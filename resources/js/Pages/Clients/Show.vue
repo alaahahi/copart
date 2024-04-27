@@ -846,7 +846,10 @@ function getDownloadUrl(name) {
                       {{ $t("note") }}
                     </th>
                     <th scope="col" class="px-1 py-3 text-base">
-                      دفع السيارة اميريكا         
+                      سعر السيارة امريكا         
+                    </th>
+                    <th scope="col" class="px-1 py-3 text-base">
+                    شحن امريكا	
                     </th>
                     <th scope="col" class="px-1 py-3 text-base">
                       كرين

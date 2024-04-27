@@ -384,7 +384,10 @@ function getDownloadUrl(name) {
                                      
                         
                                       <th scope="col" class="px-1 py-3 text-base">
-                                          دفع السيارة اميريكا         
+                                          سعر السيارة امريكا         
+                                        </th>
+                                      <th scope="col" class="px-1 py-3 text-base">
+                                          شحن امريكا	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           كرين
@@ -394,6 +397,9 @@ function getDownloadUrl(name) {
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('expenses') }}
+                                      </th>
+                                      <th scope="col" class="px-1 py-3 text-base">
+                                       عمولة
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('total') }}
@@ -427,9 +433,11 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.vin }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_number }}</td> 
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.shipping_dolar_s}}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar_s  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.expenses_s}}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s).toFixed(0) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.discount}}</td>

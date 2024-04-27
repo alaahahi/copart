@@ -804,10 +804,11 @@ const currentWork = ref(true);
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('car_number') }} copart
                                         </th>
-                                      
-                                       
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          دفع السيارة اميريكا         
+                                          سعر السيارة امريكا         
+                                        </th>
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          شحن امريكا	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           كرين
@@ -848,8 +849,8 @@ const currentWork = ref(true);
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_color }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.vin }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_number }}</td> 
-                                    
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.shipping_dolar}}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{  car.expenses  }}</td>
