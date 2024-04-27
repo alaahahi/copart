@@ -39,13 +39,13 @@ function openModalEditCars(form={}){
     formData.value.shipping_dolar_s=formData.value.shipping_dolar
   }
   if(formData.value.coc_dolar_s==0){
-    formData.value.coc_dolar_s=formData.value.coc_dolar
+    formData.value.coc_dolar_s=formData.value.coc_dolar + 15 
   }
   if(formData.value.checkout_s==0){
     formData.value.checkout_s=formData.value.checkout
   }
   if(formData.value.expenses_s==0){
-    formData.value.expenses_s=formData.value.expenses
+    formData.value.expenses_s=formData.value.expenses 
   }
   showModalEditCars.value = true;
 }
