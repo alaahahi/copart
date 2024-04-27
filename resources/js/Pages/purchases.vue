@@ -6,7 +6,7 @@ import ModalAddCar from "@/Components/ModalAddCars.vue";
 import ModalEditCars from "@/Components/ModalEditCars.vue";
 import ModalAddExpenses from "@/Components/ModalAddExpenses.vue";
 import ModalAddGenExpenses from "@/Components/ModalAddGenExpenses.vue";
-import ModalAddToBox from "@/Components/ModalAddToBox.vue";
+import ModalAddCarExpenses from "@/Components/ModalAddCarExpenses.vue";
 import ModalSpanFromBox from "@/Components/ModalSpanFromBox.vue";
 import ModalAddTransfers from "@/Components/ModalAddTransfers.vue";
 import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
@@ -26,6 +26,8 @@ import TextInput from "@/Components/TextInput.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
+import newContracts from "@/Components/icon/new.vue";
+
 import debounce from 'lodash/debounce';
 
 
@@ -63,6 +65,7 @@ const saveChangesToBackend = (id,colIndex,newValue) => {
 
 
 let searchTerm = ref('');
+let showModalAddCarExpenses =  ref(false);
 
 let showModalCar =  ref(false);
 let showModalAddExpenses =  ref(false);
@@ -118,6 +121,11 @@ function openAddCarPayment(form={}) {
     formData.value=form
     showModalAddCarPayment.value = true;
 }
+function openwshowModalAddCarExpenses(form={}) {
+  formData.value=form
+  showModalAddCarExpenses.value = true;
+}
+
 const formData = ref({});
 const formGenExpenses = ref({});
 const car = ref([]);
@@ -145,6 +153,11 @@ const refresh = () => {
 
 
 };
+function  calculateSum(carexpenses) {
+      // Use reduce to sum up carexpenses.amount_dollar
+      return carexpenses.reduce((sum, expense) => sum + (expense.amount_dollar || 0), 0);
+    }
+
 const getResultsCar = async ($state) => {
   console.log($state)
   try {
@@ -156,7 +169,7 @@ const getResultsCar = async ($state) => {
         page: page,
         q: q,
         user_id: user_id,
-        from:from.value,
+         from:from.value,
         to:to.value
       }
     });
@@ -180,7 +193,25 @@ const getResultsCar = async ($state) => {
     //$state.error();
   }
 };
+function confirmExpensesCar(V) { 
+  axios.post('/api/confirmExpensesCar',V)
+  .then(response => {
+    showModalAddCarExpenses.value = false;
+    toast.success( "تم إضافة السيارة بنجاح ", {
+        timeout: 3000,
+        position: "bottom-right",
+        rtl: true
 
+      });
+
+
+      refresh()
+
+  })
+  .catch(error => {
+    console.error(error);
+  })
+}
 
 const getcountTotalInfo = async () => {
   axios.get('/api/totalInfo')
@@ -295,11 +326,22 @@ function updateResults(input) {
   return input.toLocaleString();
 }
 const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce delay (in milliseconds) as needed
-
+const currentWork = ref(true);
 </script>
 
 <template>
     <Head title="Dashboard" />
+    <ModalAddCarExpenses
+            :formData="formData"
+            :show="showModalAddCarExpenses ? true : false"
+            :currentWork="currentWork"
+            @a="confirmExpensesCar($event)"
+            @close="showModalAddCarExpenses = false"
+            >
+        <template #header>
+          </template>
+    </ModalAddCarExpenses>
+
     <Modal
             :data="data"
             :show="showModal ? true : false"
@@ -360,7 +402,7 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
 
     <AuthenticatedLayout >
       <section  v-if="$page.props.auth.user.type_id==1||$page.props.auth.user.type_id==6">
-      <div class="py-2" v-if="pincode !=19735">
+      <div class="py-2" v-if="false">
         <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
             <div class="overflow-hidden shadow-sm d-flex text-center "  dir="ltr">
               <VuePincodeInput v-model="pincode" :digits="5" :secure="true" class="justify-center"
@@ -372,7 +414,7 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
             </div>
           </div>
         </div >
-          <div class="py-2"  v-if="pincode ==19735">
+          <div class="py-2"  >
           <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
               <div class="bg-white overflow-hidden shadow-sm ">
                   <div class="p-6  dark:bg-gray-900">
@@ -532,19 +574,7 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
                               disabled
                             />
                           </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              value="مجموع  مدفوعات بالدينار العراقي"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsDinar)"
-                              disabled
-                            />
-                          </div>
+                        
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
@@ -772,28 +802,18 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
                                           {{ $t('vin') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('car_number') }}
+                                          {{ $t('car_number') }} copart
+                                        </th>
+                                      
+                                       
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          دفع السيارة اميريكا         
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('dinar') }}
+                                          كرين
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('dolar_price') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('dolar_custom') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('note') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('shipping_dolar') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('coc_dolar') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('checkout') }}
+                                          مصاريف دبي
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('expenses') }}
@@ -810,8 +830,10 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('date') }}
                                         </th>
-                  
-                                        <th scope="col" class="px-1 py-3 text-base" style="width: 150px;">
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          {{ $t('note') }}
+                                        </th>
+                                        <th scope="col" class="px-1 py-3 text-base" style="width: 200px;">
                                           {{ $t('execute') }}
                                         </th>
                                     </tr>
@@ -826,18 +848,17 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_color }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.vin }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_number }}</td> 
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar  }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dolar_price}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ ((car.dinar/car.dolar_price)*100)?.toFixed(0)||0}}</td> 
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
+                                    
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.shipping_dolar}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.expenses}}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{  car.expenses  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total).toFixed(0)  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s-car.total).toFixed(0) }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.date  }}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
+
                                       <td className="border dark:border-gray-800 text-start px-1 py-2">
                                         <button
                                         tabIndex="1"
@@ -846,7 +867,10 @@ const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce de
                                         @click="openModalEditCars(car)"
                                       >
                                       <edit />
+                                    
+
                                       </button>
+ 
                                       <button
                                         tabIndex="1"
                                         

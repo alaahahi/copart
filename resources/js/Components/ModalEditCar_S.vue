@@ -158,7 +158,7 @@ function removeMedia(removedImage){
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="car_number">
-                  {{ $t("car_number") }}</label
+                  {{ $t("car_number") }} copart</label
                 >
                 <input
                   id="car_number"
@@ -167,46 +167,12 @@ function removeMedia(removedImage){
                   v-model="formData.car_number"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="expenses">
-                  {{ $t("expenses") }}</label
-                >
-                <input
-                  id="expenses"
-                  type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                  v-model="formData.expenses_s"
-                />
-              </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="dinar_s">
-                  {{ $t("dinar") }}</label
-                >
-                <input
-                  id="dinar_s"
-                  type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                  v-model="formData.dinar_s"
-                />
-              </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="dolar_price_s">
-                  {{ $t("dolar_price") }}</label
-                >
-                <input
-                  id="dolar_price_s"
-                  @change="validateExchangeRate"
-                  type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                  v-model="formData.dolar_price_s"
-                />
-                <div v-if="exchangeRateError" class="text-red-500">
-                          مطلوب رقم من 6 خانة فقط
-                </div>
-              </div>
+  
+      
+    
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="shipping_dolar_s">
-                  {{ $t("shipping_dolar") }}</label
+                  دفع السيارة اميريكا	</label
                 >
                 <input
                   id="shipping_dolar"
@@ -217,7 +183,7 @@ function removeMedia(removedImage){
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="coc_dolar_s">
-                  {{ $t("coc_dolar") }}</label
+                 كرين</label
                 >
                 <input
                   id="coc_dolar_s"
@@ -228,7 +194,7 @@ function removeMedia(removedImage){
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="checkout_s">
-                  {{ $t("checkout") }}</label
+                  مصاريف دبي</label
                 >
                 <input
                   id="checkout_s"
@@ -237,6 +203,18 @@ function removeMedia(removedImage){
                   v-model="formData.checkout_s"
                 />
               </div>
+              <div className="mb-4 mx-1">
+                <label class="dark:text-gray-200" for="expenses">
+                  {{ $t("expenses") }} </label
+                >
+                <input
+                  id="expenses"
+                  type="number"
+                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  v-model="formData.expenses_s"
+                />
+              </div>
+
               <!-- <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="paid">
                   {{ $t("paid") }}</label

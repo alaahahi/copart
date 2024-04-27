@@ -65,7 +65,13 @@ class CarExpensesController extends Controller
         $expenses->amount_dinar = $request->amountDinar;
         $expenses->amount_dollar = $request->amountDollar;
         $expenses->save();
+        $car = Car::find($request->id);
+        if($car){
+          $car_edited =  $car->increment('expenses',$request->amountDollar);
 
+        }else{
+            return Response::json('car not found', 200);    
+        }
 
         return Response::json($expenses, 200);    
 
@@ -75,6 +81,14 @@ class CarExpensesController extends Controller
     public function delExpensesCar(Request $request){
         try {
             $expenses = CarExpenses::findOrFail($request->id);
+            $car = Car::find($request->id);
+            if($car){
+              $car_edited =  $car->decrement(['expenses',$expenses->amountDollar]);
+    
+            }else{
+                return Response::json('car not found', 200);    
+            }
+            
             $expenses->delete();
     
             return response()->json('ok', 200);

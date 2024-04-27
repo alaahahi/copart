@@ -43,7 +43,7 @@ function openModalDelClient(expense){
   })
       }
 }
-</script>
+</script>  
   <template>
     <Transition name="modal">
       <div v-if="show" class="modal-mask ">
@@ -54,7 +54,7 @@ function openModalDelClient(expense){
             </div>
             <div class="modal-body">
                
-              
+
               <div class="text-sm font-medium text-center text-gray-500 border-b border-gray-200 dark:text-gray-400 dark:border-gray-700">
                   <ul class="flex flex-wrap -mb-px">
                     <li class="mr-2" @click="setActiveTab('add')" v-if="currentWork">

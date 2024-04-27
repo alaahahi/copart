@@ -503,39 +503,9 @@ function updateResults(input) {
                             </div>
                           </div>
             
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">تحويلات كركوك</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{howler}}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('dubai') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{dubai}}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('iran') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{iran}}</p>
-                            </div>
-                          </div>
+               
+                       
+                        
                           <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
                             <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -558,51 +528,9 @@ function updateResults(input) {
                               <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{shippingCoc}}</p>
                             </div>
                           </div>
-                         
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('online_contracts') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ onlineContracts }} دولار</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('debtOnlineContracts') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ debtOnlineContracts }} دولار</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('online_contracts') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ onlineContractsDinar }} دينار</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('debtOnlineContracts') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ debtOnlineContractsDinar }} دينار</p>
-                            </div>
-                          </div>
+            
+                        
+                      
 
                            
       
@@ -666,7 +594,7 @@ function updateResults(input) {
                             <span v-else>جاري الحفظ...</span>
                           </button>
               </div>
-              <div class=" mr-5 print:hidden" >
+              <div class=" mr-5 print:hidden"  v-if="false">
                             <InputLabel for="pay" value="طباعة" />
                             <a
                             class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-orange-500 rounded" style="display: block;text-align: center;"
@@ -679,39 +607,12 @@ function updateResults(input) {
                           </a>
               </div>
 
-              <div class="mr-5">
-                <InputLabel for="to" value="مصاريف" />
-                          <Link
-                          v-if="$page.props.auth.user.type_id!=6"
-                            type="button"
-                           href="/wallet?id=588"
-                            style="min-width:150px;"
-                            class="px-6 mb-12 py-2 font-bold text-white bg-red-500 rounded  w-full mt-1 text-center">
-                              مصاريف الشركة
-                          </Link>
-              </div>
+            
 
               
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3">
-              <div>
-                          <button
-                          v-if="$page.props.auth.user.type_id!=6"
-                            type="button"
-                            @click="openModalExpensesFromOtherBransh(1)"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 py-2 font-bold text-white bg-red-500 rounded  w-full">
-                              تحويلات كركوك
-                          </button>
-                          <button
-                            v-if="$page.props.auth.user.type_id==6"
-                            type="button"
-                            @click="openModalAddExpensesToMainBransh(1)"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 py-2 font-bold text-white bg-red-500 rounded  w-full">
-                              تحويل لفرع أربيل
-                          </button>
-                        </div>
+           
                         <div  v-if="$page.props.auth.user.type_id==1">
                           <button
                             type="button"
@@ -730,24 +631,7 @@ function updateResults(input) {
                             {{ $t('iran') }}
                           </button>
                         </div>
-                       <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(4)"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 w-full py-2 font-bold text-white bg-indigo-600 rounded">
-                            {{ $t('border') }} 
-                          </button>
-                        </div> 
-                        <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(5)"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 w-full py-2 font-bold text-white bg-pink-600 rounded">
-                            {{ $t('shipping_coc') }} 
-                          </button>
-                        </div>
+                     
                         <div>
                           <button
                             type="button"

@@ -105,12 +105,20 @@ function openModalDelCar(form = {}) {
   formData.value = form;
   showModalDelCar.value = true;
 }
-function openModalEditCars(form = {}) {
-  formData.value = form;
-  if(formData.value.dinar_s==0){
-    formData.value.dinar_s=formData.value.dinar
+function openModalEditCars(form={}){
+  formData.value=form
+  if(formData.value.shipping_dolar_s==0){
+    formData.value.shipping_dolar_s=formData.value.shipping_dolar
   }
-
+  if(formData.value.coc_dolar_s==0){
+    formData.value.coc_dolar_s=formData.value.coc_dolar
+  }
+  if(formData.value.checkout_s==0){
+    formData.value.checkout_s=formData.value.checkout
+  }
+  if(formData.value.expenses_s==0){
+    formData.value.expenses_s=formData.value.expenses
+  }
   showModalEditCars.value = true;
 }
 
@@ -595,7 +603,7 @@ function getDownloadUrl(name) {
  
  
             <div className="mb-4  mr-5">
-              <InputLabel for="cars_sum" :value="$t('Total_in_dollars')+' جمرك ' " />
+              <InputLabel for="cars_sum" :value="$t('Total_in_dollars')" />
               <TextInput
                 id="cars_sum"
                 type="text"
@@ -605,7 +613,7 @@ function getDownloadUrl(name) {
               />
             </div>
             <div className="mb-4  mr-5">
-              <InputLabel for="cars_paid" value="مجموع المدفوع  جمرك بالدولار" />
+              <InputLabel for="cars_paid" value="مجموع المدفوع بالدولار" />
               <TextInput
                 id="cars_paid"
                 type="number"
@@ -615,7 +623,7 @@ function getDownloadUrl(name) {
               />
             </div>
             <div className="mb-4  mr-5">
-              <InputLabel for="cars_discount" value="مجموع الخصومات  جمرك بالدولار" />
+              <InputLabel for="cars_discount" value="مجموع الخصومات بالدولار" />
               <TextInput
                 id="cars_discount"
                 type="text"
@@ -626,7 +634,7 @@ function getDownloadUrl(name) {
             </div>
            
             <div className="mb-4  mr-5">
-              <InputLabel for="cars_need_paid" value="  الرصيد بالدولار" />
+              <InputLabel for="cars_need_paid" value="الرصيد بالدولار" />
               <TextInput
                 id="cars_need_paid"
                 type="number"
@@ -672,52 +680,7 @@ function getDownloadUrl(name) {
                 <span>اخفاء الدفعات</span>
               </button>
             </div>
-            <div className="mb-4  mr-5">
-              <InputLabel
-                for="contract_total"
-                value="العقود المنجزة"
-              />
-              <TextInput
-                id="contract_total"
-                type="text"
-                class="mt-1 block w-full"
-                :value="laravelData.contract_total"
-                disabled
-              />
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel
-                for="exit_car_total"
-                value="الخروجيات المنجزة"
-              />
-              <TextInput
-                id="exit_car_total"
-                type="text"
-                class="mt-1 block w-full"
-                :value="laravelData.exit_car_total"
-                disabled
-              />
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_paid" value="مجموع الدين عقود بالدولار" />
-              <TextInput
-                id="cars_paid"
-                type="number"
-                class="mt-1 block w-full"
-                :value="laravelData?.contract_total_debit_Dollar"
-                disabled
-              />
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_paid" value="مجموع الدين عقود بالدينار" />
-              <TextInput
-                id="cars_paid"
-                type="number"
-                class="mt-1 block w-full"
-                :value="laravelData?.contract_total_debit_Dinar"
-                disabled
-              />
-            </div>
+
           </div>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-1" v-if="showPaymentForm">
             <div className="mb-4  mr-5">
@@ -877,28 +840,19 @@ function getDownloadUrl(name) {
                       {{ $t("vin") }}
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("car_number") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("dinar") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("dolar_price") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base print:hidden">
-                      {{ $t("dolar_custom") }}
+                      {{ $t("car_number") }} copart
                     </th>
                     <th scope="col" class="px-1 py-2 text-base print:hidden">
                       {{ $t("note") }}
                     </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("shipping_dolar") }}
+                    <th scope="col" class="px-1 py-3 text-base">
+                      دفع السيارة اميريكا         
                     </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("coc_dolar") }}
+                    <th scope="col" class="px-1 py-3 text-base">
+                      كرين
                     </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("checkout") }}
+                    <th scope="col" class="px-1 py-3 text-base">
+                      مصاريف دبي
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
                       {{ $t("expenses") }}
@@ -976,21 +930,7 @@ function getDownloadUrl(name) {
                     >
                       {{ car.car_number }}
                     </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.dinar_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.dolar_price_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1 print:hidden"
-                    >
-                      {{ ((car.dinar_s/car.dolar_price_s)*100)?.toFixed(0)||0 }}
-                    </td>
+                    
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1 print:hidden"
                     >

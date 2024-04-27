@@ -527,7 +527,7 @@ class DashboardController extends Controller
         $to =$_GET['to'] ?? 0;
         $limit =$_GET['limit'] ?? 0;
         if($car_have_expenses||$car_have_expenses==1){
-            $data = Car::with('contract','CarImages', 'exitcar','client','carexpenses.user')->where('owner_id', $owner_id)->where('car_have_expenses', $car_have_expenses);
+            $data = Car::with('contract','CarImages', 'exitcar','client','carexpenses.user')->where('owner_id', $owner_id);
             
         }else{
             $data = Car::with('contract','CarImages', 'exitcar', 'client')->where('owner_id', $owner_id);

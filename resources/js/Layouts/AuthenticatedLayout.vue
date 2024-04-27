@@ -50,7 +50,7 @@ const switchLocale = (locale) => {
                 </NavLink>
                 
               </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex" v-if="false">
+              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  >
                 <NavLink
                   :href="route('sales')"
                   :active="route().current('sales')"
@@ -95,7 +95,7 @@ const switchLocale = (locale) => {
 
                 
               </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="$page.props.auth.user.type_id==1||$page.props.auth.user.type_id==7">
+              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="false">
                 <NavLink
                   :href="route('car_expenses')"
                   :active="route().current('car_expenses')"

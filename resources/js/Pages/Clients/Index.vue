@@ -321,8 +321,6 @@ function confirmDelClient(V) {
 
                                         <th className="px-1 py-2 text-base"> السيارات غير مدفوع</th>
                                         <th className="px-1 py-2 text-base"> السيارات مدفوع</th>
-                                        <th className="px-1 py-2 text-base">العقود الالكترونية المنجزة</th>
-                                        <th className="px-1 py-2 text-base">العقود الالكترونية غير المنجزة</th>
                                         <th className="px-1 py-2 text-base">{{ $t('debt') }}</th>
                                         <th className="px-1 py-2 text-base">{{ $t('execute') }}</th>       
                                     </tr>
@@ -338,8 +336,7 @@ function confirmDelClient(V) {
 
                                         <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count-user.car_count_completed}}</td>
                                         <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count_completed}}</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.contract_count}}</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count-user.contract_count}}</td>
+                                      
                                         <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.balance}} $</td>
                                         <td className="border border-white  dark:border-gray-800 text-center px-4 py-2"  style="min-height: 42px;">
                           
@@ -368,7 +365,7 @@ function confirmDelClient(V) {
                                         >
                                           <trash />
                                         </button>
-                                        <Link
+                                        <Link  v-if="false"
                                           style="display:inline-flex;"
                                           className="px-1 py-1  text-white mx-1 bg-purple-900 rounded d-inline-block"
                                           :href="route('wallet',{ 'id':user.id})">

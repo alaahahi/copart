@@ -202,7 +202,9 @@ function onSelect (items, lastSelectItem) {
        
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="car_number">
-                  {{ $t("car_number") }}</label
+                  {{ $t("car_number") }}
+                  COPART
+                  </label
                 >
                 <input
                   id="car_number"
@@ -213,8 +215,7 @@ function onSelect (items, lastSelectItem) {
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="shipping_dolar">
-                  {{ $t("shipping_dolar") }}
-                  امريكا
+                  دفع السيارة اميريكا	
                   </label
                 >
                 <input
@@ -226,7 +227,7 @@ function onSelect (items, lastSelectItem) {
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="coc_dolar">
-                  مصاريف امريكا</label
+                  كرين</label
                 >
                 <input
                   id="coc_dolar"
@@ -247,16 +248,17 @@ function onSelect (items, lastSelectItem) {
                 />
               </div>
               <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="expenses">
-                  {{ $t("expenses") }}</label
+                <label class="dark:text-gray-200" for="checkout">
+                  مصاريف عامة</label
                 >
                 <input
-                  id="expenses"
+                  id="checkout"
                   type="number"
                   class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
                   v-model="formData.expenses"
                 />
               </div>
+              
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="date">
                   {{ $t("date") }}</label

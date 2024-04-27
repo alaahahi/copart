@@ -35,8 +35,14 @@ let allCars= ref(0)
 
 function openModalEditCars(form={}){
   formData.value=form
-  if(formData.value.dinar_s==0){
-    formData.value.dinar_s=formData.value.dinar
+  if(formData.value.shipping_dolar_s==0){
+    formData.value.shipping_dolar_s=formData.value.shipping_dolar
+  }
+  if(formData.value.coc_dolar_s==0){
+    formData.value.coc_dolar_s=formData.value.coc_dolar
+  }
+  if(formData.value.checkout_s==0){
+    formData.value.checkout_s=formData.value.checkout
   }
   if(formData.value.expenses_s==0){
     formData.value.expenses_s=formData.value.expenses
@@ -373,29 +379,19 @@ function getDownloadUrl(name) {
                                         {{ $t('vin') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('car_number') }}
+                                        {{ $t('car_number') }} copart
                                       </th>
+                                     
+                        
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('dinar') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('dolar_price') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('dolar_custom') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('note') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('shipping_dolar') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('coc_dolar') }}
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('checkout') }}
-                                      </th>
+                                          دفع السيارة اميريكا         
+                                        </th>
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          كرين
+                                        </th>
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          مصاريف دبي
+                                        </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('expenses') }}
                                       </th>
@@ -411,7 +407,9 @@ function getDownloadUrl(name) {
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('date') }}
                                       </th>
-                
+                                      <th scope="col" class="px-1 py-3 text-base">
+                                        {{ $t('note') }}
+                                      </th>
                                       <th scope="col" class="px-1 py-3 text-base" style="width: 180px;">
                                         {{ $t('execute') }}
                                       </th>
@@ -428,10 +426,6 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_color }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.vin }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_number }}</td> 
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar_s  }}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dolar_price_s}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ ((car.dinar_s/car.dolar_price_s)*100)?.toFixed(0)||0}}</td> 
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.shipping_dolar_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar_s  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout_s}}</td>
@@ -441,6 +435,8 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.discount}}</td>
 
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.date  }}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
+
                                      <td className="border dark:border-gray-800 text-start px-1 py-2">
                                     <button
                                       tabIndex="1"
