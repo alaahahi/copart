@@ -1017,31 +1017,9 @@ function getDownloadUrl(name) {
                       >
                         <pay />
                       </button>
-                      <button
-                        v-if="(car.contract?.price != car.contract?.paid) || (car.contract?.price_dinar != car.contract?.paid_dinar)"
-                        tabIndex="1"
-                        class="px-1 py-1  text-white mx-1 bg-pink-500 rounded"
-                        @click="openModalEditCarContracts(car)"
-                      >
-                        <pay />
-                      </button>
-                      <button
-                      v-if="!car.contract"
-                        tabIndex="1"
-                        class="px-1 py-1  text-white mx-1 bg-yellow-500 rounded"
-                        @click="openModalAddCarContracts(car)"
-                      >
-                        <newContracts />
-                      </button>
-
-                      <button
-                        tabIndex="1"
-                        class="px-1 py-1  text-white mx-1 bg-red-500 rounded"
-                        v-if="!car.is_exit"
-                        @click="openModalAddExitCar(car)"
-                      >
-                        <exit />
-                      </button>
+                    
+                 
+ 
                       <button
                         tabIndex="1"
                         class="px-1 py-1  text-white mx-1 bg-blue-500 rounded"
