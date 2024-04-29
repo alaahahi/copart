@@ -861,6 +861,9 @@ function getDownloadUrl(name) {
                       {{ $t("expenses") }}
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
+                      عمولة
+                    </th>
+                    <th scope="col" class="px-1 py-2 text-base">
                       {{ $t("total") }}
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
