@@ -946,6 +946,11 @@ function getDownloadUrl(name) {
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
                       {{ car.shipping_dolar_s }}
+                    </td>        
+                    <td
+                      className="border dark:border-gray-800 text-center px-2 py-1"
+                    >
+                      {{ car.dinar_s }}
                     </td>
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
@@ -961,6 +966,11 @@ function getDownloadUrl(name) {
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
                       {{ car.expenses_s }}
+                    </td>
+                    <td
+                      className="border dark:border-gray-800 text-center px-2 py-1"
+                    >
+                      {{ car.commission }}
                     </td>
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
