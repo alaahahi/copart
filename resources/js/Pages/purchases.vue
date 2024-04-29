@@ -785,7 +785,9 @@ const currentWork = ref(true);
                             <table class="w-full text-sm text-right text-gray-500 dark:text-gray-200 dark:text-gray-400 text-center">
                                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
                                     <tr>
-                
+                                        <th scope="col" class="px-1 py-3 text-base	">
+                                          No
+                                        </th>
                                         <th scope="col" class="px-1 py-3 text-base	">
                                           {{ $t('car_owner') }}
                                         </th>
@@ -842,7 +844,9 @@ const currentWork = ref(true);
                                 <tbody>
 
 
-                                  <tr v-for="car in car" :key="car.id" :class="car.results == 0 ?'':car.results == 1 ?'bg-red-100 dark:bg-red-900':'bg-green-100 dark:bg-green-900'"  class="bg-white border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                  <tr v-for="(car,index) in car" :key="car.id" :class="car.results == 0 ?'':car.results == 1 ?'bg-red-100 dark:bg-red-900':'bg-green-100 dark:bg-green-900'"  class="bg-white border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ index+1}}</td>
+
                                       <td className="border dark:border-gray-900 text-center dark:text-gray-200 text-black px-1 py-2 " style="font-weight: bold;font-size: 16px;">{{ car.client?.name }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_type}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.year}}</td>
