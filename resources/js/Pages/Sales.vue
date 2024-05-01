@@ -414,7 +414,7 @@ function getDownloadUrl(name) {
                                         {{ $t('paid') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('discount') }}
+                                        المتبقي
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('date') }}
@@ -447,7 +447,7 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s).toFixed(0) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.discount}}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ ((car.total_s).toFixed(0)) - car.paid}}</td>
 
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.date  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>

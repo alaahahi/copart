@@ -82,14 +82,17 @@
             <th scope="col">السيارة</th>
             <th scope="col">تاريخ</th>
             <th scope="col">رقم شاسى</th>
-            <th scope="col">رقم كاتى</th>
+            <th scope="col"> رقم copart</th>
             <th scope="col">لون</th>
             <th scope="col">موديل</th>
-            <th scope="col">كمرك</th>
-            <th scope="col">تخليص</th>
-            <th scope="col">شهادة</th>
-            <th scope="col">نقل</th>
+            <th scope="col"> سعر السيارة امريكا</th>
+            <th scope="col"> شحن امريكا	</th>
+            <th scope="col">كرين</th>
+            <th scope="col"> مصاريف دبي</th>
             <th scope="col">مصاريف</th>
+            <th scope="col">
+              عمولة
+            </th>
             <th scope="col">مجموع</th>
             <th scope="col">ملاحطة</th>
           </tr>
@@ -104,20 +107,12 @@
                 <td>{{$data->car_number}}</td>
                 <td>{{$data->car_color}}</td>
                 <td>{{$data->year}}</td>
-                <td>    <?php
-                    $dinar_s = $data->dinar_s;
-                    $dolar_price_s = $data->dolar_price_s ?? 1;
-                
-                    if ($dolar_price_s != 0) {
-                        echo round(($dinar_s / $dolar_price_s)*100);
-                    } else {
-                        echo 0; // or any other appropriate message
-                    }
-                    ?></td>
-                <td>{{$data->checkout_s}}</td>
+                <td>{{$data->shipping_dolar_s}}</td>
+                <td>{{$data->dinar_s}}</td>
                 <td>{{$data->coc_dolar_s}}</td>
                 <td>{{$data->shipping_dolar_s}}</td>
                 <td>{{$data->expenses_s}}</td>
+                <td>{{$data->commission}}</td>
                 <td>{{$data->total_s}}</td>
                 <td>{{$data->note}}</td>
               </tr>

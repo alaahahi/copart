@@ -683,7 +683,7 @@ function getDownloadUrl(name) {
 
           </div>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-1" v-if="showPaymentForm">
-            <div className="mb-4  mr-5">
+            <div className="mb-4  mr-5" v-if="false">
               <InputLabel
               
                 for="discount"
@@ -870,7 +870,7 @@ function getDownloadUrl(name) {
                       {{ $t("paid") }}
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("discount") }}
+                    المتبقي
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
                       {{ $t("date") }}
@@ -982,7 +982,7 @@ function getDownloadUrl(name) {
                     >
                       {{ car.paid }}
                     </td>
-                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.discount}}</td>
+                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s.toFixed(0))-car.paid}}</td>
 
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"

@@ -40,11 +40,11 @@ if(props.formData.amountPayment > amount){
             <div class="modal-header">
               <slot name="header">    
                 </slot>
-            <h4 class="text-center py-3">اكمال الدفع للسيارة {{ formData.car_type ?? ''}}</h4>
+            <h4 class="text-center py-3 dark:text-gray-200">اكمال الدفع للسيارة {{ formData.car_type ?? ''}}</h4>
             </div>
 
             <div class="modal-body">
-              <div class="grid grid-cols-4 md:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-3">
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 lg:gap-3">
                 <div className="mb-4 mx-5">
                   <label  class="dark:text-gray-200" for="user_id" >{{ $t('totalForCar') }}</label>
                   <input
@@ -80,7 +80,7 @@ if(props.formData.amountPayment > amount){
                   class=" mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900 "
                    />
                 </div>
-                <div className="mb-4 mx-5">
+                <div className="mb-4 mx-5" v-if="false">
                   <label  class="dark:text-gray-200" for="userId">{{ $t('discount') }}</label>
                   <input
                   id="id"
@@ -102,7 +102,7 @@ if(props.formData.amountPayment > amount){
                 class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900 "
                 v-model="formData.amountPayment" />
               </div>
-              <div className="mb-4 mx-5">
+              <div className="mb-4 mx-5" v-if="false">
               <label  class="dark:text-gray-200" for="amountPayment" >{{ $t('discount') }}</label>
               <input
                 id="discount"
