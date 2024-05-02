@@ -201,7 +201,7 @@ class UserController extends Controller
     public function clientsEdit(Request $request)
     {
         Validator::make($request->all(), [
-            'name' => 'required|string|max:255|unique:users',
+            'name' => 'required|string|max:255',
            ])->validate();
            //$userChief_id =User::where('type_id',  $this->userChief)->first()->id ?? 0 ;
                 $user = User::find($request->id)->update([
