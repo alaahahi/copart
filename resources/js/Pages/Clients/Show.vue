@@ -1141,7 +1141,7 @@ function getDownloadUrl(name) {
                       <button
                         tabIndex="1"
                         style="min-width: 100px;"
-                        v-if="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum)) != 0"
+                        v-if="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum)) != 0 && car.paid"
                         class="px-1 py-1 mt-1 text-white mx-1 bg-red-500 rounded"
                         @click="openModalDelPayFromBalanceCar(car)"
                       >
