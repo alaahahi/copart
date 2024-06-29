@@ -126,6 +126,9 @@ Route::post('removeContract',[OnlineContractsController::class, 'removeContract'
 
 
 Route::get('addPaymentCarTotal',[AccountingController::class, 'addPaymentCarTotal'])->name('addPaymentCarTotal');
+Route::post('DelPayFromBalanceCar',[AccountingController::class, 'DelPayFromBalanceCar'])->name('DelPayFromBalanceCar');
+Route::post('AddPayFromBalanceCar',[AccountingController::class, 'AddPayFromBalanceCar'])->name('AddPayFromBalanceCar');
+
 
 
 Route::get('addToBox',[DashboardController::class, 'addToBox'])->name('addToBox');
@@ -162,6 +165,8 @@ Route::get('getGenExpenses',[AccountingController::class, 'getGenExpenses'])->na
 
 Route::post('convertDollarDinar',[AccountingController::class, 'convertDollarDinar'])->name('convertDollarDinar');
 Route::post('convertDinarDollar',[AccountingController::class, 'convertDinarDollar'])->name('convertDinarDollar');
+
+
 
 
 Route::post('addCarFavorite',[CarExpensesController::class, 'addCarFavorite'])->name('addCarFavorite');
