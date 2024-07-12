@@ -652,7 +652,7 @@ function updateResults(input) {
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
                     <th className="px-2 py-2" style="width: 100px;">رقم الوصل
                     </th>
-                    <!-- <th className="px-2 py-2">الحساب</th> -->
+                    <th className="px-2 py-2">الحساب</th>
                     <th className="px-2 py-2" style="width: 180px;">التاريخ</th>
                     <th className="px-2 py-2">الوصف</th>
                     <th className="px-2 py-2">المبلغ</th>
@@ -674,7 +674,7 @@ function updateResults(input) {
                   }"
                   class="bg-white border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600">
                   <td className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.id }}</td>
-                  <!-- <td className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.morphed?.name }}</td> -->
+                  <td className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.morphed?.name }}</td>
 
                   
                   <td className="border dark:border-gray-800 text-center px-2 py-1">{{ tran?.created_at.slice(0, 19).replace("T", "  ") }}</td>
