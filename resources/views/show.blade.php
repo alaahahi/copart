@@ -113,7 +113,7 @@
                 <td>{{$data->expenses_s}}</td>
                 <td>{{$data->total_s}}</td>
                 <td>{{$data->paid}}</td>
-                <td>{{($data->paid)-($data->total_s)}}</td>
+                <td>{{($data->total_s)-($data->paid)}}</td>
                 <td>{{$data->note}}</td>
               </tr>
             @endforeach
