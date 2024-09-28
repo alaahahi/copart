@@ -90,10 +90,9 @@
             <th scope="col">كرين</th>
             <th scope="col"> مصاريف دبي</th>
             <th scope="col">مصاريف</th>
-            <th scope="col">
-              عمولة
-            </th>
             <th scope="col">مجموع</th>
+            <th scope="col">مدفوع</th>
+            <th scope="col">متبقي</th>
             <th scope="col">ملاحطة</th>
           </tr>
         </thead>
@@ -112,8 +111,9 @@
                 <td>{{$data->coc_dolar_s}}</td>
                 <td>{{$data->shipping_dolar_s}}</td>
                 <td>{{$data->expenses_s}}</td>
-                <td>{{$data->commission}}</td>
                 <td>{{$data->total_s}}</td>
+                <td>{{$data->paid}}</td>
+                <td>{{($data->paid)-($data->total_s)}}</td>
                 <td>{{$data->note}}</td>
               </tr>
             @endforeach
