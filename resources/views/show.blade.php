@@ -109,7 +109,7 @@
                 <td>{{$data->shipping_dolar_s}}</td>
                 <td>{{$data->dinar_s}}</td>
                 <td>{{$data->coc_dolar_s}}</td>
-                <td>{{$data->shipping_dolar_s}}</td>
+                <td>{{$data->checkout_s}}</td>
                 <td>{{$data->expenses_s}}</td>
                 <td>{{$data->total_s}}</td>
                 <td>{{$data->paid}}</td>
