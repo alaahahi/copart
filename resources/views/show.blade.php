@@ -86,10 +86,10 @@
             <th scope="col">لون</th>
             <th scope="col">موديل</th>
             <th scope="col"> سعر السيارة امريكا</th>
-            <th scope="col"> شحن امريكا	</th>
+            <th scope="col"> نقل دبي	</th>
             <th scope="col">كرين</th>
             <th scope="col"> مصاريف دبي</th>
-            <th scope="col">مصاريف</th>
+            <th scope="col">شحن اربيل</th>
             <th scope="col">مجموع</th>
             <th scope="col">مدفوع</th>
             <th scope="col">متبقي</th>

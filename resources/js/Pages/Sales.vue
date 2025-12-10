@@ -50,6 +50,9 @@ function openModalEditCars(form={}){
   if(formData.value.dinar_s==0){
     formData.value.dinar_s=formData.value.dinar 
   }
+  if(formData.value.commission_s==0){
+    formData.value.commission_s=formData.value.commission ?? 0
+  }
   showModalEditCars.value = true;
 }
 function openModalDelCar(form={}) {
@@ -393,7 +396,7 @@ function getDownloadUrl(name) {
                                           سعر السيارة امريكا         
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                          شحن امريكا	
+                                          نقل دبي	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           كرين
@@ -402,10 +405,10 @@ function getDownloadUrl(name) {
                                           مصاريف دبي
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('expenses') }}
+                                        شحن اربيل
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                       عمولة
+                                       مصاريف اربيل
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('total') }}
@@ -444,7 +447,7 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar_s  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.expenses_s}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission}}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission_s ?? 0}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s).toFixed(0) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ ((car.total_s).toFixed(0)) - car.paid}}</td>

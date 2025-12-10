@@ -47,6 +47,7 @@ class Car extends Model
         'total_s',
         'discount',
         'expenses_s',
+        'commission_s',
         'is_exit',
         'owner_id',
         'contract_id',

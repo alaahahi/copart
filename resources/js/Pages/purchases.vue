@@ -810,7 +810,7 @@ const currentWork = ref(true);
                                           سعر السيارة امريكا         
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          شحن امريكا	
+                                          نقل دبي	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           كرين
@@ -819,7 +819,10 @@ const currentWork = ref(true);
                                           مصاريف دبي
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('expenses') }}
+                                          شحن اربيل
+                                        </th>
+                                        <th scope="col" class="px-1 py-3 text-base">
+                                          مصاريف اربيل
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('total') }}
@@ -858,6 +861,7 @@ const currentWork = ref(true);
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{  car.expenses  }}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission ?? 0 }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total).toFixed(0)  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s-car.total).toFixed(0) }}</td>
