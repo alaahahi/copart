@@ -2,7 +2,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
-import { ref } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { TailwindPagination } from "laravel-vue-pagination";
 import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
@@ -57,14 +57,14 @@ let getResults = async (page = 1) => {
     .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${props.client_id}&from=${from.value}&to=${to.value}`)
     .then((response) => {
       laravelData.value = response.data;
-      client_Select.value = response.data.client.id
+      client_Select.value = response.data.client.id;
     })
     .catch((error) => {
       console.error(error);
     });
 };
 function calculateTotalFilteredAmount() {
-  if(laravelData.value){
+  if(laravelData.value && laravelData.value.transactions && Array.isArray(laravelData.value.transactions)){
      const filteredTransactions = laravelData.value.transactions.filter(user =>
     user.type === 'out' && user.amount < 0 && user.is_pay === 1
   );
@@ -73,6 +73,7 @@ function calculateTotalFilteredAmount() {
 
   return {  totalAmount };
   }
+  return { totalAmount: 0 };
 }
 const getResultsSelect = async (page = 1) => {
 
@@ -80,15 +81,24 @@ const getResultsSelect = async (page = 1) => {
     .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${client_Select.value}&from=${from.value}&to=${to.value}`)
     .then((response) => {
       laravelData.value = response.data;
-      client_Select.value = response.data.client.id
-
-
+      client_Select.value = response.data.client.id;
     })
     .catch((error) => {
       console.error(error);
     });
 };
 getResults();
+
+// مراقبة laravelData واستدعاء فحص الرصيد تلقائياً عند تحميل البيانات
+watch(() => laravelData.value?.cars_sum, (newVal) => {
+  if (newVal && laravelData.value?.client?.id) {
+    // تأخير بسيط للتأكد من تحميل جميع البيانات
+    setTimeout(() => {
+      checkClientBalance(newVal);
+    }, 500);
+  }
+}, { immediate: false });
+
 const props = defineProps({
   url: String,
   clients: Array,
@@ -435,6 +445,62 @@ function getDownloadUrl(name) {
       return `/public/uploads/${name}`;
     }
 
+function checkClientBalance(v){
+  // التحقق من البيانات
+  if (!laravelData.value) {
+    return;
+  }
+  
+  const userId = client_Select.value || laravelData.value?.client?.id;
+  if (!userId || userId === 'undefined') {
+    return;
+  }
+  
+  // استخدام القيم من الفرونت
+  const cars_sum = parseFloat(v || laravelData.value?.cars_sum) || 0;
+  const cars_discount = parseFloat(laravelData.value?.cars_discount) || 0;
+  
+  // حساب مجموع الدفعات من transactions (قيمة سالبة، نحولها لموجبة)
+  const transactionsTotal = Number(calculateTotalFilteredAmount()?.totalAmount || 0);
+  const transactionsTotalPositive = Math.abs(transactionsTotal);
+  
+  // حساب الرصيد: مجموع الدفعات + الخصم - مجموع السيارات
+  // إذا كانت النتيجة سالبة، نستخدم القيمة المطلقة (لأن الرصيد يجب أن يكون موجب)
+  const calculatedBalance = transactionsTotalPositive + cars_discount - cars_sum;
+  const currentBalance = Math.abs(calculatedBalance);
+  
+  const params = new URLSearchParams({
+    userId: userId,
+    currentBalance: currentBalance,
+    from: from.value || "",
+    to: to.value || ""
+  }).toString();
+
+  axios.get(`/api/checkClientBalance?${params}`)
+  .then(response => {
+    if(response.status == 201){
+      toast.success(" تم تصحيح الرصيد. الرصيد القديم: " + response.data, {
+        timeout: 5000,
+        position: "bottom-right",
+        rtl: true
+      });
+      // تحديث البيانات بعد التصحيح
+      if (client_Select.value) {
+        getResultsSelect();
+      } else {
+        getResults();
+      }
+    }
+  })
+  .catch(error => {
+    toast.error("لم يتم اعادة فحص الحساب بنجاح", {
+      timeout: 5000,
+      position: "bottom-right",
+      rtl: true
+    });
+  });
+}
+
 </script>
 
 <template>
@@ -703,11 +769,12 @@ function getDownloadUrl(name) {
            
             <div className="mb-4  mr-5">
               <InputLabel for="cars_need_paid" value="الرصيد بالدولار" />
-              <TextInput
+              <input
                 id="cars_need_paid"
                 type="number"
-                class="mt-1 block w-full"
-                :value="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum))"
+                class="border-gray-300 focus:border-indigo-300 dark:bg-gray-800 dark:text-gray-200 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm mt-1 block w-full"
+                :value="laravelData?.transactions ? (((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum || 0)) : 0"
+                readonly
               />
             </div>
             <div className="mb-4  mr-5 print:hidden"  >

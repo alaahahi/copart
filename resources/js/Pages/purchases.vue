@@ -230,6 +230,37 @@ const getcountTotalInfo = async () => {
     
 }
 getcountTotalInfo()
+
+function recalculateProfit() {
+  axios.get('/api/recalculateProfit')
+  .then(response => {
+    if (response.data.success) {
+      toast.success(response.data.message + " - مجموع الربح المتوقع: " + response.data.totalExpectedProfit.toFixed(2), {
+        timeout: 5000,
+        position: "bottom-right",
+        rtl: true
+      });
+      // تحديث البيانات بعد إعادة الحساب
+      refresh();
+      getcountTotalInfo();
+    } else {
+      toast.error(response.data.error || "حدث خطأ في إعادة حساب الربح", {
+        timeout: 5000,
+        position: "bottom-right",
+        rtl: true
+      });
+    }
+  })
+  .catch(error => {
+    toast.error("لم يتم إعادة حساب الربح بنجاح", {
+      timeout: 5000,
+      position: "bottom-right",
+      rtl: true
+    });
+    console.error(error);
+  });
+}
+
 function confirmCar(V) {
   axios.post('/api/addCars',V)
   .then(response => {
@@ -630,13 +661,26 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="مجموع الربح بالدولار"
+                              value="صافي الربح"
                             />
                             <TextInput
                               id="car_total_complete"
                               type="text"
                               class="mt-1 block w-full"
                               :value="updateResults(json?.resultsProfit)"
+                              disabled
+                            />
+                          </div>
+                          <div className="mb-4  mr-2">
+                            <InputLabel
+                              for="expected_profit"
+                              value="الربح المتوقع"
+                            />
+                            <TextInput
+                              id="expected_profit"
+                              type="text"
+                              class="mt-1 block w-full"
+                              :value="updateResults(json?.expectedProfit)"
                               disabled
                             />
                           </div>
@@ -666,10 +710,20 @@ const currentWork = ref(true);
                             <InputLabel for="pay" value="فلترة" />
                             <button
                               @click.prevent="refresh()"
-                              class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-gray-500 rounded"
+                              class="px-6 py-2 mt-1 font-bold text-white bg-gray-500 rounded hover:bg-gray-600"
                               style="width: 100%"
                             >
                               <span>فلترة</span>
+                            </button>
+                          </div>
+                          <div className="mb-4  mr-2 print:hidden">
+                            <InputLabel for="pay" value="إعادة حساب الربح" />
+                            <button
+                              @click.prevent="recalculateProfit"
+                              class="px-6 py-2 mt-1 font-bold text-white bg-blue-500 rounded hover:bg-blue-600"
+                              style="width: 100%"
+                            >
+                              <span>إعادة حساب الربح</span>
                             </button>
                           </div>
                           <div className="mb-4  mr-2  hidden">

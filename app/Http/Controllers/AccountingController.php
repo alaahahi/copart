@@ -603,6 +603,28 @@ class AccountingController extends Controller
         return Response::json($car, 200);    
 
     }
+
+    public function checkClientBalance(Request $request)
+    {
+        $userId = $request->userId;
+        $currentBalance = (float)$request->currentBalance;
+        $user = User::with('wallet')->where('id', $userId)->first();
+        
+        if (!$user || !$user->wallet) {
+            return Response::json('Client or wallet not found', 404);
+        }
+        
+        $systemBalance = (float)($user->wallet->balance ?? 0);
+        
+        if (abs($systemBalance - $currentBalance) < 0.01) {
+            return Response::json('balance is good', 200);
+        } else {
+            $wallet = Wallet::find($user->wallet->id);
+            $wallet->update(['balance' => $currentBalance]);
+            return Response::json($systemBalance, 201);
+        }
+    }
+
     public function getGenExpenses (Request $request){
         $year_date=Carbon::now()->format('Y');
 

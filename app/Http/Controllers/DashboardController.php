@@ -545,7 +545,22 @@ class DashboardController extends Controller
         $resultsDinar = $data->sum('dinar');
         $resultsDollar = $data->sum('total');
         $resultsTotalS = $data->sum('total_s');
-        $resultsProfit = $data->sum('profit');
+        // حساب الربح فقط للسيارات المكتملة (results = 2) - إنشاء query منفصل
+        $profitQuery = Car::where('owner_id', $owner_id);
+        if ($from && $to) {
+            $profitQuery->whereBetween('date', [$from, $to]);
+        }
+        $resultsProfit = $profitQuery->where('results', 2)->sum('profit');
+        // حساب الربح المتوقع (للحمراء والخضراء حيث total != 0)
+        $expectedProfitQuery = Car::where('owner_id', $owner_id)
+            ->whereIn('results', [1, 2])
+            ->where('total', '!=', 0);
+        if ($from && $to) {
+            $expectedProfitQuery->whereBetween('date', [$from, $to]);
+        }
+        $expectedProfit = $expectedProfitQuery->get()->sum(function($car) {
+            return ($car->total_s ?? 0) - ($car->total ?? 0);
+        });
         $resultsPaid = $data->sum('paid');
         $totalCars = $data->count();
         
@@ -575,7 +590,23 @@ class DashboardController extends Controller
             $resultsDinar=$data->sum('dinar');
             $resultsDollar=$data->sum('total'); 
             $resultsTotalS=$data->sum('total_s'); 
-            $resultsProfit=$data->sum('profit'); 
+            // حساب الربح فقط للسيارات المكتملة (results = 2) - إنشاء query منفصل
+            $profitQuery = Car::where('owner_id', $owner_id)->where('client_id', $user_id);
+            if ($from && $to) {
+                $profitQuery->whereBetween('date', [$from, $to]);
+            }
+            $resultsProfit = $profitQuery->where('results', 2)->sum('profit');
+            // حساب الربح المتوقع (للحمراء والخضراء حيث total != 0)
+            $expectedProfitQuery = Car::where('owner_id', $owner_id)
+                ->where('client_id', $user_id)
+                ->whereIn('results', [1, 2])
+                ->where('total', '!=', 0);
+            if ($from && $to) {
+                $expectedProfitQuery->whereBetween('date', [$from, $to]);
+            }
+            $expectedProfit = $expectedProfitQuery->get()->sum(function($car) {
+                return ($car->total_s ?? 0) - ($car->total ?? 0);
+            });
             $resultsPaid=$data->sum('paid'); 
             $totalCars = $data->count();
         }
@@ -584,12 +615,56 @@ class DashboardController extends Controller
         $data['resultsDollar'] = $resultsDollar;
         $data['totalCars']  =$totalCars;
         $data['resultsProfit'] = $resultsProfit;
+        $data['expectedProfit'] = $expectedProfit ?? 0;
         $data['resultsPaid']  =$resultsPaid;
         $data['resultsTotalS']  =$resultsTotalS;
  
 
         return Response::json($data, 200);
     }
+    public function recalculateProfit()
+    {
+        try {
+            $owner_id = Auth::user()->owner_id;
+            
+            // جلب جميع السيارات الحمراء والخضراء (results = 1 أو 2) حيث total != 0
+            $cars = Car::where('owner_id', $owner_id)
+                ->whereIn('results', [1, 2])
+                ->where('total', '!=', 0)
+                ->get();
+            
+            $totalExpectedProfit = 0;
+            $updatedCount = 0;
+            
+            foreach ($cars as $car) {
+                // إعادة حساب الربح المتوقع: total_s - total
+                $newProfit = ($car->total_s ?? 0) - ($car->total ?? 0);
+                
+                // تحديث الربح فقط - لا يتم تعديل أي حقل آخر
+                // استخدام DB::table للتأكد من تحديث حقل واحد فقط
+                DB::table('car')
+                    ->where('id', $car->id)
+                    ->update(['profit' => $newProfit]);
+                
+                $totalExpectedProfit += $newProfit;
+                $updatedCount++;
+            }
+            
+            return Response::json([
+                'success' => true,
+                'message' => "تم إعادة حساب الربح المتوقع لـ {$updatedCount} سيارة (حمراء وخضراء)",
+                'totalExpectedProfit' => $totalExpectedProfit,
+                'updatedCount' => $updatedCount
+            ], 200);
+        } catch (\Exception $e) {
+            return Response::json([
+                'success' => false,
+                'error' => 'حدث خطأ في إعادة حساب الربح',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getIndexCarSearch()
     {
         $owner_id=Auth::user()->owner_id;

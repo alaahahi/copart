@@ -103,6 +103,7 @@ Route::get('client',[DashboardController::class, 'client'])->name('client');
 Route::get('getIndexCar',[DashboardController::class, 'getIndexCar'])->name('getIndexCar');
 Route::get('getIndexCarSearch',[DashboardController::class, 'getIndexCarSearch'])->name('getIndexCarSearch');
 Route::get('totalInfo',[DashboardController::class, 'totalInfo'])->name('totalInfo');
+Route::get('recalculateProfit',[DashboardController::class, 'recalculateProfit'])->name('recalculateProfit');
 Route::get('getIndexCarAnnual',[AnnualController::class, 'getIndexCarAnnual'])->name('getIndexCarAnnual');
 
 Route::post('carsAnnualUpload',[AnnualController::class, 'carsAnnualUpload'])->name('carsAnnualUpload');
@@ -128,6 +129,7 @@ Route::post('removeContract',[OnlineContractsController::class, 'removeContract'
 Route::get('addPaymentCarTotal',[AccountingController::class, 'addPaymentCarTotal'])->name('addPaymentCarTotal');
 Route::post('DelPayFromBalanceCar',[AccountingController::class, 'DelPayFromBalanceCar'])->name('DelPayFromBalanceCar');
 Route::post('AddPayFromBalanceCar',[AccountingController::class, 'AddPayFromBalanceCar'])->name('AddPayFromBalanceCar');
+Route::get('checkClientBalance',[AccountingController::class, 'checkClientBalance'])->name('checkClientBalance');
 
 
 
