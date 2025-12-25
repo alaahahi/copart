@@ -77,6 +77,7 @@ class UserController extends Controller
         $userClient = $this->userClient ?? 0;
         $page = request()->input('page', '');
         $print = request()->input('print', 0);
+        $excludeZero = request()->input('exclude_zero', 0);
 
 
         $query = DB::table('users')
@@ -131,9 +132,21 @@ class UserController extends Controller
             $config=SystemConfig::first();
 
             if($q=='debit'){
-                $data = $query->havingRaw('balance > 0')->get();
+                if ($excludeZero == 1) {
+                    // عرض المدين والدائن فقط (balance != 0)
+                    $data = $query->havingRaw('balance != 0')->get();
+                } else {
+                    // السلوك القديم: عرض المدين فقط (balance > 0)
+                    $data = $query->havingRaw('balance > 0')->get();
+                }
             }else{
-                $data = $query->get();
+                if ($excludeZero == 1) {
+                    // استبعاد الرصيد = 0
+                    $data = $query->havingRaw('balance != 0')->get();
+                } else {
+                    // السلوك القديم: عرض جميع العملاء
+                    $data = $query->get();
+                }
             }
             $data=$data->toArray();
             return view('reportClients',compact('data','config','owner_id'));
@@ -141,14 +154,26 @@ class UserController extends Controller
         }
         if ($q == 'debit') {
             if ($page == 1) {
-                $data = $query->havingRaw('balance > 0')->get();
+                if ($excludeZero == 1) {
+                    // عرض المدين والدائن فقط (balance != 0)
+                    $data = $query->havingRaw('balance != 0')->get();
+                } else {
+                    // السلوك القديم: عرض المدين فقط (balance > 0)
+                    $data = $query->havingRaw('balance > 0')->get();
+                }
                 return response()->json(['data' => $data], 200);
             } else {
                 return response()->json(['data' => []], 200);
             }
         } else {
             $paginationLimit = 25;
-            $data = $query->paginate($paginationLimit);
+            if ($excludeZero == 1) {
+                // إذا كان exclude_zero=1، استبعاد الرصيد = 0
+                $data = $query->havingRaw('balance != 0')->paginate($paginationLimit);
+            } else {
+                // السلوك القديم: عرض جميع العملاء
+                $data = $query->paginate($paginationLimit);
+            }
             return response()->json($data, 200);
         }
     }

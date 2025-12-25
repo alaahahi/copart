@@ -616,12 +616,30 @@ class AccountingController extends Controller
         
         $systemBalance = (float)($user->wallet->balance ?? 0);
         
-        if (abs($systemBalance - $currentBalance) < 0.01) {
-            return Response::json('balance is good', 200);
+        // حسب منطق المشروع:
+        // - الرصيد الموجب (العميل له رصيد) → يُحفظ كسالب في الوليت
+        // - الرصيد السالب (العميل مدين) → يُحفظ كموجب في الوليت
+        if ($currentBalance > 0) {
+            // رصيد موجب → يُحفظ كسالب
+            $balanceToSave = -$currentBalance;
+        } else if ($currentBalance < 0) {
+            // مديونية (سالب) → يُحفظ كموجب (نعكس الإشارة)
+            $balanceToSave = abs($currentBalance);
         } else {
+            // الرصيد = 0
+            $balanceToSave = 0;
+        }
+        
+        // التحقق من أن الرصيد في الوليت لا يساوي الرصيد المطلوب
+        // مقارنة مباشرة للتمييز بين القيم الموجبة والسالبة
+        if ($systemBalance != $balanceToSave) {
+            // الرصيد مختلف - يتم التصحيح
             $wallet = Wallet::find($user->wallet->id);
-            $wallet->update(['balance' => $currentBalance]);
+            $wallet->update(['balance' => $balanceToSave]);
             return Response::json($systemBalance, 201);
+        } else {
+            // الرصيد متساوي
+            return Response::json('balance is good', 200);
         }
     }
 

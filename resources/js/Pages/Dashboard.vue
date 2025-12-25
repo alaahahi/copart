@@ -27,7 +27,7 @@ const laravelData2 = ref({});
 let  controller = new AbortController(); // Create a new AbortController
 
 const getResults = async (page = 1) => {
-  axios.get(`api/${selectUser(userType.value)}?page=${page}&q=debit`)
+  axios.get(`api/${selectUser(userType.value)}?page=${page}&q=debit&exclude_zero=1`)
   .then(response => {
     if(userType.value==1 || userType.value==6){
       try {
@@ -166,32 +166,41 @@ watch([searchTerm], () => {
 
 getcountTotalInfo()
 function changeColor(total){
+  // تحويل القيمة إلى رقم للتأكد من المقارنة الصحيحة
+  const balance = parseFloat(total) || 0;
+  
+  // إذا كان الرصيد سالباً في الوليت، فهذا يعني رصيد موجب فعلياً (العميل له رصيد)
+  // نعرضه باللون الأخضر
+  if(balance < 0){
+    return 'bg-green-600  dark:bg-green-600'
+  }
 
-  if(total >= 30000){
+  // إذا كان الرصيد موجباً في الوليت، فهذا يعني مديونية (العميل مدين)
+  if(balance >= 30000){
     return 'bg-red-600  dark:bg-red-600'
 
   }
-  if(total >= 25000){
+  if(balance >= 25000){
     return 'bg-pink-600  dark:bg-pink-600'
 
   }
-  if(total >= 20000){
+  if(balance >= 20000){
     return 'bg-purple-600  dark:bg-purple-600'
   }
-  if(total >= 15000){
+  if(balance >= 15000){
     return 'bg-indigo-600  dark:bg-indigo-600'
 
   }
-  if(total >= 10000){
+  if(balance >= 10000){
     return 'bg-cyan-600  dark:bg-cyan-600'
 
   }
   
-  if(total >= 1000){
+  if(balance >= 1000){
     return 'bg-teal-500  dark:bg-teal-500'
 
   }
-  if(total >= 0){
+  if(balance >= 0){
     return 'bg-yellow-600  dark:bg-yellow-600'
 
   }
