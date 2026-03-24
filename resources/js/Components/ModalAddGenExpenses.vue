@@ -4,6 +4,20 @@ import print from "@/Components/icon/print.vue";
 
 const activeTab = ref('add'); // Set the default active tab
 
+// Guard numeric calculations when inputs come as strings.
+const asNumber = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = Number.parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
+const safeDivide = (a, b) => {
+  const denom = asNumber(b);
+  if (!denom) return 0;
+  return asNumber(a) / denom;
+};
+
 const setActiveTab = (tab) => {
   activeTab.value = tab;
 };
@@ -77,7 +91,7 @@ const props = defineProps({
                             id="expens_amount"
                             type="number"
                             class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900 "
-                            :value="(formData.amount / formData.factor).toFixed(1)" />
+                            :value="fixed(safeDivide(formData.amount, formData.factor), 1)" />
                           </div>
                           <div className="mb-4 mx-5">
                           <label  class="dark:text-gray-200" for="note" >{{ $t('note') }} </label>

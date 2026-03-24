@@ -44,6 +44,15 @@ let to = ref('');
 // const columnTypes = ref({ 'date': new Plugin(),'numeric': new NumberColumnType('0,0') });
 const toast = useToast();
 
+// Backend sometimes returns numeric fields as strings; guard `.toFixed()` usages.
+const asNumber = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = Number.parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
+
 //   const handleEdit = (event) => {
 
 //   const rowIndex = event.detail.rowIndex;
@@ -235,11 +244,14 @@ function recalculateProfit() {
   axios.get('/api/recalculateProfit')
   .then(response => {
     if (response.data.success) {
-      toast.success(response.data.message + " - مجموع الربح المتوقع: " + response.data.totalExpectedProfit.toFixed(2), {
+      toast.success(
+        response.data.message + " - مجموع الربح المتوقع: " + fixed(response.data.totalExpectedProfit, 2),
+        {
         timeout: 5000,
         position: "bottom-right",
         rtl: true
-      });
+        }
+      );
       // تحديث البيانات بعد إعادة الحساب
       refresh();
       getcountTotalInfo();
@@ -916,9 +928,9 @@ const currentWork = ref(true);
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{  car.expenses  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission ?? 0 }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total).toFixed(0)  }}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(car.total, 0)  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s-car.total).toFixed(0) }}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.total), 0) }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.date  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
 

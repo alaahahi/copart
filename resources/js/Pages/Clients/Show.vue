@@ -24,6 +24,15 @@ import newContracts from "@/Components/icon/new.vue";
 
 import { useToast } from "vue-toastification";
 let toast = useToast();
+
+// Backend sometimes returns numeric fields as strings; guard `.toFixed()` usages.
+const asNumber = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = Number.parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
 let sums= ref(0);
 let laravelData = ref({});
 let isLoading = ref(0);
@@ -69,7 +78,10 @@ function calculateTotalFilteredAmount() {
     user.type === 'out' && user.amount < 0 && user.is_pay === 1
   );
   
-  const totalAmount = filteredTransactions.reduce((sum, user) => sum + user.amount, 0);
+  const totalAmount = filteredTransactions.reduce((sum, user) => {
+    const amount = asNumber(user?.amount);
+    return sum + amount;
+  }, 0);
 
   return {  totalAmount };
   }
@@ -1124,14 +1136,14 @@ function checkClientBalance(v){
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
-                      {{ car.total_s.toFixed(0) }}
+                      {{ fixed(car.total_s, 0) }}
                     </td>
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
                       {{ car.paid }}
                     </td>
-                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ (car.total_s.toFixed(0))-car.paid}}</td>
+                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>
 
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
