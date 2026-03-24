@@ -75,7 +75,7 @@ let getResults = async (page = 1) => {
 function calculateTotalFilteredAmount() {
   if(laravelData.value && laravelData.value.transactions && Array.isArray(laravelData.value.transactions)){
      const filteredTransactions = laravelData.value.transactions.filter(user =>
-    user.type === 'out' && user.amount < 0 && user.is_pay === 1
+    user.type === 'out' && asNumber(user?.amount) < 0 && asNumber(user?.is_pay) === 1
   );
   
   const totalAmount = filteredTransactions.reduce((sum, user) => {
@@ -175,7 +175,7 @@ function confirmDelCar(V) {
     });
 }
 function confirmAddPayFromBalanceCar(V) {
-  V.balance  =(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData.value?.cars_paid))
+  V.balance  = (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData.value?.cars_paid)
    axios
     .post("/api/AddPayFromBalanceCar", V)
     .then((response) => {
@@ -469,8 +469,8 @@ function checkClientBalance(v){
   }
   
   // استخدام القيم من الفرونت
-  const cars_sum = parseFloat(v || laravelData.value?.cars_sum) || 0;
-  const cars_discount = parseFloat(laravelData.value?.cars_discount) || 0;
+  const cars_sum = asNumber(v || laravelData.value?.cars_sum);
+  const cars_discount = asNumber(laravelData.value?.cars_discount);
   
   // حساب مجموع الدفعات من transactions (قيمة سالبة، نحولها لموجبة)
   const transactionsTotal = Number(calculateTotalFilteredAmount()?.totalAmount || 0);
@@ -764,7 +764,7 @@ function checkClientBalance(v){
                 id="cars_paid"
                 type="number"
                 class="mt-1 block w-full"
-                :value="parseFloat(laravelData?.cars_sum)-(parseFloat(laravelData?.client?.wallet?.balance)+parseFloat(laravelData?.cars_discount))"
+                :value="asNumber(laravelData?.cars_sum) - (asNumber(laravelData?.client?.wallet?.balance) + asNumber(laravelData?.cars_discount))"
                 disabled
               />
             </div>
@@ -785,7 +785,7 @@ function checkClientBalance(v){
                 id="cars_need_paid"
                 type="number"
                 class="border-gray-300 focus:border-indigo-300 dark:bg-gray-800 dark:text-gray-200 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm mt-1 block w-full"
-                :value="laravelData?.transactions ? (((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum || 0)) : 0"
+                :value="laravelData?.transactions ? ((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum)) : 0"
                 readonly
               />
             </div>
@@ -826,14 +826,14 @@ function checkClientBalance(v){
                 <span>اخفاء الدفعات</span>
               </button>
             </div>
-            <div className="mb-4  mr-5"   v-if="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_paid)) != 0">
+            <div className="mb-4  mr-5"   v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid)) != 0">
               <InputLabel for="cars_need_paid" value="الرصيد غير موزع بالدولار" />
               <TextInput
                 id="cars_need_paid"
                 type="number"
                 class="mt-1 block w-full"
                
-                :value="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_paid))"
+                :value="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid))"
               />
             </div>
           </div>
@@ -961,9 +961,9 @@ function checkClientBalance(v){
                     <td>{{ laravelData?.cars_discount }}</td>
                     <td>مجموع الدفعات</td>
                     <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200"> 
-                      {{ ((calculateTotalFilteredAmount().totalAmount)*-1)}}
+                      {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) }}
                      </td>
-                     <td>النتاتج : {{ ((calculateTotalFilteredAmount().totalAmount)*-1)-parseInt(laravelData?.cars_discount) }}</td>
+                     <td>النتاتج : {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_discount) }}</td>
 
                   </tr>
                 </tbody>
@@ -1212,7 +1212,7 @@ function checkClientBalance(v){
                         tabIndex="1"
                         style="min-width: 100px;"
                         class="px-1 py-1  text-white mx-1 bg-green-500 rounded"
-                        v-if="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_paid)) != 0"
+                        v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid)) != 0"
                         @click="openModalAddPayFromBalanceCar(car)"
                       >
                         دفع من الرصيد
@@ -1220,7 +1220,7 @@ function checkClientBalance(v){
                       <button
                         tabIndex="1"
                         style="min-width: 100px;"
-                        v-if="(((calculateTotalFilteredAmount().totalAmount)*-1)-(laravelData?.cars_sum)) != 0 && car.paid"
+                        v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum)) != 0 && asNumber(car.paid)"
                         class="px-1 py-1 mt-1 text-white mx-1 bg-red-500 rounded"
                         @click="openModalDelPayFromBalanceCar(car)"
                       >
