@@ -54,6 +54,26 @@ class Car extends Model
         'year_date',
         'car_have_expenses'
     ];
+
+
+    protected $casts = [
+        'dinar' => 'integer',
+        'dolar_price' => 'integer',
+        'dolar_custom' => 'integer',
+        'checkout' => 'integer',
+        'shipping_dolar' => 'integer',
+        'coc_dolar' => 'integer',
+        'total' => 'integer',
+        'paid' => 'integer',
+        'profit' => 'integer',
+        'discount' => 'integer',
+        'expenses_s' => 'integer',
+        'commission_s' => 'integer',
+        'is_exit' => 'integer',
+        'contract_id' => 'integer',
+        'year_date' => 'integer',
+        'car_have_expenses' => 'integer',
+    ];
     public function user()
     {
         return $this->belongsTo(User::class);

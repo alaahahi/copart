@@ -14,6 +14,10 @@ class Wallet extends Model
         'balance',
         'card'
     ];
+    protected $casts = [
+        'balance' => 'float',
+        'balance_dinar' => 'float'
+    ];
 
     public function user()
     {
