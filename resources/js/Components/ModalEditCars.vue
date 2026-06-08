@@ -183,7 +183,7 @@ function validateExchangeRate(v) {
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="shipping_dolar">
-                  نقل دبي	
+                  نقل امريكا	
                   </label
                 >
                 <input
@@ -195,7 +195,7 @@ function validateExchangeRate(v) {
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="coc_dolar">
-                  كرين</label
+                  ريكفري</label
                 >
                 <input
                   id="coc_dolar"
@@ -206,7 +206,7 @@ function validateExchangeRate(v) {
               </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="checkout">
-                  مصاريف دبي</label
+                  مصاريف تصليح</label
                 >
                 <input
                   id="checkout"
@@ -215,9 +215,12 @@ function validateExchangeRate(v) {
                   v-model="formData.checkout"
                 />
               </div>
+              <div class="col-span-2 md:col-span-3 lg:col-span-3 mx-1 mb-2">
+                <p class="dark:text-gray-200 font-semibold text-center border-b pb-2">نقل اربيل</p>
+              </div>
               <div className="mb-4 mx-1">
                 <label class="dark:text-gray-200" for="expenses">
-                  شحن اربيل</label
+                  شحن اربيل وتخليص</label
                 >
                 <input
                   id="expenses"
@@ -227,15 +230,47 @@ function validateExchangeRate(v) {
                 />
               </div>
               <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="commission">
-                  مصاريف اربيل
-                </label
+                <label class="dark:text-gray-200" for="erbil_clearance">
+                  تخليص</label
                 >
                 <input
-                  id="commission"
+                  id="erbil_clearance"
                   type="number"
                   class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                  v-model="formData.commission"
+                  v-model="formData.erbil_clearance"
+                />
+              </div>
+              <div className="mb-4 mx-1">
+                <label class="dark:text-gray-200" for="erbil_transfer">
+                  نقل</label
+                >
+                <input
+                  id="erbil_transfer"
+                  type="number"
+                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  v-model="formData.erbil_transfer"
+                />
+              </div>
+              <div className="mb-4 mx-1">
+                <label class="dark:text-gray-200" for="erbil_border_repair">
+                  تصليح حدود</label
+                >
+                <input
+                  id="erbil_border_repair"
+                  type="number"
+                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  v-model="formData.erbil_border_repair"
+                />
+              </div>
+              <div className="mb-4 mx-1">
+                <label class="dark:text-gray-200" for="erbil_customs">
+                  جمرك</label
+                >
+                <input
+                  id="erbil_customs"
+                  type="number"
+                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  v-model="formData.erbil_customs"
                 />
               </div>
                

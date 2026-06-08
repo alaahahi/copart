@@ -18,6 +18,7 @@ import { useToast } from "vue-toastification";
 import axios from 'axios';
 import { ref } from 'vue';
 import { useI18n } from "vue-i18n";
+import { erbilTransferTotal, ensureErbilFormFields } from "@/utils/carFields";
 const {t} = useI18n();
 const props = defineProps({
   client:Array,
@@ -61,6 +62,7 @@ function openModalEditCars(form={}){
   if(formData.value.commission_s==0){
     formData.value.commission_s=formData.value.commission ?? 0
   }
+  ensureErbilFormFields(formData.value, true);
   showModalEditCars.value = true;
 }
 function openModalDelCar(form={}) {
@@ -404,19 +406,16 @@ function getDownloadUrl(name) {
                                           سعر السيارة امريكا         
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                          نقل دبي	
+                                          نقل امريكا	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          كرين
+                                          ريكفري
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف دبي
+                                          مصاريف تصليح
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        شحن اربيل
-                                      </th>
-                                      <th scope="col" class="px-1 py-3 text-base">
-                                       مصاريف اربيل
+                                        نقل اربيل
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('total') }}
@@ -454,8 +453,7 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar_s  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout_s}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.expenses_s}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission_s ?? 0}}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ erbilTransferTotal(car, true) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(car.total_s, 0) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>

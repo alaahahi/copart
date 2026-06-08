@@ -271,7 +271,7 @@ class DashboardController extends Controller
         $expenses=$request->expenses ?? 0;
         $paid=$request->paid ?? 0;
         $commission=$request->commission ?? 0;
-        
+        $erbilTotal = Car::erbilTransferTotal($request->all(), false);
         if($dolar_price==0){
             $dolar_price=1;
         }elseif($dolar_price > 9999){
@@ -280,7 +280,7 @@ class DashboardController extends Controller
             $dolar_price=$dolar_price;
         }
         $dolar_custom=(int)($dinar/($dolar_price)) ??0;
-        $total_amount = $checkout+$shipping_dolar+$expenses+ $coc_dolar +$dolar_custom+$commission;
+        $total_amount = $checkout+$shipping_dolar+ $coc_dolar +$dolar_custom+$erbilTotal;
         if( $client_id==0){
             $client = new User;
             $client->name = $request->client_name;
@@ -311,6 +311,10 @@ class DashboardController extends Controller
             'car_color'=> $request->car_color,
             'date'=> $request->date,
             'expenses'=> $expenses,
+            'erbil_clearance'=> $request->erbil_clearance ?? 0,
+            'erbil_transfer'=> $request->erbil_transfer ?? 0,
+            'erbil_border_repair'=> $request->erbil_border_repair ?? 0,
+            'erbil_customs'=> $request->erbil_customs ?? 0,
             'commission'=> $commission,
             'client_id'=>$client_id,
             'results'=> $results,
@@ -353,6 +357,7 @@ class DashboardController extends Controller
         $dinar=$request->dinar;
         $expenses=($request->expenses??0);
         $commission=($request->commission??0);
+        $erbilTotal = Car::erbilTransferTotal($request->all(), false);
         $dolar_price=$request->dolar_price ;
         if($dolar_price==0){
             $dolar_price=1;
@@ -362,7 +367,7 @@ class DashboardController extends Controller
             $dolar_price=$dolar_price;
         }
 
-        $total = (int)(($checkout+$shipping_dolar+ $coc_dolar +(int)($dinar / ($dolar_price))+$expenses+$commission) ??0);
+        $total = (int)(($checkout+$shipping_dolar+ $coc_dolar +(int)($dinar / ($dolar_price))+$erbilTotal) ??0);
         if($car->client_id == $request->client_id)
         {
 
@@ -437,6 +442,7 @@ class DashboardController extends Controller
         $commission_s=($request->commission_s??0);
         
         $expenses_s=($request->expenses_s??0);
+        $erbilTotalS = Car::erbilTransferTotal($request->all(), true);
         $dolar_price_s=$request->dolar_price_s ;
         if($dolar_price_s==0){
             $dolar_price_s=1;
@@ -445,7 +451,7 @@ class DashboardController extends Controller
         }else{
             $dolar_price_s=$dolar_price_s;
         }
-        $total_s = (($checkout_s+$shipping_dolar_s+ $coc_dolar_s+$commission_s +(int)($dinar_s / ($dolar_price_s))+$expenses_s) ??0);
+        $total_s = (($checkout_s+$shipping_dolar_s+ $coc_dolar_s+(int)($dinar_s / ($dolar_price_s))+$erbilTotalS) ??0);
         $profit=$total_s-$car->total;
         $descClient = trans('text.editExpenses').' '.$total_s-$car->total_s.' '.trans('text.for_car').$car->car_type.' '.$car->vin;
         $this->accountingController->increaseWallet($total_s-$car->total_s, $descClient,$car->client_id,$car->id,'App\Models\User');

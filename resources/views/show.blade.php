@@ -86,10 +86,10 @@
             <th scope="col">لون</th>
             <th scope="col">موديل</th>
             <th scope="col"> سعر السيارة امريكا</th>
-            <th scope="col"> نقل دبي	</th>
-            <th scope="col">كرين</th>
-            <th scope="col"> مصاريف دبي</th>
-            <th scope="col">شحن اربيل</th>
+            <th scope="col"> نقل امريكا	</th>
+            <th scope="col">ريكفري</th>
+            <th scope="col"> مصاريف تصليح</th>
+            <th scope="col">نقل اربيل</th>
             <th scope="col">مجموع</th>
             <th scope="col">مدفوع</th>
             <th scope="col">متبقي</th>
@@ -110,7 +110,7 @@
                 <td>{{$data->dinar_s}}</td>
                 <td>{{$data->coc_dolar_s}}</td>
                 <td>{{$data->checkout_s}}</td>
-                <td>{{$data->expenses_s}}</td>
+                <td>{{ \App\Models\Car::erbilTransferTotal($data->getAttributes(), true) }}</td>
                 <td>{{$data->total_s}}</td>
                 <td>{{$data->paid}}</td>
                 <td>{{($data->total_s)-($data->paid)}}</td>

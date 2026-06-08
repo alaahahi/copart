@@ -38,6 +38,10 @@ class Car extends Model
         'year',
         'commission',
         'expenses',
+        'erbil_clearance',
+        'erbil_transfer',
+        'erbil_border_repair',
+        'erbil_customs',
         'dinar_s',
         'dolar_price_s',
         'dolar_custom_s',
@@ -48,6 +52,10 @@ class Car extends Model
         'discount',
         'expenses_s',
         'commission_s',
+        'erbil_clearance_s',
+        'erbil_transfer_s',
+        'erbil_border_repair_s',
+        'erbil_customs_s',
         'is_exit',
         'owner_id',
         'contract_id',
@@ -69,6 +77,14 @@ class Car extends Model
         'discount' => 'integer',
         'expenses_s' => 'integer',
         'commission_s' => 'integer',
+        'erbil_clearance' => 'integer',
+        'erbil_transfer' => 'integer',
+        'erbil_border_repair' => 'integer',
+        'erbil_customs' => 'integer',
+        'erbil_clearance_s' => 'integer',
+        'erbil_transfer_s' => 'integer',
+        'erbil_border_repair_s' => 'integer',
+        'erbil_customs_s' => 'integer',
         'is_exit' => 'integer',
         'contract_id' => 'integer',
         'year_date' => 'integer',
@@ -161,5 +177,18 @@ class Car extends Model
     {
         // Calculate and return the sum of amountDinar for all related expenses
         return $this->carexpenses->sum('amountDinar');
+    }
+
+    /** Sum of نقل اربيل fields (+ legacy commission for old rows). */
+    public static function erbilTransferTotal($data, bool $sales = false): int
+    {
+        $suffix = $sales ? '_s' : '';
+
+        return (int) ($data["expenses{$suffix}"] ?? 0)
+            + (int) ($data["erbil_clearance{$suffix}"] ?? 0)
+            + (int) ($data["erbil_transfer{$suffix}"] ?? 0)
+            + (int) ($data["erbil_border_repair{$suffix}"] ?? 0)
+            + (int) ($data["erbil_customs{$suffix}"] ?? 0)
+            + (int) ($data["commission{$suffix}"] ?? 0);
     }
   }

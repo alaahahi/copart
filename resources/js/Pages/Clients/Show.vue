@@ -21,6 +21,7 @@ import edit from "@/Components/icon/edit.vue";
 import exit from "@/Components/icon/exit.vue";
 import show from "@/Components/icon/show.vue";
 import newContracts from "@/Components/icon/new.vue";
+import { erbilTransferTotal, ensureErbilFormFields } from "@/utils/carFields";
 
 import { useToast } from "vue-toastification";
 let toast = useToast();
@@ -155,6 +156,7 @@ function openModalEditCars(form={}){
   if(formData.value.expenses_s==0){
     formData.value.expenses_s=formData.value.expenses
   }
+  ensureErbilFormFields(formData.value, true);
   showModalEditCars.value = true;
 }
 
@@ -1003,19 +1005,16 @@ function checkClientBalance(v){
                       سعر السيارة امريكا         
                     </th>
                     <th scope="col" class="px-1 py-3 text-base">
-                    نقل دبي	
+                    نقل امريكا	
                     </th>
                     <th scope="col" class="px-1 py-3 text-base">
-                      كرين
+                      ريكفري
                     </th>
                     <th scope="col" class="px-1 py-3 text-base">
-                      مصاريف دبي
+                      مصاريف تصليح
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
-                      شحن اربيل
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      مصاريف اربيل
+                      نقل اربيل
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
                       {{ $t("total") }}
@@ -1126,12 +1125,7 @@ function checkClientBalance(v){
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
-                      {{ car.expenses_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.commission_s ?? 0 }}
+                      {{ erbilTransferTotal(car, true) }}
                     </td>
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"

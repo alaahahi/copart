@@ -27,6 +27,7 @@ import InputLabel from "@/Components/InputLabel.vue";
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
 import newContracts from "@/Components/icon/new.vue";
+import { erbilTransferTotal, ensureErbilFormFields } from "@/utils/carFields";
 
 import debounce from 'lodash/debounce';
 
@@ -94,6 +95,7 @@ let sumDebit= ref(0)
 
 function openModalEditCars(form={}){
   formData.value=form
+  ensureErbilFormFields(formData.value, false);
   showModalEditCars.value = true;
 }
 function openModalDelCar(form={}) {
@@ -876,19 +878,16 @@ const currentWork = ref(true);
                                           سعر السيارة امريكا         
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          نقل دبي	
+                                          نقل امريكا	
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          كرين
+                                          ريكفري
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف دبي
+                                          مصاريف تصليح
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          شحن اربيل
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف اربيل
+                                          نقل اربيل
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('total') }}
@@ -926,8 +925,7 @@ const currentWork = ref(true);
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{  car.expenses  }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission ?? 0 }}</td>
+                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ erbilTransferTotal(car, false) }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(car.total, 0)  }}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                       <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.total), 0) }}</td>
