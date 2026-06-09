@@ -9,6 +9,7 @@ export const CAR_FIELD_LABELS = {
   erbilTransferFee: 'نقل',
   erbilBorderRepair: 'تصليح حدود',
   erbilCustoms: 'جمرك',
+  erbilExpenses: 'مصاريف اربيل',
 };
 
 export const asCarNumber = (v) => {
@@ -18,17 +19,22 @@ export const asCarNumber = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/** Sum of the 5 نقل اربيل fields (+ legacy commission for old rows). */
-export const erbilTransferTotal = (car, sales = false) => {
+/** Sum of the 5 نقل اربيل breakdown fields (without commission). */
+export const erbilTransferSubtotal = (car, sales = false) => {
   const suffix = sales ? '_s' : '';
   return (
     asCarNumber(car?.[`expenses${suffix}`]) +
     asCarNumber(car?.[`erbil_clearance${suffix}`]) +
     asCarNumber(car?.[`erbil_transfer${suffix}`]) +
     asCarNumber(car?.[`erbil_border_repair${suffix}`]) +
-    asCarNumber(car?.[`erbil_customs${suffix}`]) +
-    asCarNumber(car?.[`commission${suffix}`])
+    asCarNumber(car?.[`erbil_customs${suffix}`])
   );
+};
+
+/** Full نقل اربيل total including commission (for backend totals). */
+export const erbilTransferTotal = (car, sales = false) => {
+  const suffix = sales ? '_s' : '';
+  return erbilTransferSubtotal(car, sales) + asCarNumber(car?.[`commission${suffix}`]);
 };
 
 /** Ensure edit forms have the new erbil fields (old data stays in expenses). */
@@ -58,4 +64,24 @@ export const ensureErbilFormFields = (formData, sales = false) => {
   });
 
   return formData;
+};
+
+/** Copy purchase-side erbil values to sales when sales fields are empty. */
+export const syncSalesErbilFromPurchase = (formData) => {
+  const pairs = [
+    ['expenses', 'expenses_s'],
+    ['erbil_clearance', 'erbil_clearance_s'],
+    ['erbil_transfer', 'erbil_transfer_s'],
+    ['erbil_border_repair', 'erbil_border_repair_s'],
+    ['erbil_customs', 'erbil_customs_s'],
+    ['commission', 'commission_s'],
+  ];
+
+  pairs.forEach(([purchaseKey, salesKey]) => {
+    if (!asCarNumber(formData[salesKey]) && asCarNumber(formData[purchaseKey])) {
+      formData[salesKey] = formData[purchaseKey];
+    }
+  });
+
+  return ensureErbilFormFields(formData, true);
 };

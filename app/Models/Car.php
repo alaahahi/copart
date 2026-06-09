@@ -179,8 +179,8 @@ class Car extends Model
         return $this->carexpenses->sum('amountDinar');
     }
 
-    /** Sum of نقل اربيل fields (+ legacy commission for old rows). */
-    public static function erbilTransferTotal($data, bool $sales = false): int
+    /** Sum of the 5 نقل اربيل breakdown fields (without commission). */
+    public static function erbilTransferSubtotal($data, bool $sales = false): int
     {
         $suffix = $sales ? '_s' : '';
 
@@ -188,7 +188,15 @@ class Car extends Model
             + (int) ($data["erbil_clearance{$suffix}"] ?? 0)
             + (int) ($data["erbil_transfer{$suffix}"] ?? 0)
             + (int) ($data["erbil_border_repair{$suffix}"] ?? 0)
-            + (int) ($data["erbil_customs{$suffix}"] ?? 0)
+            + (int) ($data["erbil_customs{$suffix}"] ?? 0);
+    }
+
+    /** Full نقل اربيل total including commission (for backend totals). */
+    public static function erbilTransferTotal($data, bool $sales = false): int
+    {
+        $suffix = $sales ? '_s' : '';
+
+        return self::erbilTransferSubtotal($data, $sales)
             + (int) ($data["commission{$suffix}"] ?? 0);
     }
   }

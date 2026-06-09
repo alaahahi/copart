@@ -21,7 +21,7 @@ import edit from "@/Components/icon/edit.vue";
 import exit from "@/Components/icon/exit.vue";
 import show from "@/Components/icon/show.vue";
 import newContracts from "@/Components/icon/new.vue";
-import { erbilTransferTotal, ensureErbilFormFields } from "@/utils/carFields";
+import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
 
 import { useToast } from "vue-toastification";
 let toast = useToast();
@@ -153,10 +153,10 @@ function openModalEditCars(form={}){
   if(formData.value.checkout_s==0){
     formData.value.checkout_s=formData.value.checkout
   }
-  if(formData.value.expenses_s==0){
-    formData.value.expenses_s=formData.value.expenses
+  if(formData.value.dinar_s==0){
+    formData.value.dinar_s=formData.value.dinar
   }
-  ensureErbilFormFields(formData.value, true);
+  syncSalesErbilFromPurchase(formData.value);
   showModalEditCars.value = true;
 }
 
@@ -1017,6 +1017,9 @@ function checkClientBalance(v){
                       نقل اربيل
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
+                      مصاريف اربيل
+                    </th>
+                    <th scope="col" class="px-1 py-2 text-base">
                       {{ $t("total") }}
                     </th>
                     <th scope="col" class="px-1 py-2 text-base">
@@ -1125,7 +1128,12 @@ function checkClientBalance(v){
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"
                     >
-                      {{ erbilTransferTotal(car, true) }}
+                      {{ erbilTransferSubtotal(car, true) }}
+                    </td>
+                    <td
+                      className="border dark:border-gray-800 text-center px-2 py-1"
+                    >
+                      {{ car.commission_s ?? 0 }}
                     </td>
                     <td
                       className="border dark:border-gray-800 text-center px-2 py-1"

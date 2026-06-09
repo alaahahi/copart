@@ -18,7 +18,7 @@ import { useToast } from "vue-toastification";
 import axios from 'axios';
 import { ref } from 'vue';
 import { useI18n } from "vue-i18n";
-import { erbilTransferTotal, ensureErbilFormFields } from "@/utils/carFields";
+import { erbilTransferSubtotal, syncSalesErbilFromPurchase, ensureErbilFormFields } from "@/utils/carFields";
 const {t} = useI18n();
 const props = defineProps({
   client:Array,
@@ -53,16 +53,10 @@ function openModalEditCars(form={}){
   if(formData.value.checkout_s==0){
     formData.value.checkout_s=formData.value.checkout
   }
-  if(formData.value.expenses_s==0){
-    formData.value.expenses_s=formData.value.expenses 
-  }
   if(formData.value.dinar_s==0){
     formData.value.dinar_s=formData.value.dinar 
   }
-  if(formData.value.commission_s==0){
-    formData.value.commission_s=formData.value.commission ?? 0
-  }
-  ensureErbilFormFields(formData.value, true);
+  syncSalesErbilFromPurchase(formData.value);
   showModalEditCars.value = true;
 }
 function openModalDelCar(form={}) {
@@ -418,6 +412,9 @@ function getDownloadUrl(name) {
                                         نقل اربيل
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
+                                        مصاريف اربيل
+                                      </th>
+                                      <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('total') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
@@ -453,7 +450,8 @@ function getDownloadUrl(name) {
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar_s}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar_s  }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout_s}}</td>
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ erbilTransferTotal(car, true) }}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ erbilTransferSubtotal(car, true) }}</td>
+                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission_s ?? 0 }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(car.total_s, 0) }}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
                                     <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>

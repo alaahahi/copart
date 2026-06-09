@@ -90,6 +90,7 @@
             <th scope="col">ريكفري</th>
             <th scope="col"> مصاريف تصليح</th>
             <th scope="col">نقل اربيل</th>
+            <th scope="col">مصاريف اربيل</th>
             <th scope="col">مجموع</th>
             <th scope="col">مدفوع</th>
             <th scope="col">متبقي</th>
@@ -110,7 +111,8 @@
                 <td>{{$data->dinar_s}}</td>
                 <td>{{$data->coc_dolar_s}}</td>
                 <td>{{$data->checkout_s}}</td>
-                <td>{{ \App\Models\Car::erbilTransferTotal($data->getAttributes(), true) }}</td>
+                <td>{{ \App\Models\Car::erbilTransferSubtotal($data->getAttributes(), true) }}</td>
+                <td>{{ $data->commission_s ?? 0 }}</td>
                 <td>{{$data->total_s}}</td>
                 <td>{{$data->paid}}</td>
                 <td>{{($data->total_s)-($data->paid)}}</td>
