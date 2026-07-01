@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompanyTreasuryEntry;
+use App\Models\SystemConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
@@ -41,6 +42,10 @@ class CompanyTreasuryController extends Controller
 
         if ($from && $to) {
             $filteredQuery->whereBetween('entry_date', [$from, $to]);
+        }
+
+        if ($request->filled('tag')) {
+            $filteredQuery->where('tag', $request->get('tag'));
         }
 
         $totalDebit = (float) (clone $filteredQuery)->sum('debit');
@@ -91,6 +96,7 @@ class CompanyTreasuryController extends Controller
             'currency' => 'required|in:$,IQD',
             'entry_date' => 'required|date',
             'description' => 'nullable|string|max:500',
+            'tag' => 'nullable|string|max:255',
         ]);
 
         $ownerId = Auth::user()->owner_id;
@@ -103,6 +109,7 @@ class CompanyTreasuryController extends Controller
             'user_id' => Auth::id(),
             'entry_date' => $validated['entry_date'],
             'description' => $validated['description'] ?? ($isDeposit ? 'إيداع' : 'سحب'),
+            'tag' => $validated['tag'] ?? null,
             'currency' => $currency,
             'debit' => $isDeposit ? $amount : 0,
             'credit' => $isDeposit ? 0 : $amount,
@@ -203,6 +210,7 @@ class CompanyTreasuryController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'entry_date' => 'required|date',
             'description' => 'nullable|string|max:500',
+            'tag' => 'nullable|string|max:255',
         ]);
 
         $ownerId = Auth::user()->owner_id;
@@ -218,6 +226,7 @@ class CompanyTreasuryController extends Controller
         $entry->update([
             'entry_date' => $validated['entry_date'],
             'description' => $validated['description'] ?? ($isDeposit ? 'إيداع' : 'سحب'),
+            'tag' => $validated['tag'] ?? null,
             'debit' => $isDeposit ? $amount : 0,
             'credit' => $isDeposit ? 0 : $amount,
         ]);
@@ -348,5 +357,53 @@ class CompanyTreasuryController extends Controller
         }
 
         return $data;
+    }
+
+    public function printReport(Request $request)
+    {
+        $this->authorizeTreasury();
+
+        $ownerId = Auth::user()->owner_id;
+        $currency = $request->get('currency', '$');
+        $from = $request->get('from');
+        $to = $request->get('to');
+        $tag = $request->get('tag');
+        $entryId = $request->get('entry_id');
+
+        $query = CompanyTreasuryEntry::query()
+            ->where('owner_id', $ownerId)
+            ->where('currency', $currency);
+
+        if ($entryId) {
+            $query->where('id', $entryId);
+        } else {
+            if ($from && $to) {
+                $query->whereBetween('entry_date', [$from, $to]);
+            }
+            if ($tag) {
+                $query->where('tag', $tag);
+            }
+        }
+
+        $entries = $query
+            ->orderBy('entry_date', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $config = SystemConfig::first();
+        $balanceUsd = $this->getLastBalance($ownerId, '$');
+        $balanceIqd = $this->getLastBalance($ownerId, 'IQD');
+
+        return view('receiptCompanyTreasury', compact(
+            'entries',
+            'config',
+            'currency',
+            'from',
+            'to',
+            'tag',
+            'entryId',
+            'balanceUsd',
+            'balanceIqd'
+        ));
     }
 }

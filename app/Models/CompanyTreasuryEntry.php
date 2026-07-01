@@ -15,6 +15,7 @@ class CompanyTreasuryEntry extends Model
         'user_id',
         'entry_date',
         'description',
+        'tag',
         'currency',
         'debit',
         'credit',

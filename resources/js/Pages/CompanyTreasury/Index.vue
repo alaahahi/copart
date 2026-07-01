@@ -47,6 +47,7 @@ const form = ref({
   amount: "",
   entry_date: getTodayDate(),
   description: "",
+  tag: "",
 });
 
 const editForm = ref({
@@ -54,7 +55,14 @@ const editForm = ref({
   amount: "",
   entry_date: getTodayDate(),
   description: "",
+  tag: "",
 });
+
+const tagOptions = ref([]);
+const filterTag = ref("");
+const showTagsPanel = ref(false);
+const newTagName = ref("");
+const savingTag = ref(false);
 
 const currencyLabel = computed(() =>
   currency.value === "$" ? "USD" : "IQD"
@@ -137,6 +145,59 @@ function flashSuccess(msg) {
   setTimeout(() => { successMsg.value = ""; }, 2800);
 }
 
+async function loadTags() {
+  try {
+    const res = await axios.get("/api/paymentTags");
+    tagOptions.value = res.data || [];
+  } catch {
+    tagOptions.value = [];
+  }
+}
+
+async function addTag() {
+  const name = newTagName.value.trim();
+  if (!name) return;
+  savingTag.value = true;
+  try {
+    const res = await axios.post("/api/paymentTags", { name });
+    tagOptions.value = [...tagOptions.value, res.data];
+    newTagName.value = "";
+    flashSuccess("تم إضافة التاغ | Tag added");
+  } catch (e) {
+    errorMsg.value = e.response?.data?.message || "تعذر إضافة التاغ | Failed to add tag";
+  } finally {
+    savingTag.value = false;
+  }
+}
+
+async function deleteTag(tag) {
+  if (!confirm(`حذف التاغ "${tag.name}"؟`)) return;
+  try {
+    await axios.post("/api/deletePaymentTag", { id: tag.id });
+    tagOptions.value = tagOptions.value.filter((t) => t.id !== tag.id);
+    if (form.value.tag === tag.name) form.value.tag = "";
+    if (editForm.value.tag === tag.name) editForm.value.tag = "";
+    if (filterTag.value === tag.name) {
+      filterTag.value = "";
+      resetEntries();
+    }
+    flashSuccess("تم حذف التاغ | Tag deleted");
+  } catch (e) {
+    errorMsg.value = e.response?.data?.message || "تعذر حذف التاغ | Failed to delete tag";
+  }
+}
+
+function printTreasury(entryId = null) {
+  const query = new URLSearchParams({
+    currency: currency.value,
+    from: from.value,
+    to: to.value,
+  });
+  if (filterTag.value) query.set("tag", filterTag.value);
+  if (entryId) query.set("entry_id", String(entryId));
+  window.open(`/company_treasury/print?${query.toString()}`, "_blank");
+}
+
 async function loadSummary() {
   const res = await axios.get("/api/companyTreasurySummary");
   balanceUsd.value = res.data.balance_usd ?? 0;
@@ -155,15 +216,16 @@ async function loadEntriesPage($state) {
   }
 
   try {
-    const res = await axios.get("/api/companyTreasuryEntries", {
-      params: {
-        currency: currency.value,
-        from: from.value,
-        to: to.value,
-        page: requestPage,
-        limit: PAGE_SIZE,
-      },
-    });
+    const params = {
+      currency: currency.value,
+      from: from.value,
+      to: to.value,
+      page: requestPage,
+      limit: PAGE_SIZE,
+    };
+    if (filterTag.value) params.tag = filterTag.value;
+
+    const res = await axios.get("/api/companyTreasuryEntries", { params });
 
     if (token !== listToken) {
       $state.complete();
@@ -220,6 +282,7 @@ async function submitEntry() {
       currency: currency.value,
       entry_date: form.value.entry_date,
       description: form.value.description,
+      tag: form.value.tag || null,
     });
     form.value.amount = "";
     form.value.description = "";
@@ -253,6 +316,7 @@ function openEdit(entry) {
     amount: isDeposit ? entry.debit : entry.credit,
     entry_date: (entry.entry_date?.substring?.(0, 10) ?? entry.entry_date) || getTodayDate(),
     description: entry.description ?? "",
+    tag: entry.tag ?? "",
   };
   editError.value = "";
   showEditModal.value = true;
@@ -273,6 +337,7 @@ async function confirmEdit() {
       amount: editForm.value.amount,
       entry_date: editForm.value.entry_date,
       description: editForm.value.description,
+      tag: editForm.value.tag || null,
     });
     showEditModal.value = false;
     entryToEdit.value = null;
@@ -349,10 +414,10 @@ watch(currency, () => {
   }
 });
 
-watch([from, to], () => resetEntries());
+watch([from, to, filterTag], () => resetEntries());
 
 onMounted(async () => {
-  await loadSummary();
+  await Promise.all([loadSummary(), loadTags()]);
 });
 </script>
 
@@ -413,6 +478,13 @@ onMounted(async () => {
             <label class="field-label">البيان <span class="en">Description</span></label>
             <input v-model="editForm.description" type="text" class="field-input w-full" />
           </div>
+          <div>
+            <label class="field-label">التاغ <span class="en">Tag</span></label>
+            <select v-model="editForm.tag" class="field-input w-full">
+              <option value="">— بدون تاغ —</option>
+              <option v-for="t in tagOptions" :key="t.id" :value="t.name">{{ t.name }}</option>
+            </select>
+          </div>
           <p v-if="editError" class="composer-error">{{ editError }}</p>
         </div>
       </template>
@@ -467,6 +539,19 @@ onMounted(async () => {
               <button type="button" class="btn-ghost" :disabled="loading" @click="refreshAll">
                 <span>تحديث</span>
                 <span class="en">Refresh</span>
+              </button>
+              <button type="button" class="btn-ghost" @click="printTreasury()">
+                <span>طباعة</span>
+                <span class="en">Print</span>
+              </button>
+              <button
+                type="button"
+                class="btn-ghost"
+                :class="{ 'btn-ghost-active': showTagsPanel }"
+                @click="showTagsPanel = !showTagsPanel"
+              >
+                <span>{{ showTagsPanel ? "إخفاء التاغات" : "التاغات" }}</span>
+                <span class="en">{{ showTagsPanel ? "Hide Tags" : "Tags" }}</span>
               </button>
               <button
                 type="button"
@@ -530,7 +615,43 @@ onMounted(async () => {
                 <span class="en">3 Months</span>
               </button>
             </div>
+            <div class="filter-tag">
+              <label class="field-label">التاغ <span class="en">Tag</span></label>
+              <select v-model="filterTag" class="field-input">
+                <option value="">الكل · All</option>
+                <option v-for="t in tagOptions" :key="t.id" :value="t.name">{{ t.name }}</option>
+              </select>
+            </div>
             <p class="filter-hint">{{ from }} — {{ to }}</p>
+          </section>
+        </Transition>
+
+        <Transition name="slide-filter">
+          <section v-show="showTagsPanel" class="treasury-tags-bar">
+            <div class="tags-add">
+              <input
+                v-model="newTagName"
+                type="text"
+                class="field-input"
+                placeholder="تاغ جديد · New tag"
+                @keydown.enter.prevent="addTag"
+              />
+              <button type="button" class="btn-quick" :disabled="savingTag" @click="addTag">
+                <span>{{ savingTag ? "..." : "إضافة" }}</span>
+                <span class="en">Add</span>
+              </button>
+            </div>
+            <div v-if="tagOptions.length" class="tags-list">
+              <span
+                v-for="t in tagOptions"
+                :key="t.id"
+                class="tag-chip"
+              >
+                {{ t.name }}
+                <button type="button" class="tag-chip-del" title="حذف" @click="deleteTag(t)">×</button>
+              </span>
+            </div>
+            <p v-else class="filter-hint">لا توجد تاغات · No tags yet</p>
           </section>
         </Transition>
 
@@ -602,6 +723,13 @@ onMounted(async () => {
                   placeholder="وصف الحركة · Entry note"
                 />
               </div>
+              <div class="composer-field">
+                <label class="field-label">التاغ <span class="en">Tag</span></label>
+                <select v-model="form.tag" class="field-input">
+                  <option value="">— بدون تاغ —</option>
+                  <option v-for="t in tagOptions" :key="t.id" :value="t.name">{{ t.name }}</option>
+                </select>
+              </div>
               <button
                 type="button"
                 class="btn-submit"
@@ -642,6 +770,7 @@ onMounted(async () => {
                   <th>#</th>
                   <th>التاريخ <span class="en">Date</span></th>
                   <th>البيان <span class="en">Description</span></th>
+                  <th>التاغ <span class="en">Tag</span></th>
                   <th class="col-debit">مدين <span class="en">Debit</span></th>
                   <th class="col-credit">دائن <span class="en">Credit</span></th>
                   <th class="col-balance">الرصيد <span class="en">Balance</span></th>
@@ -650,7 +779,7 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-if="!loading && !entries.length" class="empty-row">
-                  <td colspan="7">
+                  <td colspan="8">
                     <div class="empty-state">
                       <span>لا توجد حركات</span>
                       <span class="en">No entries in this period</span>
@@ -669,11 +798,16 @@ onMounted(async () => {
                     <span v-if="entryTimeOf(row)" class="date-time-lite">{{ entryTimeOf(row) }}</span>
                   </td>
                   <td class="col-desc">{{ row.description || "—" }}</td>
+                  <td class="col-tag">
+                    <span v-if="row.tag" class="tag-badge">{{ row.tag }}</span>
+                    <span v-else>—</span>
+                  </td>
                   <td class="col-debit">{{ fmtCell(row.debit) }}</td>
                   <td class="col-credit">{{ fmtCell(row.credit) }}</td>
                   <td class="col-balance">{{ fmt(row.balance) }}</td>
                   <td class="col-action">
                     <div class="action-btns">
+                      <button type="button" class="btn-print" title="Print" @click="printTreasury(row.id)">طباعة</button>
                       <button type="button" class="btn-edit" title="Edit" @click="openEdit(row)">تعديل</button>
                       <button type="button" class="btn-delete" title="Delete" @click="openDelete(row)">حذف</button>
                     </div>
@@ -682,7 +816,7 @@ onMounted(async () => {
               </tbody>
               <tfoot v-if="entries.length && !loading">
                 <tr class="totals-row">
-                  <td colspan="3">المجموع · Total</td>
+                  <td colspan="4">المجموع · Total</td>
                   <td class="col-debit">{{ fmt(totalDebit) }}</td>
                   <td class="col-credit">{{ fmt(totalCredit) }}</td>
                   <td class="col-balance">{{ fmt(periodBalance) }}</td>
@@ -692,7 +826,7 @@ onMounted(async () => {
             </table>
 
             <InfiniteLoading
-              :key="`${currency}-${from}-${to}-${infiniteKey}`"
+              :key="`${currency}-${from}-${to}-${filterTag}-${infiniteKey}`"
               @infinite="loadEntriesPage"
             >
               <template #complete>
@@ -991,6 +1125,72 @@ onMounted(async () => {
   gap: 0.4rem;
   margin-top: 0.5rem;
 }
+.filter-tag {
+  margin-top: 0.5rem;
+  max-width: 220px;
+}
+.treasury-tags-bar {
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+.dark .treasury-tags-bar { background: #0f172a; border-color: #334155; }
+.tags-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.dark .tag-chip { background: #312e81; color: #e0e7ff; }
+.tag-chip-del {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+.tag-badge {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.dark .tag-badge { background: #312e81; color: #e0e7ff; }
+.col-tag { white-space: nowrap; }
+.btn-print {
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+}
+.btn-print:hover { background: #f3f4f6; border-color: #6366f1; color: #4338ca; }
+.dark .btn-print { background: #1e293b; border-color: #475569; color: #e5e7eb; }
 .btn-quick {
   padding: 0.35rem 0.65rem;
   border-radius: 8px;
