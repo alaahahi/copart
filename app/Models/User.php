@@ -33,7 +33,9 @@ class User extends Authenticatable
         'phone',
         'device',
         'created',
-        'year_date'
+        'year_date',
+        'has_wallet_tags',
+        'show_in_dashboard',
     ];
 
     /**
@@ -54,6 +56,8 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'has_wallet_tags' => 'boolean',
+        'show_in_dashboard' => 'boolean',
     ];
 
     public function morphed()

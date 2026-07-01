@@ -160,6 +160,18 @@ Route::post('delTransactions',[AccountingController::class, 'delTransactions'])-
 Route::post('receiptArrived',[AccountingController::class, 'receiptArrived'])->name('receiptArrived');
 Route::post('receiptArrivedUser',[AccountingController::class, 'receiptArrivedUser'])->name('receiptArrivedUser');
 Route::post('salesDebtUser',[AccountingController::class, 'salesDebtUser'])->name('salesDebtUser');
+Route::post('receiptArrivedUserAmanah',[AccountingController::class, 'receiptArrivedUserAmanah'])->name('receiptArrivedUserAmanah');
+Route::post('salesDebtUserAmanah',[AccountingController::class, 'salesDebtUserAmanah'])->name('salesDebtUserAmanah');
+Route::post('updateTransactionDescription',[AccountingController::class, 'updateTransactionDescription'])->name('updateTransactionDescription');
+Route::post('updateTransaction',[AccountingController::class, 'updateTransaction'])->name('updateTransaction');
+Route::post('toggleWalletTags',[AccountingController::class, 'toggleWalletTags'])->name('toggleWalletTags');
+Route::post('assignTransactionToWallet',[AccountingController::class, 'assignTransactionToWallet'])->name('assignTransactionToWallet');
+Route::get('paymentTags',[AccountingController::class, 'getPaymentTags'])->name('getPaymentTags');
+Route::post('paymentTags',[AccountingController::class, 'storePaymentTag'])->name('storePaymentTag');
+Route::post('deletePaymentTag',[AccountingController::class, 'deletePaymentTag'])->name('deletePaymentTag');
+Route::post('createDriverLoan',[AccountingController::class, 'createDriverLoan'])->name('createDriverLoan');
+Route::post('createDriverLoanRepayment',[AccountingController::class, 'createDriverLoanRepayment'])->name('createDriverLoanRepayment');
+Route::post('toggleShowInDashboard',[UserController::class, 'toggleShowInDashboard'])->name('toggleShowInDashboard');
 
 
 Route::post('GenExpenses',[AccountingController::class, 'GenExpenses'])->name('GenExpenses');

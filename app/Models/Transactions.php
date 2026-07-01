@@ -21,7 +21,8 @@ class Transactions extends Model
         'created',
         'discount',
         'parent_id',
-        'details'
+        'details',
+        'tag',
     ];
     protected $casts = [
         'details' => 'array',

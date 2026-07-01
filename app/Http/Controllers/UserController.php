@@ -81,7 +81,7 @@ class UserController extends Controller
 
 
         $query = DB::table('users')
-            ->select('users.id', 'users.name', 'users.phone', 'users.created_at')
+            ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
             ->selectRaw('(SELECT COUNT(id) FROM contract WHERE user_id = users.id) AS contract_count')
             ->selectSub(function ($subquery) use ($userClient) {
                 $subquery->selectRaw('COUNT(id)')
@@ -111,20 +111,35 @@ class UserController extends Controller
 
             ->orderBy('balance', 'desc');
     
-            if ($q && $q !== 'debit') {
+            if ($q && !in_array($q, ['debit', 'box_movement'])) {
                 $query->leftJoin('car', 'users.id', '=', 'car.client_id')
                     ->where(function ($subQuery) use ($q) {
                         $subQuery->where('users.name', 'like', '%' . $q . '%')
                             ->orWhere('users.phone', 'like', '%' . $q . '%')
                             ->orWhere(function ($carQuery) use ($q) {
-                                $carQuery->where('car.vin', 'like', '%' . $q . '%') // Search using VIN
-                                    ->orWhere('car.car_number', 'like', '%' . $q . '%'); // Search using car number
+                                $carQuery->where('car.vin', 'like', '%' . $q . '%')
+                                    ->orWhere('car.car_number', 'like', '%' . $q . '%');
                             });
                     });
-                $query->groupBy('users.id', 'users.name', 'users.phone', 'users.created_at');
+                $query->groupBy('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard');
+            }
+
+            if ($q === 'box_movement') {
+                $query->whereExists(function ($subQuery) use ($from, $to) {
+                    $subQuery->select(DB::raw(1))
+                        ->from('transactions')
+                        ->whereColumn('transactions.morphed_id', 'users.id')
+                        ->where('transactions.morphed_type', 'App\\Models\\User')
+                        ->whereIn('transactions.type', ['inUserBox', 'outUserBox'])
+                        ->whereNull('transactions.deleted_at');
+
+                    if ($from && $to) {
+                        $subQuery->whereBetween('transactions.created_at', [$from, $to]);
+                    }
+                });
             }
     
-        if ($from && $to) {
+        if ($from && $to && $q !== 'box_movement') {
             $query->whereBetween('users.created_at', [$from, $to]);
         }
         if($print==1)
@@ -152,14 +167,16 @@ class UserController extends Controller
             return view('reportClients',compact('data','config','owner_id'));
 
         }
-        if ($q == 'debit') {
+        if ($q == 'debit' || $q == 'box_movement') {
             if ($page == 1) {
-                if ($excludeZero == 1) {
-                    // عرض المدين والدائن فقط (balance != 0)
-                    $data = $query->havingRaw('balance != 0')->get();
+                if ($q == 'debit') {
+                    if ($excludeZero == 1) {
+                        $data = $query->havingRaw('balance != 0')->get();
+                    } else {
+                        $data = $query->havingRaw('balance > 0')->get();
+                    }
                 } else {
-                    // السلوك القديم: عرض المدين فقط (balance > 0)
-                    $data = $query->havingRaw('balance > 0')->get();
+                    $data = $query->get();
                 }
                 return response()->json(['data' => $data], 200);
             } else {
@@ -228,13 +245,32 @@ class UserController extends Controller
         Validator::make($request->all(), [
             'name' => 'required|string|max:255',
            ])->validate();
-           //$userChief_id =User::where('type_id',  $this->userChief)->first()->id ?? 0 ;
                 $user = User::find($request->id)->update([
                     'name' => $request->name,
                     'phone' => $request->phone,
                 ]);
        
         return Response::json($user, 200);
+    }
+
+    public function toggleShowInDashboard(Request $request)
+    {
+        $validated = Validator::make($request->all(), [
+            'client_id' => 'required|integer|exists:users,id',
+            'show_in_dashboard' => 'required|boolean',
+        ])->validate();
+
+        $client = User::where('id', $validated['client_id'])
+            ->where('owner_id', Auth::user()->owner_id)
+            ->firstOrFail();
+
+        $client->show_in_dashboard = $validated['show_in_dashboard'];
+        $client->save();
+
+        return response()->json([
+            'message' => 'تم تحديث عرض القاسة في لوحة المحاسبة',
+            'show_in_dashboard' => $client->show_in_dashboard,
+        ], 200);
     }
     public function delClient(Request $request)
     {

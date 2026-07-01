@@ -150,6 +150,18 @@ function confirmDelClient(V) {
 
 }
 
+async function toggleShowInDashboardQuick(user) {
+  try {
+    const response = await axios.post('/api/toggleShowInDashboard', {
+      client_id: user.id,
+      show_in_dashboard: !(user.show_in_dashboard || false),
+    });
+    user.show_in_dashboard = response.data.show_in_dashboard;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 
 </script>
 
@@ -262,6 +274,7 @@ function confirmDelClient(V) {
                             <select  v-model="q" id="default" class="pr-8 bg-gray-50 border border-gray-300 text-gray-900 mb-6 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-red-500 dark:focus:border-red-500">
                               <option value="0">{{ $t("allOwners") }}</option>
                               <option value="debit">يوجد دين</option>
+                              <option value="box_movement">حركة على القاسة</option>
                             </select>
                         </div>
                         <div class="text-center px-4">
@@ -365,7 +378,16 @@ function confirmDelClient(V) {
                                         >
                                           <trash />
                                         </button>
-                                        <Link  v-if="false"
+                                        <button
+                                          tabIndex="1"
+                                          class="px-2 py-1 text-xs mx-1 rounded"
+                                          @click="toggleShowInDashboardQuick(user)"
+                                          :class="user.show_in_dashboard ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'"
+                                          :title="user.show_in_dashboard ? 'القاسة مفعلة في المحاسبة' : 'تفعيل القاسة في المحاسبة'"
+                                        >
+                                          {{ user.show_in_dashboard ? 'قاسة ✓' : 'قاسة' }}
+                                        </button>
+                                        <Link
                                           style="display:inline-flex;"
                                           className="px-1 py-1  text-white mx-1 bg-purple-900 rounded d-inline-block"
                                           :href="route('wallet',{ 'id':user.id})">
