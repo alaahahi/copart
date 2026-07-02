@@ -15,6 +15,7 @@ use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CarContractController;
 use App\Http\Controllers\CompanyTreasuryController;
+use App\Http\Controllers\SyncMonitorController;
 
 use App\Models\SystemConfig;
 
@@ -153,6 +154,9 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('contract_account',[CarContractController::class, 'contract_account'])->name('contract_account');
     Route::get('company_treasury',[CompanyTreasuryController::class, 'index'])->name('company_treasury');
     Route::get('company_treasury/print',[CompanyTreasuryController::class, 'printReport'])->name('company_treasury_print');
+    Route::get('sync-monitor', function () {
+        return Inertia::render('SyncMonitor');
+    })->name('sync-monitor');
     Route::get('contract/{id?}', [CarContractController::class, 'contract'])->name('contract');
     Route::get('contract_print/{id}', [CarContractController::class, 'contract_print'])->name('contract_print');
 

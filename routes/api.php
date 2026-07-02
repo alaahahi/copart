@@ -21,6 +21,7 @@ use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CarContractController;
 use App\Http\Controllers\CompanyTreasuryController;
+use App\Http\Controllers\SyncMonitorController;
 
 
 use App\Models\SystemConfig;
@@ -212,6 +213,12 @@ Route::post('companyTreasuryUpdate',[CompanyTreasuryController::class, 'update']
 Route::post('companyTreasuryDelete',[CompanyTreasuryController::class, 'destroy'])->name('companyTreasuryDelete');
 Route::get('companyTreasuryTrash',[CompanyTreasuryController::class, 'getTrash'])->name('companyTreasuryTrash');
 Route::post('companyTreasuryRestore',[CompanyTreasuryController::class, 'restore'])->name('companyTreasuryRestore');
+
+Route::get('sync-monitor/migrations',[SyncMonitorController::class, 'getMigrations'])->name('sync.monitor.migrations');
+Route::post('sync-monitor/check-migration',[SyncMonitorController::class, 'checkMigration'])->name('sync.monitor.check.migration');
+Route::post('sync-monitor/run-migration',[SyncMonitorController::class, 'runMigration'])->name('sync.monitor.run.migration');
+Route::get('sync-monitor/logs',[SyncMonitorController::class, 'getLogs'])->name('sync.monitor.logs');
+Route::post('sync-monitor/clear-logs',[SyncMonitorController::class, 'clearLogs'])->name('sync.monitor.clear.logs');
 
 
 

@@ -560,7 +560,7 @@ class AccountingController extends Controller
         if($from && $to ){
             $contract=Contract::where('user_id',$user_id)->whereBetween('created', [$from, $to]);
             $transactions = Transactions ::where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
-            $cars = Car::with('contract')->with('CarImages')->with('exitcar')->with(['internalSale.client', 'tags:id,name'])->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
+            $cars = Car::with('contract')->with('CarImages')->with('exitcar')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->whereBetween('date', [$from, $to])->count();
@@ -576,7 +576,7 @@ class AccountingController extends Controller
         }else{
             $contract=Contract::where('user_id',$user_id);
             $transactions = Transactions ::where('wallet_id', $client?->wallet?->id);
-            $cars =  Car::with('contract')->with('CarImages')->with('exitcar')->with(['internalSale.client', 'tags:id,name'])->where('client_id',$client->id);
+            $cars =  Car::with('contract')->with('CarImages')->with('exitcar')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->count();
@@ -590,16 +590,6 @@ class AccountingController extends Controller
             $contract_total_debit_Dinar=($contract->sum('price_dinar')-$contract->sum('paid_dinar'))??0;
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }
-        if($tag !== null && $tag !== ''){
-            $cars->whereHas('tags', function ($query) use ($tag) {
-                if (is_numeric($tag)) {
-                    $query->where('car_tags.id', (int) $tag);
-                } else {
-                    $query->where('car_tags.name', trim((string) $tag));
-                }
-            });
-        }
-
         // مجموع الدفعات بالدولار (type=out, is_pay=1, currency=$) - للمطابقة مع cars_paid
         $payments_sum_dollar = (clone $transactions)
             ->where('type', 'out')
