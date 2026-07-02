@@ -787,7 +787,7 @@ function checkClientBalance(v){
                 id="cars_need_paid"
                 type="number"
                 class="border-gray-300 focus:border-indigo-300 dark:bg-gray-800 dark:text-gray-200 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm mt-1 block w-full"
-                :value="laravelData?.transactions ? (asNumber(laravelData?.cars_sum) - (asNumber(calculateTotalFilteredAmount().totalAmount) * -1)) : 0"
+                :value="laravelData?.transactions ? ((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum)) : 0"
                 readonly
               />
             </div>
