@@ -84,6 +84,14 @@ const switchLocale = (locale) => {
                 {{ $t("CompanyTreasury") }}
                 </NavLink>
               </div>
+              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                <NavLink
+                  :href="route('sync-monitor')"
+                  :active="route().current('sync-monitor')"
+                >
+                {{ $t("SyncMonitor") }}
+                </NavLink>
+              </div>
               <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="false">
                 <NavLink
                   :href="route('online_contracts')"
@@ -364,6 +372,12 @@ const switchLocale = (locale) => {
                 :active="route().current('company_treasury')"
               >
               {{ $t("CompanyTreasury") }}
+              </ResponsiveNavLink>
+              <ResponsiveNavLink
+                :href="route('sync-monitor')"
+                :active="route().current('sync-monitor')"
+              >
+              {{ $t("SyncMonitor") }}
               </ResponsiveNavLink>
               <ResponsiveNavLink
                 :href="route('online_contracts')"

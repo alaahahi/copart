@@ -140,6 +140,7 @@
     "newContract":"newContract",
     "SalesContracts": "Sales Contracts",
     "CompanyTreasury": "Company Treasury",
+    "SyncMonitor": "System Tools",
     "CompanyExpenses": "Company Expenses",
     "seller": "Seller",
     "debtInDinars": "Debt in Dinars",
