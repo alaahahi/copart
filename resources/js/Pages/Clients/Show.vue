@@ -479,9 +479,9 @@ function checkClientBalance(v){
   const transactionsTotalPositive = Math.abs(transactionsTotal);
   
   // حساب الرصيد: مجموع الدفعات + الخصم - مجموع السيارات
-  // الرصيد يجب أن يكون موجباً دائماً (نستخدم القيمة المطلقة)
+  // نضرب الناتج بسالب قبل الإرسال إلى الـ API
   const calculatedBalance = transactionsTotalPositive + cars_discount - cars_sum;
-  const currentBalance = Math.abs(calculatedBalance);
+  const currentBalance = calculatedBalance * -1;
   
   const params = new URLSearchParams({
     userId: userId,
