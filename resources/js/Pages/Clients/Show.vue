@@ -479,9 +479,9 @@ function checkClientBalance(v){
   const transactionsTotalPositive = Math.abs(transactionsTotal);
   
   // حساب الرصيد: مجموع الدفعات + الخصم - مجموع السيارات
-  // نحافظ على الإشارة (موجب أو سالب) للتمييز بين الرصيد الإيجابي والمديونية
+  // الرصيد يجب أن يكون موجباً دائماً (نستخدم القيمة المطلقة)
   const calculatedBalance = transactionsTotalPositive + cars_discount - cars_sum;
-  const currentBalance = calculatedBalance;
+  const currentBalance = Math.abs(calculatedBalance);
   
   const params = new URLSearchParams({
     userId: userId,
