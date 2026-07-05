@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
         }
 
         return array_merge(parent::share($request), [
+            'appName' => config('app.name'),
             'auth' => [
                 'user' => $user,
                 'accessToken' => $accessToken?->token,

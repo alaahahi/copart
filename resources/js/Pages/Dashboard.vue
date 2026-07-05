@@ -4,9 +4,10 @@ import { useToast } from "vue-toastification";
 import axios from 'axios';
 import { ref, watch } from 'vue'; // Import ref and watch from Vue
 import { useI18n } from "vue-i18n";
-import { Link } from "@inertiajs/inertia-vue3";
+import { Link, usePage } from "@inertiajs/inertia-vue3";
 
 const auth = defineProps(['auth']);
+const appName = usePage().props.value.appName;
 
 const {t} = useI18n();
 let userType = ref(auth.auth.user.type_id)
@@ -61,7 +62,7 @@ let showModal = ref(false);
 function sendWhatsAppMessage(phoneNumber) {
   if(phoneNumber){
     phoneNumber= '964'+phoneNumber;
-    const message = 'السلام عليكم: شركة سلام جلال ايوب - أربيل ,يرجى الأخذ بالعلم تسديد المبلغ المستحق عليكم في أقرب وقت ممكن. شكرا لتعاونكم  ..........   سڵاوی خواتان لێبێت: کۆمپانیای سلام جلال ايوب - تکایە ئاگاداربن بە زووترین کات ئەو بڕە پارەیەی کە قەرزارن بیدەن. سوپاس بۆ هەماهەنگیت';
+    const message = `السلام عليكم: ${appName} - أربيل ,يرجى الأخذ بالعلم تسديد المبلغ المستحق عليكم في أقرب وقت ممكن. شكرا لتعاونكم  ..........   سڵاوی خواتان لێبێت: کۆمپانیای ${appName} - تکایە ئاگاداربن بە زووترین کات ئەو بڕە پارەیەی کە قەرزارن بیدەن. سوپاس بۆ هەماهەنگیت`;
 
     // Construct the WhatsApp message URL
     const whatsappURL = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;

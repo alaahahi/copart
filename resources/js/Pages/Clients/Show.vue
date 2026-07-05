@@ -524,7 +524,7 @@ function checkClientBalance(v){
       <h2
         class="font-semibold text-xl dark:text-gray-400 text-gray-800 leading-tight"
       >
-        شركة سلام جلال
+        {{ $page.props.appName }}
       </h2>
     </template>
     <ModalAddCarContracts
