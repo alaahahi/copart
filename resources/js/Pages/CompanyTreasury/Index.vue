@@ -702,16 +702,6 @@ onMounted(async () => {
             <div class="composer-type">
               <button
                 type="button"
-                class="type-btn type-withdraw"
-                :class="{ active: form.entry_type === 'withdraw' }"
-                @click="setEntryType('withdraw')"
-              >
-                <span>سحب</span>
-                <span class="en">Withdraw</span>
-                <small class="hint">دائن · Credit</small>
-              </button>
-              <button
-                type="button"
                 class="type-btn type-deposit"
                 :class="{ active: form.entry_type === 'deposit' }"
                 @click="setEntryType('deposit')"
@@ -719,6 +709,16 @@ onMounted(async () => {
                 <span>إيداع</span>
                 <span class="en">Deposit</span>
                 <small class="hint">مدين · Debit</small>
+              </button>
+              <button
+                type="button"
+                class="type-btn type-withdraw"
+                :class="{ active: form.entry_type === 'withdraw' }"
+                @click="setEntryType('withdraw')"
+              >
+                <span>سحب</span>
+                <span class="en">Withdraw</span>
+                <small class="hint">دائن · Credit</small>
               </button>
             </div>
 
@@ -791,38 +791,27 @@ onMounted(async () => {
 
             <table class="ledger-table">
               <colgroup>
-                <col class="col-action" />
-                <col class="col-balance" />
-                <col class="col-credit" />
-                <col class="col-debit" />
-                <col class="col-tag" />
-                <col class="col-desc" />
-                <col class="col-date" />
-                <col class="col-num" />
                 <col class="col-status" />
+                <col class="col-num" />
+                <col class="col-date" />
+                <col class="col-desc" />
+                <col class="col-tag" />
+                <col class="col-debit" />
+                <col class="col-credit" />
+                <col class="col-balance" />
+                <col class="col-action" />
               </colgroup>
               <thead>
                 <tr class="ledger-head-row">
-                  <th class="col-action"></th>
-                  <th class="col-balance">الرصيد <span class="en">Balance</span></th>
-                  <th class="col-credit">دائن <span class="en">Credit</span></th>
-                  <th class="col-debit">مدين <span class="en">Debit</span></th>
-                  <th class="col-tag">التاغ <span class="en">Tag</span></th>
-                  <th class="col-desc">البيان <span class="en">Description</span></th>
-                  <th class="col-date">التاريخ <span class="en">Date</span></th>
-                  <th class="col-num">#</th>
                   <th class="col-status"></th>
-                </tr>
-                <tr v-if="entries.length && !loading" class="totals-row">
-                  <td class="col-action"></td>
-                  <td class="col-balance">{{ fmt(periodBalance) }}</td>
-                  <td class="col-credit">{{ fmt(totalCredit) }}</td>
-                  <td class="col-debit">{{ fmt(totalDebit) }}</td>
-                  <td class="col-tag"></td>
-                  <td class="col-desc totals-label">المجموع · Total</td>
-                  <td class="col-date"></td>
-                  <td class="col-num"></td>
-                  <td class="col-status"></td>
+                  <th class="col-num">#</th>
+                  <th class="col-date">التاريخ <span class="en">Date</span></th>
+                  <th class="col-desc">البيان <span class="en">Description</span></th>
+                  <th class="col-tag">التاغ <span class="en">Tag</span></th>
+                  <th class="col-debit">مدين <span class="en">Debit</span></th>
+                  <th class="col-credit">دائن <span class="en">Credit</span></th>
+                  <th class="col-balance">الرصيد <span class="en">Balance</span></th>
+                  <th class="col-action"></th>
                 </tr>
               </thead>
               <tbody>
@@ -843,26 +832,6 @@ onMounted(async () => {
                     row.is_settled ? 'row-settled' : '',
                   ]"
                 >
-                  <td class="col-action">
-                    <div class="action-btns">
-                      <button type="button" class="btn-print" title="Print" @click="printTreasury(row.id)">طباعة</button>
-                      <button type="button" class="btn-edit" title="Edit" @click="openEdit(row)">تعديل</button>
-                      <button type="button" class="btn-delete" title="Delete" @click="openDelete(row)">حذف</button>
-                    </div>
-                  </td>
-                  <td class="col-balance">{{ fmt(row.balance) }}</td>
-                  <td class="col-credit">{{ fmtCell(row.credit) }}</td>
-                  <td class="col-debit">{{ fmtCell(row.debit) }}</td>
-                  <td class="col-tag">
-                    <span v-if="row.tag" class="tag-badge">{{ row.tag }}</span>
-                    <span v-else>—</span>
-                  </td>
-                  <td class="col-desc">{{ row.description || "—" }}</td>
-                  <td class="col-date">
-                    <span class="date-main">{{ fmtDateLite(row.entry_date) }}</span>
-                    <span v-if="entryTimeOf(row)" class="date-time-lite">{{ entryTimeOf(row) }}</span>
-                  </td>
-                  <td class="col-num">{{ idx + 1 }}</td>
                   <td class="col-status">
                     <button
                       type="button"
@@ -878,8 +847,41 @@ onMounted(async () => {
                       @click="toggleSettled(row)"
                     />
                   </td>
+                  <td class="col-num">{{ idx + 1 }}</td>
+                  <td class="col-date">
+                    <span class="date-main">{{ fmtDateLite(row.entry_date) }}</span>
+                    <span v-if="entryTimeOf(row)" class="date-time-lite">{{ entryTimeOf(row) }}</span>
+                  </td>
+                  <td class="col-desc">{{ row.description || "—" }}</td>
+                  <td class="col-tag">
+                    <span v-if="row.tag" class="tag-badge">{{ row.tag }}</span>
+                    <span v-else>—</span>
+                  </td>
+                  <td class="col-debit">{{ fmtCell(row.debit) }}</td>
+                  <td class="col-credit">{{ fmtCell(row.credit) }}</td>
+                  <td class="col-balance">{{ fmt(row.balance) }}</td>
+                  <td class="col-action">
+                    <div class="action-btns">
+                      <button type="button" class="btn-print" title="Print" @click="printTreasury(row.id)">طباعة</button>
+                      <button type="button" class="btn-edit" title="Edit" @click="openEdit(row)">تعديل</button>
+                      <button type="button" class="btn-delete" title="Delete" @click="openDelete(row)">حذف</button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
+              <tfoot v-if="entries.length && !loading">
+                <tr class="totals-row">
+                  <td class="col-status"></td>
+                  <td class="col-num"></td>
+                  <td class="col-date"></td>
+                  <td class="col-desc totals-label">المجموع · Total</td>
+                  <td class="col-tag"></td>
+                  <td class="col-debit">{{ fmt(totalDebit) }}</td>
+                  <td class="col-credit">{{ fmt(totalCredit) }}</td>
+                  <td class="col-balance">{{ fmt(periodBalance) }}</td>
+                  <td class="col-action"></td>
+                </tr>
+              </tfoot>
             </table>
 
             <InfiniteLoading
@@ -1558,32 +1560,15 @@ onMounted(async () => {
   top: 0;
   z-index: 2;
 }
-.ledger-table th,
-.ledger-table .totals-row td {
-  background: #e5e7eb;
-  color: #111827;
-  padding: 0.45rem 0.45rem;
-  font-weight: 800;
-  font-size: 0.9375rem;
-  border: 1px solid #9ca3af;
-  white-space: nowrap;
-}
-.dark .ledger-table th,
-.dark .ledger-table .totals-row td {
-  background: #334155;
-  color: #f9fafb;
-  border-color: #475569;
-}
 .ledger-table th {
-  text-align: center;
-  font-size: 0.8125rem;
+  background: #374151;
+  color: #fff;
+  padding: 0.5rem 0.45rem;
   font-weight: 700;
-}
-.ledger-table .totals-row td {
-  border-bottom: 2px solid #374151;
-}
-.dark .ledger-table .totals-row td {
-  border-bottom-color: #64748b;
+  font-size: 0.8125rem;
+  text-align: center;
+  border: 1px solid #4b5563;
+  white-space: nowrap;
 }
 .ledger-table th .en {
   display: inline;
@@ -1729,6 +1714,7 @@ onMounted(async () => {
   font-weight: 800;
   font-size: 0.9375rem;
   padding: 0.45rem 0.45rem !important;
+  border-top: 2px solid #374151;
 }
 .dark .totals-row td { background: #334155 !important; }
 
