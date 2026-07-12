@@ -35,6 +35,7 @@ const showTrashPanel = ref(false);
 const trashEntries = ref([]);
 const loadingTrash = ref(false);
 const restoringId = ref(null);
+const togglingIds = ref([]);
 const infiniteKey = ref(0);
 let page = 1;
 let listToken = 0;
@@ -130,7 +131,14 @@ function fmtCell(n) {
 function fmtDateLite(value) {
   if (!value) return "—";
   const s = String(value);
-  return s.substring(0, 10);
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s.substring(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function fmtTimeLite(value) {
@@ -314,7 +322,7 @@ function openEdit(entry) {
   editForm.value = {
     entry_type: isDeposit ? "deposit" : "withdraw",
     amount: isDeposit ? entry.debit : entry.credit,
-    entry_date: (entry.entry_date?.substring?.(0, 10) ?? entry.entry_date) || getTodayDate(),
+    entry_date: entry.entry_date || getTodayDate(),
     description: entry.description ?? "",
     tag: entry.tag ?? "",
   };
@@ -400,6 +408,23 @@ async function restoreEntry(entry) {
     errorMsg.value = e.response?.data?.message || "تعذر الاسترجاع | Restore failed";
   } finally {
     restoringId.value = null;
+  }
+}
+
+async function toggleSettled(row) {
+  if (togglingIds.value.includes(row.id)) return;
+  togglingIds.value = [...togglingIds.value, row.id];
+  const next = !row.is_settled;
+  try {
+    const { data } = await axios.post("/api/companyTreasuryToggleSettled", {
+      id: row.id,
+      is_settled: next,
+    });
+    row.is_settled = data.is_settled;
+  } catch (e) {
+    errorMsg.value = e.response?.data?.message || "تعذر تحديث الحالة | Failed to update status";
+  } finally {
+    togglingIds.value = togglingIds.value.filter((id) => id !== row.id);
   }
 }
 
@@ -767,6 +792,7 @@ onMounted(async () => {
             <table class="ledger-table">
               <thead>
                 <tr>
+                  <th class="col-status"></th>
                   <th>#</th>
                   <th>التاريخ <span class="en">Date</span></th>
                   <th>البيان <span class="en">Description</span></th>
@@ -779,7 +805,7 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-if="!loading && !entries.length" class="empty-row">
-                  <td colspan="8">
+                  <td colspan="9">
                     <div class="empty-state">
                       <span>لا توجد حركات</span>
                       <span class="en">No entries in this period</span>
@@ -790,8 +816,26 @@ onMounted(async () => {
                   v-for="(row, idx) in entries"
                   :key="row.id"
                   class="data-row"
-                  :class="Number(row.debit) > 0 ? 'row-deposit' : 'row-withdraw'"
+                  :class="[
+                    Number(row.debit) > 0 ? 'row-deposit' : 'row-withdraw',
+                    row.is_settled ? 'row-settled' : '',
+                  ]"
                 >
+                  <td class="col-status">
+                    <button
+                      type="button"
+                      class="status-dot"
+                      :class="{
+                        'is-settled': row.is_settled,
+                        'is-pending': !row.is_settled,
+                        toggling: togglingIds.includes(row.id),
+                      }"
+                      :title="row.is_settled ? 'مؤكد — اضغط للإلغاء' : 'غير مؤكد — اضغط للتأكيد'"
+                      :aria-label="row.is_settled ? 'مؤكد' : 'غير مؤكد'"
+                      :disabled="togglingIds.includes(row.id)"
+                      @click="toggleSettled(row)"
+                    />
+                  </td>
                   <td class="col-num">{{ idx + 1 }}</td>
                   <td class="col-date">
                     <span class="date-main">{{ fmtDateLite(row.entry_date) }}</span>
@@ -816,7 +860,7 @@ onMounted(async () => {
               </tbody>
               <tfoot v-if="entries.length && !loading">
                 <tr class="totals-row">
-                  <td colspan="4">المجموع · Total</td>
+                  <td colspan="5">المجموع · Total</td>
                   <td class="col-debit">{{ fmt(totalDebit) }}</td>
                   <td class="col-credit">{{ fmt(totalCredit) }}</td>
                   <td class="col-balance">{{ fmt(periodBalance) }}</td>
@@ -1170,21 +1214,21 @@ onMounted(async () => {
 }
 .tag-badge {
   display: inline-block;
-  padding: 0.12rem 0.45rem;
+  padding: 0.18rem 0.55rem;
   border-radius: 999px;
   background: #e0e7ff;
   color: #3730a3;
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 .dark .tag-badge { background: #312e81; color: #e0e7ff; }
 .col-tag { white-space: nowrap; }
 .btn-print {
-  padding: 0.2rem 0.45rem;
+  padding: 0.28rem 0.55rem;
   border-radius: 6px;
   border: 1px solid #d1d5db;
   background: #fff;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #374151;
   cursor: pointer;
@@ -1435,13 +1479,13 @@ onMounted(async () => {
 .dark .ledger-header { background: #0f172a; border-color: #334155; }
 .ledger-header h2 {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.9375rem;
   font-weight: 800;
   color: #111827;
 }
 .dark .ledger-header h2 { color: #f9fafb; }
 .ledger-count {
-  font-size: 0.65rem;
+  font-size: 0.8125rem;
   color: #6b7280;
   font-weight: 600;
 }
@@ -1481,8 +1525,8 @@ onMounted(async () => {
 .ledger-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.72rem;
-  line-height: 1.25;
+  font-size: 0.9375rem;
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
 .ledger-table thead {
@@ -1493,23 +1537,24 @@ onMounted(async () => {
 .ledger-table th {
   background: #374151;
   color: #fff;
-  padding: 0.28rem 0.35rem;
+  padding: 0.5rem 0.45rem;
   font-weight: 700;
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
   text-align: center;
   border: 1px solid #4b5563;
   white-space: nowrap;
 }
 .ledger-table th .en {
   display: inline;
-  font-size: 0.55rem;
-  opacity: 0.7;
+  font-size: 0.6875rem;
+  opacity: 0.75;
   margin-right: 3px;
 }
 .ledger-table td {
-  padding: 0.2rem 0.35rem;
+  padding: 0.42rem 0.45rem;
   border: 1px solid #d1d5db;
   vertical-align: middle;
+  font-size: 0.9375rem;
 }
 .dark .ledger-table td { border-color: #475569; color: #e5e7eb; }
 
@@ -1564,39 +1609,91 @@ onMounted(async () => {
 }
 .panel-slide-enter-to, .panel-slide-leave-from { max-height: 480px; }
 
-.col-num { text-align: center; color: #9ca3af; width: 1.8rem; font-size: 0.65rem; }
-.col-date { text-align: center; white-space: nowrap; font-size: 0.68rem; line-height: 1.15; }
-.date-main { display: block; }
+.col-num { text-align: center; color: #6b7280; width: 2rem; font-size: 0.875rem; font-weight: 600; }
+.col-date { text-align: center; white-space: nowrap; font-size: 0.875rem; line-height: 1.3; font-weight: 600; }
+.date-main { display: block; color: #111827; }
+.dark .date-main { color: #f3f4f6; }
 .date-time-lite {
   display: block;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #6b7280;
   margin-top: 2px;
 }
 .dark .date-time-lite { color: #94a3b8; }
-.col-desc { text-align: right; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-debit { text-align: left; font-weight: 700; color: #047857; font-size: 0.72rem; }
-.col-credit { text-align: left; font-weight: 700; color: #b91c1c; font-size: 0.72rem; }
-.col-balance { text-align: left; font-weight: 800; color: #1e40af; font-size: 0.72rem; }
+.col-desc { text-align: right; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; }
+.col-debit { text-align: left; font-weight: 700; color: #047857; font-size: 0.9375rem; }
+.col-credit { text-align: left; font-weight: 700; color: #b91c1c; font-size: 0.9375rem; }
+.col-balance { text-align: left; font-weight: 800; color: #1e40af; font-size: 0.9375rem; }
 .dark .col-balance { color: #93c5fd; }
-.col-action { width: 4.5rem; padding: 0.15rem !important; }
+.col-action { width: 5.5rem; padding: 0.25rem !important; }
+.col-status { width: 2.5rem; text-align: center; padding: 0.3rem !important; }
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+}
+.status-dot.is-pending {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28);
+}
+.status-dot.is-settled {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.28);
+}
+.status-dot:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+.status-dot:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.status-dot.toggling {
+  animation: dot-pop 0.35s ease;
+}
+.status-dot:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+@keyframes dot-pop {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot { transition: none; }
+  .status-dot.toggling { animation: none; }
+}
+
+.row-settled { opacity: 0.92; }
+.row-settled.row-deposit { background: #d1fae5 !important; }
+.row-settled.row-withdraw { background: #fee2e2 !important; }
+.dark .row-settled.row-deposit { background: rgba(6, 95, 70, 0.32) !important; }
+.dark .row-settled.row-withdraw { background: rgba(153, 27, 27, 0.28) !important; }
 
 .totals-row td {
   background: #e5e7eb !important;
   font-weight: 800;
-  font-size: 0.72rem;
-  padding: 0.28rem 0.35rem !important;
+  font-size: 0.9375rem;
+  padding: 0.45rem 0.45rem !important;
   border-top: 2px solid #374151;
 }
 .dark .totals-row td { background: #334155 !important; }
 
 .btn-delete {
-  padding: 0.1rem 0.35rem;
+  padding: 0.22rem 0.45rem;
   border-radius: 4px;
   background: transparent;
   color: #dc2626;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 700;
   border: none;
   cursor: pointer;
@@ -1610,11 +1707,11 @@ onMounted(async () => {
   gap: 2px;
 }
 .btn-edit {
-  padding: 0.1rem 0.35rem;
+  padding: 0.22rem 0.45rem;
   border-radius: 4px;
   background: transparent;
   color: #2563eb;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 700;
   border: none;
   cursor: pointer;

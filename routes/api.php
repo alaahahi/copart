@@ -213,6 +213,7 @@ Route::post('companyTreasuryUpdate',[CompanyTreasuryController::class, 'update']
 Route::post('companyTreasuryDelete',[CompanyTreasuryController::class, 'destroy'])->name('companyTreasuryDelete');
 Route::get('companyTreasuryTrash',[CompanyTreasuryController::class, 'getTrash'])->name('companyTreasuryTrash');
 Route::post('companyTreasuryRestore',[CompanyTreasuryController::class, 'restore'])->name('companyTreasuryRestore');
+Route::post('companyTreasuryToggleSettled',[CompanyTreasuryController::class, 'toggleSettled'])->name('companyTreasuryToggleSettled');
 
 Route::get('sync-monitor/migrations',[SyncMonitorController::class, 'getMigrations'])->name('sync.monitor.migrations');
 Route::post('sync-monitor/check-migration',[SyncMonitorController::class, 'checkMigration'])->name('sync.monitor.check.migration');

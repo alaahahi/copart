@@ -20,10 +20,12 @@ class CompanyTreasuryEntry extends Model
         'debit',
         'credit',
         'balance',
+        'is_settled',
     ];
 
     protected $casts = [
         'entry_date' => 'date',
+        'is_settled' => 'boolean',
         'debit' => 'float',
         'credit' => 'float',
         'balance' => 'float',

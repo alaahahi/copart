@@ -347,12 +347,31 @@ class CompanyTreasuryController extends Controller
         );
     }
 
+    public function toggleSettled(Request $request)
+    {
+        $this->authorizeTreasury();
+
+        $validated = $request->validate([
+            'id' => 'required|integer',
+            'is_settled' => 'required|boolean',
+        ]);
+
+        $ownerId = Auth::user()->owner_id;
+        $entry = CompanyTreasuryEntry::where('owner_id', $ownerId)->findOrFail($validated['id']);
+        $entry->update(['is_settled' => $validated['is_settled']]);
+
+        return Response::json($this->formatEntryForApi($entry->fresh()), 200);
+    }
+
     protected function formatEntryForApi(CompanyTreasuryEntry $entry, bool $includeDeleted = false): array
     {
         $data = $entry->toArray();
+        $data['entry_date'] = $entry->entry_date?->format('Y-m-d') ?? null;
+        $data['is_settled'] = (bool) $entry->is_settled;
         $data['entry_time'] = $entry->created_at?->timezone(config('app.timezone'))->format('H:i') ?? '';
 
         if ($includeDeleted) {
+            $data['deleted_at'] = $entry->deleted_at?->timezone(config('app.timezone'))->format('Y-m-d') ?? null;
             $data['deleted_time'] = $entry->deleted_at?->timezone(config('app.timezone'))->format('H:i') ?? '';
         }
 

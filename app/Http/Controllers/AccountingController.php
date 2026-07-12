@@ -781,104 +781,64 @@ class AccountingController extends Controller
             $car->increment('discount',$discount);
         }
 
-        if((($car->paid)+($car->discount))-$car->total_s >= 0){
-            $car->update(['results'=>2]); 
+        if((($car->paid)+($car->discount))-$car->total_s < 0 && $amount){
+            $car->update(['results'=>1]);
         }
-        elseif($amount){
-            $car->update(['results'=>1]); 
-        }
-        return Response::json($transaction, 200);    
+        return Response::json($transaction, 200);
     }
     public function addPaymentCarTotal()
     {
         $this->accounting->loadAccounts(Auth::user()->owner_id);
-        $owner_id=Auth::user()->owner_id;
         $client_id  = $_GET['client_id']  ??0;
         $amount_o  = $_GET['amount']  ??0;
         $note = $_GET['note'] ?? '';
         $discount= $_GET['discount']  ??0;
-        $amount  = $_GET['amount']   ??0;
-        $paided =false;
-        $client= User::with('wallet')->find($client_id);
 
-        $cars = Car::where('client_id',$client_id)->where('total_s','!=',0)->whereIn('results',[0, 1]);
-        $carLast = Car::where('client_id',$client_id)->where('total_s','!=',0)->whereIn('results',[0, 1])->latest()->first();
-        $needToPay=0;
-        $user_id=$_GET['user_id']??0;
-        $carsName = '';
-        if(($client->wallet->balance -((int)$amount_o +(int)$discount))==0){
-        $amount= (int)$cars->sum('total_s') - (int)$cars->sum('discount');
-        foreach ($cars->get() as $car) {
-            $paided = true;
-            $needToPay = $car->total_s - ($car->paid + $car->discount);
-            $carsName = $car->car_type.' '.$carsName;
-            if ($needToPay <= $amount) {
-                // Deduct the amount and update 'paid' for this car
-                $amount -= $needToPay;
-                $car->update(['paid' => $car->total_s-$car->discount,'results' =>2]);
-  
-            } else {
-                if($needToPay <= $amount+$discount){
-                    $car->update(['paid' => $car->paid + $amount,'results' =>2]);
-                    $amount = 0;
-                    break; // Stop processing if the amount is exhausted
-                }else{
-                    $car->update(['paid' => $car->paid + $amount,'results' =>1]);
-                    $amount = 0;
-                    break; // Stop processing if the amount is exhausted 
-                }
-
-
-            }
-
-           
-        }
-        if($discount){
-            $carLast->decrement('paid',$discount);
-            if($discount ?? 0){
-                $carLast->increment('discount',$discount);
-            }
-            }
-        }else{
-            if($discount ?? 0){
-                $carLast->increment('discount',$discount);
+        if ($discount) {
+            $carLast = Car::where('client_id', $client_id)
+                ->where('total_s', '!=', 0)
+                ->whereIn('results', [0, 1])
+                ->latest()
+                ->first();
+            if ($carLast) {
+                $carLast->increment('discount', $discount);
             }
         }
-        if($amount_o){
-            $desc=trans('text.addPayment').' '.$amount_o.' '.$note;
 
-            $tran=$this->increaseWallet($amount_o,$desc,$this->accounting->mainBox()->id,$client_id,'App\Models\User',0,0,'$');
-    
-            $this->increaseWallet($amount_o, $desc,$this->accounting->mainAccount()->id,$client_id,'App\Models\User',1,$discount,'$',$this->currentDate,$tran->id);
-    
-            $transaction = $this->decreaseWallet((int)$amount_o+(int)$discount, $desc,$client_id,$client_id,'App\Models\User',1,$discount,'$',$this->currentDate,$tran->id);
-            return Response::json($transaction, 200);    
+        if ($amount_o) {
+            $desc = trans('text.addPayment').' '.$amount_o.' '.$note;
+
+            $tran = $this->increaseWallet($amount_o, $desc, $this->accounting->mainBox()->id, $client_id, 'App\Models\User', 0, 0, '$');
+
+            $this->increaseWallet($amount_o, $desc, $this->accounting->mainAccount()->id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
+
+            $transaction = $this->decreaseWallet((int) $amount_o + (int) $discount, $desc, $client_id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
+
+            return Response::json($transaction, 200);
         }
-        return Response::json('ok', 200);    
-      
 
-       
+        return Response::json('ok', 200);
     }
 
     public function AddPayFromBalanceCar (Request $request){
 
-        $balance = $request->balance;
-        $car_id = $request->id;
-        $car = Car::find($car_id);
-        $shoudPaid = $car->total_s-$car->paid-$car->discount;
- 
-        if ($balance >= $shoudPaid) {
-            // Deduct the amount and update 'paid' for this car
-             $car->update(['paid' => $car->total_s-$car->discount,'results' =>2]);
-        } else {
-            if($balance <= $shoudPaid){
-                $car->update(['paid' => $balance ,'results' =>1]);
-              }
-        } 
-        return Response::json($car, 200);    
+        $balance = (float) ($request->balance ?? 0);
+        $car = Car::findOrFail($request->id);
+        $shouldPaid = max(0, (float) $car->total_s - (float) $car->paid - (float) $car->discount);
+        $toApply = min($balance, $shouldPaid);
 
+        if ($toApply <= 0) {
+            return Response::json($car, 200);
+        }
 
-    }
+        $newPaid = (float) $car->paid + $toApply;
+        $updates = ['paid' => $newPaid];
+        if ($newPaid + (float) $car->discount < (float) $car->total_s) {
+            $updates['results'] = 1;
+        }
+        $car->update($updates);
+
+        return Response::json($car->fresh(), 200);
     public function DelPayFromBalanceCar (Request $request){
         $car_id = $request->id;
         $car = Car::find($car_id);
