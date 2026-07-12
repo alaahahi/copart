@@ -839,6 +839,8 @@ class AccountingController extends Controller
         $car->update($updates);
 
         return Response::json($car->fresh(), 200);
+    }
+
     public function DelPayFromBalanceCar (Request $request){
         $car_id = $request->id;
         $car = Car::find($car_id);
