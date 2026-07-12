@@ -53,8 +53,8 @@ class CompanyTreasuryController extends Controller
         $totalCount = (clone $filteredQuery)->count();
 
         $paginated = (clone $filteredQuery)
-            ->orderBy('entry_date', 'asc')
-            ->orderBy('id', 'asc')
+            ->orderBy('entry_date', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
 
         return Response::json([
