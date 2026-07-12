@@ -20,25 +20,27 @@ export default {
             </div>
   
             <div class="modal-body">
+              <slot name="body"></slot>
             </div>
   
             <div class="modal-footer my-2">
-              <div class="flex flex-row">
-                <div class="basis-1/2 px-4">             <button
-                    class="modal-default-button py-3  bg-gray-500 rounded"
-                    @click="$emit('close');"
-                  >تراجع</button></div>
-              <div class="basis-1/2 px-4">              <button
-                    class="modal-default-button py-3  bg-rose-500 rounded col-6"
-                    @click="$emit('a',data);"
-                    @keydown.enter="$emit('a', data);"
-                    
-                  >نعم</button>
+              <slot name="footer">
+                <div class="flex flex-row">
+                  <div class="basis-1/2 px-4">
+                    <button
+                      class="modal-default-button py-3 bg-gray-500 rounded"
+                      @click="$emit('close');"
+                    >تراجع</button>
+                  </div>
+                  <div class="basis-1/2 px-4">
+                    <button
+                      class="modal-default-button py-3 bg-rose-500 rounded col-6"
+                      @click="$emit('a', data);"
+                      @keydown.enter="$emit('a', data);"
+                    >نعم</button>
+                  </div>
                 </div>
-
-            </div>
-  
-     
+              </slot>
             </div>
           </div>
         </div>
