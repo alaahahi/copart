@@ -13,7 +13,6 @@ use App\Models\Results;
 use App\Models\DoctorResults;
 use App\Models\SystemConfig;
 use App\Models\Wallet;
-use App\Models\Contract;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Requests\Auth\LoginRequest;
@@ -557,10 +556,13 @@ class AccountingController extends Controller
         $tag = $_GET['tag'] ?? '';
         $transactions_id = $_GET['transactions_id'] ?? 0;
         $client = User::with('wallet')->where('id', $user_id)->first();
+        $contract_total = 0;
+        $contract_total_debit_Dollar = 0;
+        $contract_total_debit_Dinar = 0;
+
         if($from && $to ){
-            $contract=Contract::where('user_id',$user_id)->whereBetween('created', [$from, $to]);
-            $transactions = Transactions ::where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
-            $cars = Car::with('contract')->with('CarImages')->with('exitcar')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
+            $transactions = Transactions::where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
+            $cars = Car::with('CarImages')->with('exitcar')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->whereBetween('date', [$from, $to])->count();
@@ -568,15 +570,11 @@ class AccountingController extends Controller
             $cars_discount=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('discount');
             $cars_paid=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('paid');
             $cars_sum=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('total_s');
-            $contract_total=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->where('contract_id','!=',0)->count();
             $exit_car_total=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->where('is_exit','!=',0)->count();
-            $contract_total_debit_Dollar=($contract->sum('price')-$contract->sum('paid'))??0;
-            $contract_total_debit_Dinar=($contract->sum('price_dinar')-$contract->sum('paid_dinar'))??0;
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }else{
-            $contract=Contract::where('user_id',$user_id);
-            $transactions = Transactions ::where('wallet_id', $client?->wallet?->id);
-            $cars =  Car::with('contract')->with('CarImages')->with('exitcar')->where('client_id',$client->id);
+            $transactions = Transactions::where('wallet_id', $client?->wallet?->id);
+            $cars =  Car::with('CarImages')->with('exitcar')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->count();
@@ -584,10 +582,7 @@ class AccountingController extends Controller
             $cars_discount=Car::where('client_id',$client->id)->sum('discount');
             $cars_paid=   Car::where('client_id',$client->id)->sum('paid');
             $cars_sum=   Car::where('client_id',$client->id)->sum('total_s');
-            $contract_total=   Car::where('client_id',$client->id)->where('contract_id','!=',0)->count();
             $exit_car_total=   Car::where('client_id',$client->id)->where('is_exit','!=',0)->count();
-            $contract_total_debit_Dollar=($contract->sum('price')-$contract->sum('paid'))??0;
-            $contract_total_debit_Dinar=($contract->sum('price_dinar')-$contract->sum('paid_dinar'))??0;
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }
         // مجموع الدفعات بالدولار (type=out, is_pay=1, currency=$) - للمطابقة مع cars_paid
@@ -1586,36 +1581,6 @@ class AccountingController extends Controller
             $expenses = Expenses::where('transaction_id',$firstTransaction->id);
             $expenses->delete();
         }
-        $walletContractsIds = [];
-        if ($this->accounting->onlineContracts() && $this->accounting->onlineContracts()->wallet) {
-            $walletContractsIds[] = $this->accounting->onlineContracts()->wallet->id;
-        }
-        if ($this->accounting->onlineContractsDinar() && $this->accounting->onlineContractsDinar()->wallet) {
-            $walletContractsIds[] = $this->accounting->onlineContractsDinar()->wallet->id;
-        }
-        if ($this->accounting->debtOnlineContracts() && $this->accounting->debtOnlineContracts()->wallet) {
-            $walletContractsIds[] = $this->accounting->debtOnlineContracts()->wallet->id;
-        }
-        if ($this->accounting->debtOnlineContractsDinar() && $this->accounting->debtOnlineContractsDinar()->wallet) {
-            $walletContractsIds[] = $this->accounting->debtOnlineContractsDinar()->wallet->id;
-        }
-        if ($firstTransaction && in_array($wallet_id, $walletContractsIds)) {
-            $refundTransaction = 'مرتجع حذف حركة';
-            $contract = Contract::where('car_id',$firstTransaction->morphed_id)->first();
-            if($firstTransaction->currency=='$'){
-                $this->increaseWallet($firstTransaction->amount, $refundTransaction,$this->accounting->debtOnlineContracts()->id,$firstTransaction->id,'App\Models\Car',0,0,'$',0);
-                if($contract){
-                    $contract->delete();
-                }
-            }
-            if($firstTransaction->currency=='IQD'){
-                $this->increaseWallet($firstTransaction->amount, $refundTransaction,$this->accounting->debtOnlineContractsDinar()->id,$firstTransaction->id,'App\Models\Car',0,0,'IQD',0);
-                if($contract){
-                    $contract->delete();
-                }
-
-            }
-        }
          
         if($originalTransaction){
             foreach ($originalTransaction->TransactionsImages as $transactionsImage) {
@@ -1673,7 +1638,7 @@ class AccountingController extends Controller
         if (VoucherPrint::usesMklTemplate($config)) {
             return view('receiptVoucherMkl', array_merge(
                 VoucherPrint::dataFromTransaction($transaction, $client, $voucherType),
-                ['config' => $config]
+                ['config' => $config ? $config->toArray() : []]
             ));
         }
 

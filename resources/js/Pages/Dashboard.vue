@@ -12,19 +12,12 @@ const appName = usePage().props.value.appName;
 const {t} = useI18n();
 let userType = ref(auth.auth.user.type_id)
 function selectUser(v){
-  if(v==1 || v==6){
-    return 'getIndexClients'
-  }
-  if(v==8){
-    return 'getIndexClientsContract'
-  }
+  return 'getIndexClients'
 }
 
 let data = ref({});
 
 const laravelData = ref({});
-const laravelData1 = ref({});
-const laravelData2 = ref({});
 let  controller = new AbortController(); // Create a new AbortController
 
 const getResults = async (page = 1) => {
@@ -37,10 +30,6 @@ const getResults = async (page = 1) => {
       laravelData.value =  response.data.data
 
     }
-  }
-  if(userType.value==8){
-    laravelData1.value =  response.data.data1
-      laravelData2.value =  response.data.data2
   }
 
 
@@ -78,15 +67,11 @@ function sendWhatsAppMessage(phoneNumber) {
 let searchTerm = ref('');
 
 let mainAccount= ref(0)
-let onlineContracts= ref(0)
 let howler= ref(0)
 let shippingCoc= ref(0)
 let border= ref(0)
 let iran= ref(0)
 let dubai= ref(0)
-let debtOnlineContracts= ref(0)
-let onlineContractsDinar= ref(0)
-let debtOnlineContractsDinar= ref(0)
 let purchasesCost = ref(0)
 let clientPaid = ref(0)
 let clientDebit  = ref(0)
@@ -130,15 +115,6 @@ const getcountTotalInfo = async () => {
 })
   .then(response => {
     mainAccount.value = response.data.data.mainAccount;
-    onlineContracts.value=  response.data.data.onlineContracts
-    howler.value=  response.data.data.howler
-    shippingCoc.value=  response.data.data.shippingCoc
-    border.value=  response.data.data.border
-    iran.value=  response.data.data.iran
-    dubai.value=  response.data.data.dubai
-    debtOnlineContracts.value=  response.data.data.debtOnlineContracts
-    onlineContractsDinar.value =response.data.data.onlineContractsDinar
-    debtOnlineContractsDinar.value = response.data.data.debtOnlineContractsDinar
     allCars.value =response.data.data.allCars;
     purchasesCost.value =response.data.data.purchasesCost
     clientPaid.value =response.data.data.clientPaid
@@ -372,56 +348,6 @@ function updateResults(input) {
                     </div>
                 </div>
         </div>
-        <div v-if="$page.props.auth.user.type_id==8">
-          <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
-            <div class="bg-white overflow-hidden shadow-sm ">
-                <div class="p-6  dark:bg-gray-900">
-                    <div class="flex flex-col">
-                      <div>
-                          <h2 class="my-3 dark:text-white" v-if="laravelData1">دين البائع</h2>
-                          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-                          <Link @dblclick="sendWhatsAppMessage(user.phone)"  v-for="(user,i) in laravelData1" :key="i" class="flex items-start rounded-xl text-gray-200  dark:text-gray-300  p-4 shadow-lg"  :href="route('car_contract', {   q:  user.name_seller })"   :class="changeColor(user.tex_seller -  user.tex_seller_paid)">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ user.name_seller}}</h2>
-                              <p class="mt-2 text-sm text-gray-200  dark:text-gray-200"> ${{ user.tex_seller -  user.tex_seller_paid }}
-                                - IQD {{ user.tex_seller_dinar -  user.tex_seller_dinar_paid }}
-                              </p>
-                            
-                            </div>
-                          </Link>
-
- 
-                        </div>
-                        <h2 class="my-3 dark:text-white" v-if="laravelData2">دين المشتري</h2>
-                          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-                          <Link @dblclick="sendWhatsAppMessage(user.phone)"  v-for="(user,i) in laravelData2" :key="i" class="flex items-start rounded-xl text-gray-200  dark:text-gray-300  p-4 shadow-lg"  :href="route('car_contract', {q:  user.name_buyer })"   :class="changeColor(user.tex_buyer -  user.tex_buyer_paid)">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ user.name_buyer}}</h2>
-                              <p class="mt-2 text-sm text-gray-200  dark:text-gray-200">${{ user.tex_buyer -  user.tex_buyer_paid }}
-                                - IQD {{ user.tex_buyer_dinar -  user.tex_buyer_dinar_paid }}
-                              </p>
-                            
-                            </div>
-                          </Link>
-
- 
-                        </div>
-                      </div>
-                      </div>
-                    </div>
-                    </div>
-                </div>
-            </div>
         <div >
          
       </div>   

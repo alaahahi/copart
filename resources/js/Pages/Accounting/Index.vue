@@ -8,9 +8,6 @@ import ModalAddDebt from "@/Components/ModalAddDebt.vue";
 import ModalAddExpenses from "@/Components/ModalAddExpenses.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
-import ModalAddGenExpenses from "@/Components/ModalAddGenExpenses.vue";
-import ModalAddExpensesToMainBransh from "@/Components/ModalAddExpensesToMainBransh.vue";
-import ModalExpensesFromOtherBransh from "@/Components/ModalExpensesFromOtherBransh.vue";
 
 
 import ModalConvertDollarDinar from "@/Components/ModalConvertDollarDinar.vue";
@@ -39,43 +36,28 @@ const searchTerm = ref('');
 let showModalAddSales = ref(false);
 let showModaldebtSales = ref(false);
 let showModalAddExpenses = ref(false);
-let showModalAddGenExpenses = ref(false);
 let showModalConvertDollarDinar = ref(false);
 let showModalConvertDinarDollar = ref(false);
-let showModalAddExpensesToMainBransh = ref(false);
-let showModalExpensesFromOtherBransh = ref(false);
 let showModalDel = ref(false);
 let showModalUploader = ref(false);
 let showModalAssignToWallet = ref(false);
 let tranForAssignWallet = ref(null);
 let transactions= ref([]);
-let expenses_type_id = ref(0);
 let tranId =ref({});
 let formData = ref({});
-let GenExpenses = ref({});
 let isLoading=ref(false);
 let from = ref(getTodayDate());
 let to = ref(getTodayDate());
 let mainAccount= ref(0)
-let onlineContracts= ref(0)
-let howler= ref(0)
-let shippingCoc= ref(0)
-let border= ref(0)
-let iran= ref(0)
-let dubai= ref(0)
-let debtOnlineContracts= ref(0)
 let allCars= ref(0)
 let transactionInTodayDollar = ref(0)
 let transactionInTodayDinar = ref(0)
 let transactionOutTodayDollar = ref(0)
 let transactionOutTodayDinar = ref(0)
-let onlineContractsDinar = ref(0)
-let debtOnlineContractsDinar = ref(0)
 let resetData = ref(false);
 let user_id = 0;
 let page = 1;
 let q = '';
-let allTransfers=ref([]);
 
 const editingDescriptionId = ref(null);
 const descriptionDraft = ref('');
@@ -129,15 +111,6 @@ const getcountTotalInfo = async () => {
   axios.get('/api/totalInfo')
   .then(response => {
     mainAccount.value = response.data.data.mainAccount;
-    onlineContracts.value=  response.data.data.onlineContracts
-    howler.value=  response.data.data.howler
-    shippingCoc.value=  response.data.data.shippingCoc
-    border.value=  response.data.data.border
-    iran.value=  response.data.data.iran
-    dubai.value=  response.data.data.dubai
-    debtOnlineContracts.value=  response.data.data.debtOnlineContracts
-    onlineContractsDinar.value =response.data.data.onlineContractsDinar
-    debtOnlineContractsDinar.value = response.data.data.debtOnlineContractsDinar
     allCars.value =response.data.data.allCars;
     transactionInTodayDollar.value = response.data.data.transactionInTodayDollar
     transactionOutTodayDollar.value = response.data.data.transactionOutTodayDollar
@@ -160,14 +133,6 @@ function opendebtSales() {
 }
 function openAddExpenses(){
   showModalAddExpenses.value = true;
-}
-function openModalAddExpensesToMainBransh() {
-  getTransfers();
-  showModalAddExpensesToMainBransh.value = true;
-}
-function openModalExpensesFromOtherBransh() {
-  getTransfers();
-  showModalExpensesFromOtherBransh.value = true;
 }
 function openConvertDollarDinar(){
   showModalConvertDollarDinar.value = true;
@@ -311,63 +276,6 @@ function delTransactions(id){
   .then(response => {
     refresh();
     showModalDel.value=false;
-  })
-  .catch(error => {
-
-    errors.value = error.response.data.errors
-  })
-}
-function openAddGenExpenses(v) {
-    expenses_type_id.value=v
-    getGenfirmExpenses()
-    showModalAddGenExpenses.value = true;
-}
-function getGenfirmExpenses() {
-  axios.get(`/api/getGenExpenses?expenses_type_id=${expenses_type_id.value}`)
-  .then(response => {
-    GenExpenses.value = response.data;
-
-  })
-  .catch(error => {
-
-    errors.value = error.response.data.errors
-  })
-
-
-}
-
-function conGenfirmExpenses(V) {
-  axios.post(`/api/GenExpenses?amount=${V.amount??0}&expenses_type_id=${expenses_type_id.value}&factor=${V.factor??1}&note=${V.note??''}`)
-  .then(response => {
-    refresh();
-    showModalAddGenExpenses.value = false;
-    console.log(response.data);
-    window.open(`/api/getIndexAccountsSelas?user_id=${response.data.morphed_id}&print=3&transactions_id=${response.data.id}`, '_blank');
-    window.location.reload();
-  })
-  .catch(error => {
-
-    errors.value = error.response.data.errors
-  })
-
-
-}
-function getTransfers(){
-  axios.get(`/api/transfers`)
-  .then(response => {
-    allTransfers.value = response.data
-  })
-  .catch(error => {
-
-    errors.value = error.response.data.errors
-  })
-}
-function conAddExpensesToMainBransh(V){
-  axios.post(`/api/addTransfers?amount=${V.amount??0}&sender_note=${V.note??''}`)
-  .then(response => {
-    window.location.reload();
-
-    showModalAddExpensesToMainBransh.value = false;
   })
   .catch(error => {
 
@@ -623,40 +531,6 @@ function getOrangeColorClass(index) {
     </ModalUploader>
     
 
-    <ModalAddGenExpenses
-            :formData="formData"
-            :show="showModalAddGenExpenses ? true : false"
-            :expenses_type_id="expenses_type_id"
-            :GenExpenses="GenExpenses"
-            @a="conGenfirmExpenses($event)"
-            @close="showModalAddGenExpenses = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddGenExpenses>
-    <ModalAddExpensesToMainBransh
-            :formData="formData"
-            :show="showModalAddExpensesToMainBransh ? true : false"
-            :expenses_type_id="expenses_type_id"
-            :allTransfers="allTransfers"
-            @a="conAddExpensesToMainBransh($event)"
-            @close="showModalAddExpensesToMainBransh = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddExpensesToMainBransh>
-    <ModalExpensesFromOtherBransh
-      :formData="formData"
-            :show="showModalExpensesFromOtherBransh ? true : false"
-            :expenses_type_id="expenses_type_id"
-            :GenExpenses="GenExpenses"
-            :allTransfers="allTransfers"
-            @a="conGenfirmExpenses($event)"
-            @refresh="getTransfers"
-            @close="showModalExpensesFromOtherBransh = false">
-        <template #header>
-          </template>
-    </ModalExpensesFromOtherBransh>
     <ModalAddSales
             :show="showModalAddSales ? true : false"
             :data="users"
@@ -815,61 +689,7 @@ function getOrangeColorClass(index) {
 
               
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3">
-              <div>
-                          <button
-                          v-if="$page.props.auth.user.owner_id==1"
-                            type="button"
-                            @click="openModalExpensesFromOtherBransh(1)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 py-2 font-bold text-white bg-red-500 rounded  w-full">
-                              تحويلات كركوك
-                          </button>
-                          <button
-                            v-if="$page.props.auth.user.type_id==6"
-                            type="button"
-                            @click="openModalAddExpensesToMainBransh(1)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 py-2 font-bold text-white bg-red-500 rounded  w-full">
-                              تحويل لفرع أربيل
-                          </button>
-                        </div>
-                        <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(2)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 text-center py-2 font-bold text-white bg-blue-600 rounded  w-full">
-                            {{ $t('dubai') }}
-                          </button>
-                        </div>
-                        <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(3)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 text-center w-full py-2 font-bold text-white bg-blue-600 rounded">
-                            {{ $t('iran') }}
-                          </button>
-                        </div>
-                       <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(4)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 w-full py-2 font-bold text-white bg-indigo-600 rounded">
-                            {{ $t('border') }} 
-                          </button>
-                        </div> 
-                        <div  v-if="$page.props.auth.user.type_id==1">
-                          <button
-                            type="button"
-                            @click="openAddGenExpenses(5)"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 w-full py-2 font-bold text-white bg-pink-600 rounded">
-                            {{ $t('shipping_coc') }} 
-                          </button>
-                        </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-3">
                         <div>
                           <button
                             type="button"

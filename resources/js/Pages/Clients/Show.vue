@@ -10,8 +10,6 @@ import axios from "axios";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
 import ModalEditCars from "@/Components/ModalEditCar_S.vue";
 import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
-import ModalAddCarContracts from "@/Components/ModalAddCarContracts.vue";
-import ModalEditCarContracts from "@/Components/ModalEditCarContracts.vue";
 import ModalAddExitCar from "@/Components/ModalAddExitCar.vue";
 import ModalShowExitCar from "@/Components/ModalShowExitCar.vue";
 import print from "@/Components/icon/print.vue";
@@ -20,7 +18,6 @@ import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import exit from "@/Components/icon/exit.vue";
 import show from "@/Components/icon/show.vue";
-import newContracts from "@/Components/icon/new.vue";
 import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
 
 import { useToast } from "vue-toastification";
@@ -46,8 +43,6 @@ let showModalAddCarPayment = ref(false);
 let showErorrAmount = ref(false);
 let showTransactions= ref(false);
 let showComplatedCars = ref(false);
-let showModalAddCarContracts =  ref(false);
-let showModalEditCarContracts =  ref(false);
 let showModalAddExitCar = ref(false);
 let showModalShowExitCar = ref(false);
 let total = ref(0);
@@ -311,19 +306,6 @@ function hideTransactionsDiv(){
   
 }
 
-function openModalAddCarContracts(form={}) {
-  formData.value=form
-
-  formData.value.prices=100
-  formData.value.price_dinars=50000
-
-  showModalAddCarContracts.value = true;
-}
-function openModalEditCarContracts(form={}) {
-  formData.value=form
-
-  showModalEditCarContracts.value = true;
-}
 function openModalAddExitCar(form={}) {
   formData.value=form
   formData.value.createdExit = getTodayDate()
@@ -357,59 +339,6 @@ function calculateAmount(){
     showErorrAmount.value = false
   }
 
-}
-
-function confirmAddCarContracts(V) {
-  axios.get(`/api/addCarContracts?car_id=${V.id}&price=${V.prices??0}&price_dinar=${V.price_dinars??0}&paid=${V.paids??0}&paid_dinar=${V.paid_dinars??0}&phone=${V.phone??''}&note=${V.note??''}`)
-  .then(response => {
-    showModalAddCarContracts.value = false;
-    toast.success( " تم دفع مبلغ بنجاح ", {
-        timeout: 4000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-      getResultsSelect();
-
-
-  })
-  .catch(error => {
-    showModalAddCarContracts.value = false;
-
-    toast.error("لم التعديل بنجاح", {
-        timeout: 2000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-
-  })
-}
-function confirmEditCarContracts(V) {
-  axios.get(`/api/editCarContracts?car_id=${V.id}&paid=${V.paids??0}&paid_dinar=${V.paid_dinars??0}&note=${V.notePayment??''}`)
-  .then(response => {
-    showModalEditCarContracts.value = false;
-    toast.success( " تم دفع مبلغ دولار "+V.amountPayment+" بنجاح ", {
-        timeout: 3000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-      getResultsSelect();
-
-
-  })
-  .catch(error => {
-    showModalEditCarContracts.value = false;
-
-    toast.error("لم التعديل بنجاح", {
-        timeout: 2000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-
-  })
 }
 
 function confirmAddExitCar(v){
@@ -527,24 +456,6 @@ function checkClientBalance(v){
         {{ $page.props.appName }}
       </h2>
     </template>
-    <ModalAddCarContracts
-            :formData="formData"
-            :show="showModalAddCarContracts ? true : false"
-            @a="confirmAddCarContracts($event)"
-            @close="showModalAddCarContracts = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddCarContracts>
-    <ModalEditCarContracts
-            :formData="formData"
-            :show="showModalEditCarContracts ? true : false"
-            @a="confirmEditCarContracts($event)"
-            @close="showModalEditCarContracts = false"
-            >
-        <template #header>
-          </template>
-    </ModalEditCarContracts>
     <ModalAddExitCar
             :formData="formData"
             :show="showModalAddExitCar ? true : false"

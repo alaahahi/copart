@@ -12,7 +12,6 @@ use App\Models\Car;
 use App\Models\Company;
 use App\Models\Name;
 use App\Models\ExitCar;
-use App\Models\Contract;
 use App\Models\CarModel;
 use App\Models\Color;
 use App\Models\Wallet;
@@ -97,7 +96,6 @@ class DashboardController extends Controller
         ->sum('amount');
 
         $car = Car::all()->where('owner_id',$owner_id);
-        $contarts = Contract::all()->where('owner_id',$owner_id);
         $exitCar = ExitCar::all()->where('owner_id',$owner_id)->count();
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
@@ -105,27 +103,13 @@ class DashboardController extends Controller
         $sumDebit =Wallet::whereIn('user_id', $client)->sum('balance');
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
         $sumProfit = $car->where('results',2)->sum('profit');
-        $sumContrat = $contarts->sum('paid') ;
-        $sumContratDinar = $contarts->sum('paid_dinar') ;
-        $debtSumContrat = $contarts->sum('price') -$sumContrat;
-        $debtSumContratDinar = $contarts->sum('price_dinar') - $sumContratDinar;
         $data = [
-        'contarts'=>$contarts->count(),
         'exitCar'=>$exitCar,
         'mainAccount'=>$sumTotal -$sumPaid ,
-        'onlineContracts'=>$sumContrat,
-        'onlineContractsDinar'=>$sumContratDinar,
-        'debtOnlineContractsDinar'=>$debtSumContratDinar,
-        'howler'=>$this->howler->where('owner_id',$owner_id)->first()->wallet->balance??0,
-        'shippingCoc'=>$this->shippingCoc->where('owner_id',$owner_id)->first()->wallet->balance??0,
-        'border'=>$this->border->where('owner_id',$owner_id)->first()->wallet->balance??0,
-        'iran'=>$this->iran->where('owner_id',$owner_id)->first()->wallet->balance??0,
-        'dubai'=>$this->dubai->where('owner_id',$owner_id)->first()->wallet->balance??0,
         'sumTotal'=>$sumTotal,
         'sumPaid'=>$sumPaid,
         'sumDebit'=>$sumDebit,
         'sumProfit'=>$sumProfit,
-        'debtOnlineContracts'=>$debtSumContrat,
         'allCars'=>$car->count()??0,
         'purchasesCost'=>$sumTotalS??0,
         'clientPaid'=>$sumPaid??0,
@@ -133,8 +117,6 @@ class DashboardController extends Controller
         'mainBoxDollar'=>$this->mainBox->where('owner_id',$owner_id)->first()->wallet->balance??0,
         'mainBoxDinar'=>$this->mainBox->where('owner_id',$owner_id)->first()->wallet->balance_dinar??0,
         'mainBoxDollarNew'=>$transactionIn+$transactionOut
-
-        
         ];
         return response()->json(['data'=>$data]); 
 
@@ -538,10 +520,10 @@ class DashboardController extends Controller
         $to =$_GET['to'] ?? 0;
         $limit =$_GET['limit'] ?? 0;
         if($car_have_expenses||$car_have_expenses==1){
-            $data = Car::with('contract','CarImages', 'exitcar','client','carexpenses.user')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'exitcar','client','carexpenses.user')->where('owner_id', $owner_id);
             
         }else{
-            $data = Car::with('contract','CarImages', 'exitcar', 'client')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'exitcar', 'client')->where('owner_id', $owner_id);
         }
 
         if ($from && $to) {
@@ -572,11 +554,7 @@ class DashboardController extends Controller
         
         $type = $_GET['type'] ?? '';
         
-        if ($type == 'debitContract') {
-            $data->whereHas('contract', function ($query) use ($q) {
-                $query->where('name', 'LIKE', '%' . $q . '%');
-            });
-        } elseif ($type) {
+        if ($type) {
             $data->where('results', $type);
         }
         if($q){
@@ -676,7 +654,7 @@ class DashboardController extends Controller
         $owner_id=Auth::user()->owner_id;
 
         $term = $_GET['q']??'';
-        $data =  Car::with('contract')->with('exitcar')->with('client')->where('owner_id',$owner_id)->orwhere('car_number', 'LIKE','%'.$term.'%')->orwhere('vin', 'LIKE','%'.$term.'%')->orwhere('car_type', 'LIKE','%'.$term.'%')->orWhereHas('client', function ($query) use ($term) {
+        $data =  Car::with('exitcar')->with('client')->where('owner_id',$owner_id)->orwhere('car_number', 'LIKE','%'.$term.'%')->orwhere('vin', 'LIKE','%'.$term.'%')->orwhere('car_type', 'LIKE','%'.$term.'%')->orWhereHas('client', function ($query) use ($term) {
             $query->where('name', 'LIKE', '%' . $term . '%');
         });
         $data =$data->orderBy('no', 'DESC')->paginate(100);

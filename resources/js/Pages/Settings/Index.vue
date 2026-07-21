@@ -11,6 +11,14 @@ const props = defineProps({
   config: Object,
 });
 
+const logoFields = [
+  { key: "receipt_logo_left_1", labelKey: "logoLeft1" },
+  { key: "receipt_logo_left_2", labelKey: "logoLeft2" },
+  { key: "receipt_logo_left_3", labelKey: "logoLeft3" },
+  { key: "receipt_logo_haulf", labelKey: "logoHaulf" },
+  { key: "receipt_logo_main", labelKey: "logoMain" },
+];
+
 const form = ref({
   receipt_template: props.config?.receipt_template || "default",
   receipt_phone: props.config?.receipt_phone || "",
@@ -19,6 +27,15 @@ const form = ref({
   first_title_ar: props.config?.first_title_ar || "",
   second_title_ar: props.config?.second_title_ar || "",
 });
+
+const logoPaths = ref(
+  Object.fromEntries(
+    logoFields.map(({ key }) => [key, props.config?.[key] || ""])
+  )
+);
+
+const logoFiles = ref({});
+const logoPreviews = ref({});
 
 const saving = ref(false);
 const successMsg = ref("");
@@ -37,12 +54,46 @@ const templates = [
   },
 ];
 
+function onLogoChange(field, event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  logoFiles.value[field] = file;
+  logoPreviews.value[field] = URL.createObjectURL(file);
+}
+
+function logoSrc(field) {
+  return logoPreviews.value[field] || logoPaths.value[field] || "";
+}
+
 async function save() {
   saving.value = true;
   errorMsg.value = "";
   successMsg.value = "";
   try {
-    await axios.post(route("settings.update"), form.value);
+    const formData = new FormData();
+    Object.entries(form.value).forEach(([key, val]) => {
+      formData.append(key, val ?? "");
+    });
+    logoFields.forEach(({ key }) => {
+      if (logoFiles.value[key]) {
+        formData.append(key, logoFiles.value[key]);
+      }
+    });
+
+    const { data } = await axios.post(route("settings.update"), formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    if (data.config) {
+      logoFields.forEach(({ key }) => {
+        if (data.config[key]) {
+          logoPaths.value[key] = data.config[key];
+        }
+      });
+    }
+
+    logoFiles.value = {};
+    logoPreviews.value = {};
     successMsg.value = t("settingsSaved");
   } catch (e) {
     errorMsg.value = e.response?.data?.message || t("settingsFailed");
@@ -52,10 +103,7 @@ async function save() {
 }
 
 function preview(type) {
-  window.open(
-    `${route("settings.receipt_preview")}?type=${type}`,
-    "_blank"
-  );
+  window.open(`${route("settings.receipt_preview")}?type=${type}`, "_blank");
 }
 </script>
 
@@ -64,7 +112,9 @@ function preview(type) {
 
   <AuthenticatedLayout>
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+      <h2
+        class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight"
+      >
         {{ $t("settings") }} — {{ $t("receiptTemplates") }}
       </h2>
     </template>
@@ -107,7 +157,9 @@ function preview(type) {
                 class="mt-1"
               />
               <div>
-                <div class="font-bold dark:text-gray-100">{{ $t(tpl.titleKey) }}</div>
+                <div class="font-bold dark:text-gray-100">
+                  {{ $t(tpl.titleKey) }}
+                </div>
                 <div class="text-sm text-gray-600 dark:text-gray-400">
                   {{ $t(tpl.descKey) }}
                 </div>
@@ -133,7 +185,44 @@ function preview(type) {
           </div>
 
           <h4 class="font-bold mb-3 dark:text-gray-100">
-            بيانات التذييل (قالب MKL)
+            {{ $t("receiptLogos") }}
+          </h4>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {{ $t("receiptLogosHint") }}
+          </p>
+
+          <div class="grid gap-4 sm:grid-cols-2 mb-6">
+            <div
+              v-for="logo in logoFields"
+              :key="logo.key"
+              class="border border-gray-200 dark:border-gray-700 rounded-lg p-3"
+            >
+              <label
+                class="block text-sm font-semibold mb-2 dark:text-gray-300"
+              >
+                {{ $t(logo.labelKey) }}
+              </label>
+              <div
+                v-if="logoSrc(logo.key)"
+                class="mb-2 flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded p-2 min-h-[60px]"
+              >
+                <img
+                  :src="logoSrc(logo.key)"
+                  alt=""
+                  class="max-h-14 max-w-full object-contain"
+                />
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                class="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/40 dark:file:text-blue-200"
+                @change="onLogoChange(logo.key, $event)"
+              />
+            </div>
+          </div>
+
+          <h4 class="font-bold mb-3 dark:text-gray-100">
+            {{ $t("receiptFooter") }}
           </h4>
           <div class="grid gap-4">
             <div>
@@ -170,11 +259,6 @@ function preview(type) {
               />
             </div>
           </div>
-
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-4">
-            ضع شعارات الشركاء (Copart, AA, ...) في المجلد
-            <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">public/img/receipt/</code>
-          </p>
 
           <button
             type="button"

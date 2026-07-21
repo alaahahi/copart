@@ -10,10 +10,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\TransfersController;
 use App\Http\Controllers\CarConfigController;
-use App\Http\Controllers\OnlineContractsController;
 use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
-use App\Http\Controllers\CarContractController;
 use App\Http\Controllers\CompanyTreasuryController;
 use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\SystemConfigController;
@@ -149,10 +147,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::post('companyStoreEdit',[CarConfigController::class, 'storeEdit'])->name('companyStoreEdit');
 
 
-    Route::get('online_contracts',[OnlineContractsController::class, 'online_contracts'])->name('online_contracts');
     Route::get('car_expenses',[CarExpensesController::class, 'index'])->name('car_expenses');
-    Route::get('car_contract',[CarContractController::class, 'index'])->name('car_contract');
-    Route::get('contract_account',[CarContractController::class, 'contract_account'])->name('contract_account');
     Route::get('company_treasury',[CompanyTreasuryController::class, 'index'])->name('company_treasury');
     Route::get('company_treasury/print',[CompanyTreasuryController::class, 'printReport'])->name('company_treasury_print');
     Route::get('settings',[SystemConfigController::class, 'index'])->name('settings');
@@ -161,8 +156,6 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('sync-monitor', function () {
         return Inertia::render('SyncMonitor');
     })->name('sync-monitor');
-    Route::get('contract/{id?}', [CarContractController::class, 'contract'])->name('contract');
-    Route::get('contract_print/{id}', [CarContractController::class, 'contract_print'])->name('contract_print');
 
 
     

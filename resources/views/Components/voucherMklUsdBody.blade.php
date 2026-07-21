@@ -1,27 +1,50 @@
 @php
     $isReceipt = ($voucherType ?? 'receipt') === 'receipt';
-    $clientName = $clientName ?? ($clientData['client']->name ?? ($clientData['client']->name ?? ''));
+    $clientName = $clientName ?? ($clientData['client']->name ?? '');
     $amountDisplay = isset($amount) ? number_format((float) $amount, ($currency ?? '$') === '$' ? 2 : 0) : '';
     $dateParts = [];
     if (!empty($created)) {
         $dt = \Carbon\Carbon::parse($created);
         $dateParts = [$dt->format('Y'), $dt->format('m'), $dt->format('d')];
     }
-    $phone = $config['receipt_phone'] ?? '+964 750 468 0510 / 750 705 3555 / 750 438 0888';
-    $address = $config['receipt_address'] ?? '100 M road near Hanouf motel';
-    $website = $config['receipt_website'] ?? 'Mklmersin.com';
+    $cfg = [];
+    if ($config instanceof \Illuminate\Database\Eloquent\Model) {
+        $cfg = $config->toArray();
+    } elseif (is_array($config ?? null)) {
+        $cfg = $config;
+    }
+    $phone = $cfg['receipt_phone'] ?? '+964 750 468 0510 / 750 705 3555 / 750 438 0888';
+    $address = $cfg['receipt_address'] ?? '100 M road near Hanouf motel';
+    $website = $cfg['receipt_website'] ?? 'Mklmersin.com';
+    $logoLeft1 = $cfg['receipt_logo_left_1'] ?? null;
+    $logoLeft2 = $cfg['receipt_logo_left_2'] ?? null;
+    $logoLeft3 = $cfg['receipt_logo_left_3'] ?? null;
+    $logoHaulf = $cfg['receipt_logo_haulf'] ?? null;
+    $logoMain = $cfg['receipt_logo_main'] ?? '/img/logo.jpg';
 @endphp
 <div class="mkl-voucher-sheet">
     <div class="mkl-header">
         <div class="mkl-logos-left">
-            <img src="/img/receipt/copart.png" alt="Copart" class="mkl-partner-logo" onerror="this.style.display='none'">
-            <img src="/img/receipt/m-gold.png" alt="M" class="mkl-partner-logo mkl-logo-m" onerror="this.style.display='none'">
-            <img src="/img/receipt/aa.png" alt="AA" class="mkl-partner-logo" onerror="this.style.display='none'">
+            @if($logoLeft1)
+                <img src="{{ $logoLeft1 }}" alt="" class="mkl-partner-logo">
+            @endif
+            @if($logoLeft2)
+                <img src="{{ $logoLeft2 }}" alt="" class="mkl-partner-logo mkl-logo-m">
+            @endif
+            @if($logoLeft3)
+                <img src="{{ $logoLeft3 }}" alt="" class="mkl-partner-logo">
+            @endif
         </div>
         <div class="mkl-logos-right">
-            <div class="mkl-haulf">HAULF</div>
+            @if($logoHaulf)
+                <img src="{{ $logoHaulf }}" alt="HAULF" class="mkl-haulf-img">
+            @else
+                <div class="mkl-haulf">HAULF</div>
+            @endif
             <div class="mkl-shipping-block">
-                <img src="/img/logo.jpg" alt="MKL Shipping" class="mkl-main-logo" onerror="this.style.display='none'">
+                @if($logoMain)
+                    <img src="{{ $logoMain }}" alt="Logo" class="mkl-main-logo">
+                @endif
                 <div class="mkl-branch">Georgia Branch</div>
                 <div class="mkl-branch-url">GEORGIA.MKLSHIPPING.COM</div>
             </div>

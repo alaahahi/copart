@@ -16,10 +16,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\TransfersController;
 use App\Http\Controllers\CarConfigController;
-use App\Http\Controllers\OnlineContractsController;
 use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
-use App\Http\Controllers\CarContractController;
 use App\Http\Controllers\CompanyTreasuryController;
 use App\Http\Controllers\SyncMonitorController;
 
@@ -121,11 +119,6 @@ Route::get('showCar',[CarConfigController::class, 'showCar']);
 
 Route::get('addExpenses',[DashboardController::class, 'addExpenses'])->name('addExpenses');
 Route::get('addPaymentCar',[AccountingController::class, 'addPaymentCar'])->name('addPaymentCar');
-Route::get('addCarContracts',[OnlineContractsController::class, 'addCarContracts'])->name('addCarContracts');
-Route::get('editCarContracts',[OnlineContractsController::class, 'editCarContracts'])->name('editCarContracts');
-Route::get('makeCarExit',[OnlineContractsController::class, 'makeCarExit'])->name('makeCarExit');
-Route::get('unMakeCarExit',[OnlineContractsController::class, 'unMakeCarExit'])->name('unMakeCarExit');
-Route::post('removeContract',[OnlineContractsController::class, 'removeContract'])->name('removeContract');
 
 
 Route::get('addPaymentCarTotal',[AccountingController::class, 'addPaymentCarTotal'])->name('addPaymentCarTotal');
@@ -193,18 +186,6 @@ Route::post('confirmArchiveCarBack',[CarExpensesController::class, 'confirmArchi
 Route::post('confirmDelCarFav',[CarExpensesController::class, 'confirmDelCarFav'])->name('confirmDelCarFav');
 Route::get('getIndexExpensesPrint',[CarExpensesController::class, 'getIndexExpensesPrint'])->name('getIndexExpensesPrint');
 
-Route::post('addCarContract',[CarContractController::class, 'addCarContract'])->name('addCarContract');
-Route::get('getIndexContractCar',[CarContractController::class, 'getIndexContractCar'])->name('getIndexContractCar');
-Route::post('DelCarContract',[CarContractController::class, 'DelCarContract'])->name('DelCarContract');
-Route::get('totalInfoContract',[CarContractController::class, 'totalInfoContract'])->name('totalInfoContract');
-Route::get('getListTransactionsContract',[CarContractController::class, 'getListTransactionsContract'])->name('getListTransactionsContract');
-Route::post('addToBoxContract',[CarContractController::class, 'addToBoxContract'])->name('addToBoxContract');
-Route::post('delTransactionsContract',[CarContractController::class, 'delTransactionsContract'])->name('delTransactionsContract');
-Route::post('convertDollarDinarContract',[CarContractController::class, 'convertDollarDinarContract'])->name('convertDollarDinarContract');
-Route::post('convertDinarDollarContract',[CarContractController::class, 'convertDinarDollarContract'])->name('convertDinarDollarContract');
-Route::post('DropFromBoxContract',[CarContractController::class, 'DropFromBoxContract'])->name('DropFromBoxContract');
-Route::get('getIndexClientsContract',[CarContractController::class, 'getIndexClientsContract'])->name('getIndexClientsContract');
-Route::get('contract_account_report',[CarContractController::class, 'contract_account_report'])->name('contract_account_report');
 
 Route::get('companyTreasuryEntries',[CompanyTreasuryController::class, 'getEntries'])->name('companyTreasuryEntries');
 Route::get('companyTreasurySummary',[CompanyTreasuryController::class, 'getSummary'])->name('companyTreasurySummary');

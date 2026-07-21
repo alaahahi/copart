@@ -118,11 +118,6 @@ class Car extends Model
     {
         return $this->morphMany(Transactions::class, 'morphed');
     }
-    public function contract()
-    {
-        // Define a one-to-one relationship with the Car model
-        return $this->hasOne(Contract::class, 'car_id', 'id');
-    }
     public function exitcar()
     {
         // Define a one-to-one relationship with the Car model
@@ -130,7 +125,7 @@ class Car extends Model
     }
     public function CarImages()
     {
-        return $this->hasMany(ContractImg::class, 'car_id');
+        return $this->hasMany(CarImages::class, 'car_id');
     }
     protected $appends = ['image_url'];
 

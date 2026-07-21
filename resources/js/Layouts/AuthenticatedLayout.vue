@@ -94,14 +94,6 @@ const switchLocale = (locale) => {
               </div>
               <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="false">
                 <NavLink
-                  :href="route('online_contracts')"
-                  :active="route().current('online_contracts')"
-                >
-                  {{ $t("online_contracts") }}
-                </NavLink>
-              </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="false">
-                <NavLink
                   :href="route('annual_information')"
                   :active="route().current('annual_information')"
 
@@ -118,33 +110,6 @@ const switchLocale = (locale) => {
 
                 >
                    مصاريف السيارات
-                </NavLink>
-              </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="$page.props.auth.user.type_id==8">
-                <NavLink
-                  :href="route('contract')"
-                  :active="route().current('contract')"
-
-                >
-                {{ $t("newContract") }}
-                </NavLink>
-              </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="$page.props.auth.user.type_id==8">
-                <NavLink
-                  :href="route('car_contract')"
-                  :active="route().current('car_contract')"
-
-                >
-                {{ $t("SalesContracts") }}
-                </NavLink>
-              </div>
-              <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex"  v-if="$page.props.auth.user.type_id==8">
-                <NavLink
-                  :href="route('contract_account')"
-                  :active="route().current('contract_account')"
-
-                >
-                {{ $t("CompanyExpenses") }}
                 </NavLink>
               </div>
 
@@ -386,13 +351,6 @@ const switchLocale = (locale) => {
               {{ $t("SyncMonitor") }}
               </ResponsiveNavLink>
               <ResponsiveNavLink
-                :href="route('online_contracts')"
-                :active="route().current('online_contracts')"
-                v-if="$page.props.auth.user.type_id == 1||$page.props.auth.user.type_id==6"
-              >
-              {{ $t("online_contracts") }}
-              </ResponsiveNavLink>
-              <ResponsiveNavLink
                 :href="route('annual_information')"
                 :active="route().current('annual_information')"
                 v-if="$page.props.auth.user.type_id == 1||$page.props.auth.user.type_id==6"
@@ -405,27 +363,6 @@ const switchLocale = (locale) => {
                 v-if="$page.props.auth.user.type_id == 1||$page.props.auth.user.type_id==7"
               >
               مصاريف السيارات 
-              </ResponsiveNavLink>
-              <ResponsiveNavLink
-                :href="route('contract')"
-                :active="route().current('contract')"
-                v-if="$page.props.auth.user.type_id==8"
-              >
-              عقد جديد   
-              </ResponsiveNavLink>
-              <ResponsiveNavLink
-                :href="route('car_contract')"
-                :active="route().current('car_contract')"
-                v-if="$page.props.auth.user.type_id==8"
-              >
-              عقود البيع  
-              </ResponsiveNavLink>
-              <ResponsiveNavLink
-                :href="route('contract_account')"
-                :active="route().current('contract_account')"
-                v-if="$page.props.auth.user.type_id==8"
-              >
-              محاسبة عقود
               </ResponsiveNavLink>
               <ResponsiveNavLink
                 :href="route('logout')"

@@ -23,5 +23,10 @@ class SystemConfig extends Model
         'receipt_phone',
         'receipt_address',
         'receipt_website',
+        'receipt_logo_left_1',
+        'receipt_logo_left_2',
+        'receipt_logo_left_3',
+        'receipt_logo_haulf',
+        'receipt_logo_main',
     ];
 }
