@@ -447,7 +447,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Head title="قاصة الشركة | Company Treasury" />
+  <Head :title="$t('CompanyTreasury')" />
   <AuthenticatedLayout>
     <ModalDel
       :show="showModalDel"
@@ -545,7 +545,7 @@ onMounted(async () => {
           <div class="treasury-brand">
             <div class="treasury-brand-icon">₵</div>
             <div>
-              <h1 class="treasury-title">قاصة الشركة</h1>
+              <h1 class="treasury-title">{{ $t("CompanyTreasury") }}</h1>
               <p class="treasury-subtitle">Company Treasury</p>
             </div>
           </div>
@@ -558,15 +558,15 @@ onMounted(async () => {
                 :class="{ 'btn-ghost-active': showFilterPanel }"
                 @click="showFilterPanel = !showFilterPanel"
               >
-                <span>{{ showFilterPanel ? "إخفاء الفلتر" : "فلتر" }}</span>
+                <span>{{ showFilterPanel ? $t("cancel") : $t("filter") }}</span>
                 <span class="en">{{ showFilterPanel ? "Hide Filter" : "Filter" }}</span>
               </button>
               <button type="button" class="btn-ghost" :disabled="loading" @click="refreshAll">
-                <span>تحديث</span>
+                <span>{{ $t("refresh") }}</span>
                 <span class="en">Refresh</span>
               </button>
               <button type="button" class="btn-ghost" @click="printTreasury()">
-                <span>طباعة</span>
+                <span>{{ $t("print") }}</span>
                 <span class="en">Print</span>
               </button>
               <button
@@ -584,7 +584,7 @@ onMounted(async () => {
                 :class="{ 'btn-ghost-active': showTrashPanel }"
                 @click="toggleTrashPanel"
               >
-                <span>{{ showTrashPanel ? "إخفاء المحذوفات" : "المحذوفات" }}</span>
+                <span>{{ showTrashPanel ? $t("cancel") : $t("trash") }}</span>
                 <span class="en">{{ showTrashPanel ? "Hide Trash" : "Trash" }}</span>
               </button>
               <button
@@ -592,7 +592,7 @@ onMounted(async () => {
                 class="btn-primary"
                 @click="showEntryPanel = !showEntryPanel"
               >
-                <span>{{ showEntryPanel ? "إخفاء الإدخال" : "حركة جديدة" }}</span>
+                <span>{{ showEntryPanel ? $t("cancel") : $t("newEntry") }}</span>
                 <span class="en">{{ showEntryPanel ? "Hide Form" : "New Entry" }}</span>
               </button>
             </div>
@@ -605,7 +605,7 @@ onMounted(async () => {
                 :class="{ active: currency === '$' }"
                 @click="currency = '$'"
               >
-                <span>دولار</span>
+                <span>{{ $t("usd") }}</span>
                 <span class="en">USD</span>
               </button>
               <button
@@ -615,7 +615,7 @@ onMounted(async () => {
                 :class="{ active: currency === 'IQD' }"
                 @click="currency = 'IQD'"
               >
-                <span>دينار</span>
+                <span>{{ $t("iqd") }}</span>
                 <span class="en">IQD</span>
               </button>
             </div>
@@ -632,11 +632,11 @@ onMounted(async () => {
             </div>
             <div class="filter-quick">
               <button type="button" class="btn-quick" @click="setFilterThisMonth">
-                <span>هذا الشهر</span>
+                <span>{{ $t("thisMonth") }}</span>
                 <span class="en">This Month</span>
               </button>
               <button type="button" class="btn-quick" @click="setFilterThreeMonths">
-                <span>3 أشهر</span>
+                <span>{{ $t("threeMonths") }}</span>
                 <span class="en">3 Months</span>
               </button>
             </div>

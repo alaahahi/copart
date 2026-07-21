@@ -73,7 +73,7 @@ const switchLocale = (locale) => {
                   :href="route('accounting')"
                   :active="route().current('accounting')"
                 >
-                 المحاسبة
+                  {{ $t("accounting") }}
                 </NavLink>
               </div>
               <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
@@ -260,6 +260,12 @@ const switchLocale = (locale) => {
                   </template>
 
                   <template #content>
+                    <DropdownLink
+                      v-if="$page.props.auth.user.type_id == 1"
+                      :href="route('settings')"
+                    >
+                      {{ $t("settings") }}
+                    </DropdownLink>
                     <DropdownLink
                       :href="route('logout')"
                       method="post"

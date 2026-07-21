@@ -28,6 +28,7 @@ use App\Models\ExpensesType;
 use App\Models\Expenses;
 use App\Models\TransactionsImages;
 use App\Models\PaymentTag;
+use App\Support\VoucherPrint;
 use App\Helpers\UploadHelper;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Facades\File;
@@ -292,12 +293,11 @@ class AccountingController extends Controller
       }
       elseif($print==2){
          $config=SystemConfig::first();
-         return view('receipt',compact('data','config','transactions_id','owner_id'));
+         return $this->renderVoucher('receipt', 'receipt', $config, compact('data','config','transactions_id','owner_id'));
       }
       elseif($print==3){
          $config=SystemConfig::first();
- 
-         return view('receiptPayment',compact('data','config','transactions_id','owner_id'));
+         return $this->renderVoucher('receiptPayment', 'payment', $config, compact('data','config','transactions_id','owner_id'));
       }
       elseif($print==4){
          $config=SystemConfig::first();
@@ -337,7 +337,7 @@ class AccountingController extends Controller
         $clientData = [
             'client' => $user
         ];
-        return view('receiptWallet',compact('clientData','config','transactions_id','owner_id','transaction'));
+        return $this->renderVoucher('receiptWallet', 'receipt', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
      }
      elseif($print==10){
         // طباعة وصل دفع للدفعات (outUser)
@@ -346,7 +346,7 @@ class AccountingController extends Controller
         $clientData = [
             'client' => $user
         ];
-        return view('receiptWalletPayment',compact('clientData','config','transactions_id','owner_id','transaction'));
+        return $this->renderVoucher('receiptWalletPayment', 'payment', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
      }
      elseif($print==11){
         // طباعة وصل قبض للأمانات (inUserAmanah)
@@ -355,7 +355,7 @@ class AccountingController extends Controller
         $clientData = [
             'client' => $user
         ];
-        return view('receiptWalletAmanah',compact('clientData','config','transactions_id','owner_id','transaction'));
+        return $this->renderVoucher('receiptWalletAmanah', 'receipt', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
      }
      elseif($print==12){
         // طباعة وصل دفع للأمانات (outUserAmanah)
@@ -364,7 +364,7 @@ class AccountingController extends Controller
         $clientData = [
             'client' => $user
         ];
-        return view('receiptWalletAmanahPayment',compact('clientData','config','transactions_id','owner_id','transaction'));
+        return $this->renderVoucher('receiptWalletAmanahPayment', 'payment', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
      }
      return response()->json($data); 
      }
@@ -706,14 +706,14 @@ class AccountingController extends Controller
             $config=SystemConfig::first();
             $transaction = Transactions ::find($transactions_id);
 
-            return view('receipt',compact('clientData','config','transactions_id','owner_id','transaction'));
+            return $this->renderVoucher('receipt', 'receipt', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
          }
    
          
          if($print==3){
             $config=SystemConfig::first();
             $transaction = Transactions ::find($transactions_id);
-            return view('receiptPayment',compact('clientData','config','transactions_id','transaction','owner_id'));
+            return $this->renderVoucher('receiptPayment', 'payment', $config, compact('clientData','config','transactions_id','transaction','owner_id'));
          }
          if($print==4){
             $config=SystemConfig::first();
@@ -1658,5 +1658,25 @@ class AccountingController extends Controller
         }
 
         return Response::json($new_balance, 200);
+    }
+
+    protected function renderVoucher(string $defaultView, string $voucherType, $config, array $vars)
+    {
+        $transaction = $vars['transaction'] ?? null;
+        if (!$transaction && !empty($vars['transactions_id'])) {
+            $transaction = Transactions::find($vars['transactions_id']);
+        }
+
+        $client = $vars['clientData']['client']
+            ?? ($vars['user'] ?? ($vars['data']['user'] ?? null));
+
+        if (VoucherPrint::usesMklTemplate($config)) {
+            return view('receiptVoucherMkl', array_merge(
+                VoucherPrint::dataFromTransaction($transaction, $client, $voucherType),
+                ['config' => $config]
+            ));
+        }
+
+        return view($defaultView, $vars);
     }
 }

@@ -19,5 +19,9 @@ class SystemConfig extends Model
         'second_title_kr',
         'third_title_ar',
         'third_title_kr',
+        'receipt_template',
+        'receipt_phone',
+        'receipt_address',
+        'receipt_website',
     ];
 }

@@ -16,10 +16,11 @@ import kr from './lang/kr.json';
 
 const i18n = createI18n({
   legacy: false,
-  locale: localStorage.getItem('lang')|| 'ar', // Set the default locale
+  locale: localStorage.getItem('lang')|| 'ar',
+  fallbackLocale: 'ar',
   messages: {
-    en, // English translations
-    ar, // Arabic translations
+    en,
+    ar,
     kr
   },
 });
