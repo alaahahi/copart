@@ -21,6 +21,7 @@ class CompanyTreasuryEntry extends Model
         'credit',
         'balance',
         'is_settled',
+        'journal_entry_id',
     ];
 
     protected $casts = [

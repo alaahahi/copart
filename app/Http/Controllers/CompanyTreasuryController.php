@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyTreasuryEntry;
 use App\Models\SystemConfig;
+use App\Services\LedgerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
 
@@ -130,6 +132,17 @@ class CompanyTreasuryController extends Controller
             $this->recalculateAfterDelete($ownerId, $currency, $entryDate, $entryId);
 
             return Response::json(['message' => 'الرصيد غير كافٍ لإتمام السحب'], 422);
+        }
+
+        try {
+            $ledger = app(LedgerService::class);
+            $memo = (string) ($entry->description ?? ($isDeposit ? 'إيداع قاصة' : 'سحب قاصة'));
+            $journal = $isDeposit
+                ? $ledger->postTreasuryDeposit($ownerId, $amount, $currency, $memo, $entry, $validated['entry_date'])
+                : $ledger->postTreasuryWithdraw($ownerId, $amount, $currency, $memo, $entry, $validated['entry_date']);
+            $entry->forceFill(['journal_entry_id' => $journal->id])->save();
+        } catch (\Throwable $e) {
+            Log::warning('Ledger post failed on treasury store', ['error' => $e->getMessage()]);
         }
 
         $entry->refresh();

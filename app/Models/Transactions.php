@@ -23,6 +23,7 @@ class Transactions extends Model
         'parent_id',
         'details',
         'tag',
+        'journal_entry_id',
     ];
     protected $casts = [
         'details' => 'array',

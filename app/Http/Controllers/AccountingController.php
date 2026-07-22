@@ -36,7 +36,9 @@ use App\Imports\ImportInfo;
 use App\Exports\ExportInfo;
 use App\Exports\ExportAccount;
 use App\Services\AccountingCacheService;
+use App\Services\LedgerService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 
 class AccountingController extends Controller
@@ -1372,6 +1374,21 @@ class AccountingController extends Controller
             }else{
                 $wallet->increment('balance', $amount);
             }
+            try {
+                $journal = app(LedgerService::class)->postClientDebtIncrease(
+                    (int) $ownerId,
+                    (int) $user_id,
+                    abs((float) $amount),
+                    $currency === 'IQD' ? 'IQD' : '$',
+                    (string) $desc,
+                    $transaction
+                );
+                if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                    $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Ledger post failed on increaseWallet', ['error' => $e->getMessage()]);
+            }
             }
             if (is_null($wallet)) {
                 return null;
@@ -1406,6 +1423,21 @@ class AccountingController extends Controller
             $wallet->decrement('balance_dinar', $amount);
         }else{
             $wallet->decrement('balance', $amount);
+        }
+        try {
+            $journal = app(LedgerService::class)->postClientPayment(
+                (int) $ownerId,
+                (int) $user_id,
+                abs((float) $amount),
+                $currency === 'IQD' ? 'IQD' : '$',
+                (string) $desc,
+                $transaction
+            );
+            if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Ledger post failed on decreaseWallet', ['error' => $e->getMessage()]);
         }
 
         }
