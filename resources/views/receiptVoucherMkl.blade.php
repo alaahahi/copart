@@ -110,13 +110,15 @@
             background: #d9d9d9;
             border: 1px solid #999;
             padding: 6px 10px;
-            gap: 10px;
+            gap: 16px;
+            width: 100%;
         }
         .mkl-type-options {
             display: flex;
             flex-direction: column;
             gap: 4px;
-            flex: 1;
+            flex: 1 1 auto;
+            min-width: 0;
         }
         .mkl-type-item {
             display: flex;
@@ -149,13 +151,14 @@
             align-items: stretch;
             border: 1px solid #222;
             min-width: 140px;
-            flex-shrink: 0;
+            flex: 0 0 auto;
+            margin-inline-start: auto;
         }
         .mkl-amount-cell {
             flex: 1;
             min-width: 80px;
             background: #fff;
-            border-inline-start: 1px solid #222;
+            border-inline-end: 1px solid #222;
             padding: 6px 10px;
             font-size: 15px;
             font-weight: 700;

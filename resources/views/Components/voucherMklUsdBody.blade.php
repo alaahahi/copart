@@ -21,6 +21,22 @@
     $logoLeft3 = $cfg['receipt_logo_left_3'] ?? null;
     $logoHaulf = $cfg['receipt_logo_haulf'] ?? null;
     $logoMain = $cfg['receipt_logo_main'] ?? '/img/logo.jpg';
+
+    if ($isReceipt) {
+        $typeKr = 'وەسڵی وەرگرتن';
+        $typeAr = 'وصل قبض';
+        $typeEn = 'Receipt voucher';
+        $partyKr = 'وەرگیرا لە';
+        $partyAr = 'استلمت من';
+        $partyEn = 'Received from:';
+    } else {
+        $typeKr = 'وەسڵی پارەدان';
+        $typeAr = 'وصل صرف';
+        $typeEn = 'Payment Voucher';
+        $partyKr = 'دراوە';
+        $partyAr = 'دفعت الى';
+        $partyEn = 'Paid to:';
+    }
 @endphp
 <div class="mkl-voucher-sheet">
     <div class="mkl-header">
@@ -52,27 +68,19 @@
     </div>
 
     <div class="mkl-type-bar">
-        <div class="mkl-currency-box">
-            <div class="mkl-currency-label">دولار</div>
-            <div class="mkl-amount-cell" dir="ltr">{{ $amountDisplay }}</div>
-        </div>
         <div class="mkl-type-options">
-            <label class="mkl-type-item">
-                <span class="mkl-check {{ !$isReceipt ? 'checked' : '' }}"></span>
+            <div class="mkl-type-item mkl-type-active">
+                <span class="mkl-check checked"></span>
                 <span>
-                    <span class="mkl-ar">وصل صرف</span>
-                    <span class="mkl-kr">وەسڵی پارەدان</span>
-                    <span class="mkl-en">Payment Voucher</span>
+                    <span class="mkl-kr">{{ $typeKr }}</span>
+                    <span class="mkl-ar">{{ $typeAr }}</span>
+                    <span class="mkl-en">{{ $typeEn }}</span>
                 </span>
-            </label>
-            <label class="mkl-type-item">
-                <span class="mkl-check {{ $isReceipt ? 'checked' : '' }}"></span>
-                <span>
-                    <span class="mkl-ar">وصل قبض</span>
-                    <span class="mkl-kr">وەسڵی وەرگرتن</span>
-                    <span class="mkl-en">Receipt voucher</span>
-                </span>
-            </label>
+            </div>
+        </div>
+        <div class="mkl-currency-box">
+            <div class="mkl-amount-cell" dir="ltr">{{ $amountDisplay }}</div>
+            <div class="mkl-currency-label">دولار</div>
         </div>
     </div>
 
@@ -85,11 +93,11 @@
 
     <div class="mkl-field-row">
         <span class="mkl-field-ar">
-            <span class="mkl-kr">وەرگیرا لە / دراوە</span>
-            <span>استلمت من / دفعت الى</span>
+            <span class="mkl-kr">{{ $partyKr }}</span>
+            <span>{{ $partyAr }}</span>
         </span>
         <span class="mkl-field-value">{{ $clientName }}</span>
-        <span class="mkl-field-en">Payer / Payee:</span>
+        <span class="mkl-field-en">{{ $partyEn }}</span>
     </div>
 
     <div class="mkl-field-row">
