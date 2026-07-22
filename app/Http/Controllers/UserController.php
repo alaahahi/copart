@@ -81,7 +81,6 @@ class UserController extends Controller
 
         $query = DB::table('users')
             ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
-            ->selectRaw('(SELECT COUNT(id) FROM contract WHERE user_id = users.id) AS contract_count')
             ->selectSub(function ($subquery) use ($userClient) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')

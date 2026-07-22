@@ -78,11 +78,9 @@
   @php
     $totalBalance = 0;
     $totalcar = 0;
-    $totalcontract = 0;
     foreach ($data as $item) {
         $totalBalance += $item->balance;
         $totalcar += $item->car_count;
-        $totalcontract += $item->contract_count;
     }
   @endphp
   <div class="row p-2 text-center border-bottom alert-primary "  style="font-size: 14px">
@@ -101,13 +99,6 @@
     {{$totalcar}}
     </div>
     @endif
-    
-    @if($totalcontract)
-    <div class="col-3">
-      عدد العقود:
-    {{$totalcontract}}
-    </div>
-    @endif
   </div>
   <div class="row text-center py-2">
     <table class="table table-sm table-striped table-bordered" style="font-size: 12px">
@@ -119,8 +110,6 @@
             <th scope="col">السيارات</th>
             <th scope="col">غير المدفوع</th>
             <th scope="col">المدفوع</th>
-            <th scope="col">العقود المنجزة</th>
-            <th scope="col">العقود غير المنجزة</th>
             <th scope="col">الدين</th>
           </tr>
         </thead>
@@ -133,8 +122,6 @@
               <td>{{$data->car_count}}</td>
               <td>{{$data->car_count-$data->car_count_completed}}</td>
               <td>{{$data->car_count_completed}}</td>
-              <td>{{$data->contract_count}}</td>
-              <td>{{$data->car_count-$data->contract_count}}</td>
               <td>{{$data->balance}} $</td>
             </tr>
             @endforeach
