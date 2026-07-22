@@ -38,6 +38,7 @@ const primaryItems = computed(() => [
 
 const operationsItems = computed(() => [
   { key: "treasury", label: "CompanyTreasury", href: route("company_treasury"), active: route().current("company_treasury"), show: true },
+  { key: "ledger", label: "Ledger", href: route("ledger"), active: route().current("ledger"), show: hasRole(1, 6) },
   { key: "sync", label: "SyncMonitor", href: route("sync-monitor"), active: route().current("sync-monitor"), show: true },
 ]);
 

@@ -140,6 +140,7 @@
     "newContract":"newContract",
     "SalesContracts": "Sales Contracts",
     "CompanyTreasury": "Company Treasury",
+    "Ledger": "General Ledger",
     "SyncMonitor": "System Tools",
     "CompanyExpenses": "Company Expenses",
     "seller": "Seller",

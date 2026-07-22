@@ -19,6 +19,7 @@ use App\Http\Controllers\CarConfigController;
 use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CompanyTreasuryController;
+use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\SyncMonitorController;
 
 
@@ -195,6 +196,10 @@ Route::post('companyTreasuryDelete',[CompanyTreasuryController::class, 'destroy'
 Route::get('companyTreasuryTrash',[CompanyTreasuryController::class, 'getTrash'])->name('companyTreasuryTrash');
 Route::post('companyTreasuryRestore',[CompanyTreasuryController::class, 'restore'])->name('companyTreasuryRestore');
 Route::post('companyTreasuryToggleSettled',[CompanyTreasuryController::class, 'toggleSettled'])->name('companyTreasuryToggleSettled');
+
+Route::get('ledgerTrialBalance',[LedgerController::class, 'trialBalance'])->name('ledgerTrialBalance');
+Route::get('ledgerAccount',[LedgerController::class, 'accountLedger'])->name('ledgerAccount');
+Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('ledgerJournals');
 
 Route::get('sync-monitor/migrations',[SyncMonitorController::class, 'getMigrations'])->name('sync.monitor.migrations');
 Route::post('sync-monitor/check-migration',[SyncMonitorController::class, 'checkMigration'])->name('sync.monitor.check.migration');
