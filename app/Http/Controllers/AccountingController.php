@@ -940,19 +940,25 @@ class AccountingController extends Controller
     }
     public function checkClientBalance(Request $request)
     {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
-        $userId= $request->userId;
-        $currentBalance= $request->currentBalance;
-        $user = User::with('wallet')->where('id',$userId)->first();
-        $systemBalance=$user->wallet->balance;
-        if($systemBalance==$currentBalance){
-            return Response::json('balance is good', 200);
-        }else{
-            $wallet = Wallet::find($user->wallet->id);
-            $wallet->update(['balance' => $currentBalance]);
-            return Response::json($systemBalance,201);
+        $ownerId = (int) Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+        $userId = (int) $request->userId;
+        $currentBalance = (float) $request->currentBalance;
+        $user = User::with('wallet')->where('id', $userId)->where('owner_id', $ownerId)->first();
+        if (!$user || !$user->wallet) {
+            return Response::json(['message' => 'user not found'], 404);
         }
-        return Response::json('balance is good',200);
+
+        $ledger = app(LedgerService::class);
+        // Ledger is source of truth — never trust frontend to overwrite balances.
+        $systemBalance = $ledger->clientBalance($ownerId, $userId, '$');
+        $ledger->syncWalletFromLedger($ownerId, $userId);
+
+        if (round($systemBalance, 2) === round($currentBalance, 2)) {
+            return Response::json('balance is good', 200);
+        }
+
+        return Response::json($systemBalance, 201);
     }
 
     public function updateTransactionDescription(Request $request)
@@ -1375,7 +1381,8 @@ class AccountingController extends Controller
                 $wallet->increment('balance', $amount);
             }
             try {
-                $journal = app(LedgerService::class)->postClientDebtIncrease(
+                $ledger = app(LedgerService::class);
+                $journal = $ledger->postClientDebtIncrease(
                     (int) $ownerId,
                     (int) $user_id,
                     abs((float) $amount),
@@ -1386,6 +1393,7 @@ class AccountingController extends Controller
                 if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
                     $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
                 }
+                $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
             } catch (\Throwable $e) {
                 Log::warning('Ledger post failed on increaseWallet', ['error' => $e->getMessage()]);
             }
@@ -1425,7 +1433,8 @@ class AccountingController extends Controller
             $wallet->decrement('balance', $amount);
         }
         try {
-            $journal = app(LedgerService::class)->postClientPayment(
+            $ledger = app(LedgerService::class);
+            $journal = $ledger->postClientPayment(
                 (int) $ownerId,
                 (int) $user_id,
                 abs((float) $amount),
@@ -1436,6 +1445,7 @@ class AccountingController extends Controller
             if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
                 $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
             }
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
         } catch (\Throwable $e) {
             Log::warning('Ledger post failed on decreaseWallet', ['error' => $e->getMessage()]);
         }

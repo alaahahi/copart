@@ -22,6 +22,7 @@ use Carbon\Carbon;
 use App\Models\Transactions;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\LedgerService;
 
 class UserController extends Controller
 {
@@ -98,12 +99,7 @@ class UserController extends Controller
                     ->whereColumn('car.client_id', 'users.id')
                     ->where('car.total_s', 0); // Add condition here
             }, 'car_total_un_pay')
-            ->selectSub(function ($subquery) {
-                $subquery->select('balance')
-                    ->from('wallets')
-                    ->whereColumn('user_id', 'users.id')
-                    ->limit(1);
-            }, 'balance')
+            ->selectSub(LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$'), 'balance')
             ->where('users.owner_id', $owner_id)
             ->where('users.type_id', $userClient)
 

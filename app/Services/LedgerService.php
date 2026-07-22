@@ -259,4 +259,136 @@ class LedgerService
 
         return $account->balance($currency);
     }
+
+    /**
+     * Client AR balance from journal lines (source of truth).
+     * Positive = client owes company.
+     */
+    public function clientBalance(int $ownerId, int $clientId, string $currency = '$'): float
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('code', self::CODE_CLIENT_AR_PREFIX . '-' . $clientId)
+            ->first();
+
+        if (!$account) {
+            return 0.0;
+        }
+
+        return $account->balance($currency);
+    }
+
+    /**
+     * Sum of all client receivable balances for an owner (USD by default).
+     */
+    public function sumClientsReceivable(int $ownerId, string $currency = '$'): float
+    {
+        $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
+
+        $row = DB::table('ledger_accounts as la')
+            ->join('journal_lines as jl', 'jl.ledger_account_id', '=', 'la.id')
+            ->join('journal_entries as je', function ($join) {
+                $join->on('je.id', '=', 'jl.journal_entry_id')
+                    ->whereNull('je.deleted_at');
+            })
+            ->where('la.owner_id', $ownerId)
+            ->where('la.code', 'like', $prefix . '%')
+            ->where('jl.currency', $currency)
+            ->selectRaw('ROUND(COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0), 2) as balance')
+            ->first();
+
+        return (float) ($row->balance ?? 0);
+    }
+
+    /**
+     * Per-client COALESCE(ledger, wallet) then sum — safe before/after opening migration.
+     */
+    public function sumClientsReceivableWithFallback(int $ownerId, int $clientTypeId, string $currency = '$'): float
+    {
+        $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
+        $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
+
+        $row = DB::selectOne(
+            "SELECT ROUND(COALESCE(SUM(client_bal), 0), 2) AS total
+             FROM (
+                SELECT COALESCE(
+                    (
+                        SELECT ROUND(COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0), 2)
+                        FROM ledger_accounts AS la
+                        INNER JOIN journal_lines AS jl ON jl.ledger_account_id = la.id
+                        INNER JOIN journal_entries AS je ON je.id = jl.journal_entry_id AND je.deleted_at IS NULL
+                        WHERE la.owner_id = ?
+                          AND la.code = CONCAT(?, u.id)
+                          AND jl.currency = ?
+                    ),
+                    (
+                        SELECT w.{$walletColumn} FROM wallets AS w WHERE w.user_id = u.id LIMIT 1
+                    ),
+                    0
+                ) AS client_bal
+                FROM users AS u
+                WHERE u.owner_id = ?
+                  AND u.type_id = ?
+             ) AS t",
+            [$ownerId, $prefix, $currency, $ownerId, $clientTypeId]
+        );
+
+        return (float) ($row->total ?? 0);
+    }
+
+    /**
+     * Keep wallets.balance as a cache of ledger AR balances.
+     */
+    public function syncWalletFromLedger(int $ownerId, int $clientId): void
+    {
+        $wallet = \App\Models\Wallet::where('user_id', $clientId)->first();
+        if (!$wallet) {
+            return;
+        }
+
+        $usd = $this->clientBalance($ownerId, $clientId, '$');
+        $iqd = $this->clientBalance($ownerId, $clientId, 'IQD');
+
+        $payload = [
+            'balance' => $usd,
+            'balance_dinar' => $iqd,
+        ];
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('wallets', 'ledger_synced_at')) {
+            $payload['ledger_synced_at'] = now();
+        }
+
+        $wallet->forceFill($payload)->save();
+    }
+
+    /**
+     * SQL expression (correlated) for client USD balance from ledger, with wallet fallback.
+     * Use as selectSub / selectRaw binding owner_id once.
+     */
+    public static function clientBalanceSqlSubquery(int $ownerId, string $currency = '$'): \Closure
+    {
+        $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
+        $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
+
+        return function ($subquery) use ($ownerId, $currency, $prefix, $walletColumn) {
+            $subquery->selectRaw(
+                "COALESCE(
+                    (
+                        SELECT ROUND(COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0), 2)
+                        FROM ledger_accounts AS la
+                        INNER JOIN journal_lines AS jl ON jl.ledger_account_id = la.id
+                        INNER JOIN journal_entries AS je ON je.id = jl.journal_entry_id AND je.deleted_at IS NULL
+                        WHERE la.owner_id = ?
+                          AND la.code = CONCAT(?, users.id)
+                          AND jl.currency = ?
+                    ),
+                    (
+                        SELECT w.{$walletColumn} FROM wallets AS w WHERE w.user_id = users.id LIMIT 1
+                    ),
+                    0
+                )",
+                [$ownerId, $prefix, $currency]
+            );
+        };
+    }
 }

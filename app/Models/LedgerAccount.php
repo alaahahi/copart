@@ -38,7 +38,7 @@ class LedgerAccount extends Model
 
     public function balance(?string $currency = null): float
     {
-        $query = $this->lines();
+        $query = $this->lines()->whereHas('entry');
         if ($currency) {
             $query->where('currency', $currency);
         }

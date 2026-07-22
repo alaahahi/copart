@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Auth;
 
 
 use Carbon\Carbon;
+use App\Services\LedgerService;
 
 use Inertia\Inertia;
 
@@ -99,7 +100,11 @@ class DashboardController extends Controller
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
         $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->pluck('id');
-        $sumDebit =Wallet::whereIn('user_id', $client)->sum('balance');
+        $sumDebit = app(LedgerService::class)->sumClientsReceivableWithFallback(
+            (int) $owner_id,
+            (int) $this->userClient,
+            '$'
+        );
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
         $sumProfit = $car->where('results',2)->sum('profit');
         $data = [
