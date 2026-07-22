@@ -103,18 +103,28 @@
 
     <div class="mkl-field-row mkl-split-row">
         <span class="mkl-field-en">VIN:</span>
-        <span class="mkl-field-value mkl-half">{{ $vin ?? '' }}</span>
-        <span class="mkl-field-en mkl-lot-label">LOT:</span>
-        <span class="mkl-field-value mkl-half">{{ $lot ?? '' }}</span>
+        <span class="mkl-field-value">{{ $vin ?? '' }}</span>
+        <span class="mkl-field-en">LOT:</span>
+        <span class="mkl-field-value">{{ $lot ?? '' }}</span>
     </div>
 
-    <div class="mkl-field-row mkl-split-row">
-        <span class="mkl-field-en">Paid up:</span>
-        <span class="mkl-field-value mkl-half">{{ $paidUp ?? '' }}</span>
-        <span class="mkl-field-ar mkl-mid">وەرگیراو / المدفوع</span>
-        <span class="mkl-field-en mkl-rest-label">Rest:</span>
-        <span class="mkl-field-value mkl-half">{{ $rest ?? '' }}</span>
-        <span class="mkl-field-ar">ماوە / الباقي</span>
+    <div class="mkl-dual-row">
+        <div class="mkl-dual-group">
+            <span class="mkl-field-en">Paid up:</span>
+            <span class="mkl-field-value">{{ $paidUp ?? '' }}</span>
+            <span class="mkl-field-ar">
+                <span class="mkl-kr">وەرگیراو</span>
+                <span>المدفوع</span>
+            </span>
+        </div>
+        <div class="mkl-dual-group">
+            <span class="mkl-field-en">Rest:</span>
+            <span class="mkl-field-value">{{ $rest ?? '' }}</span>
+            <span class="mkl-field-ar">
+                <span class="mkl-kr">ماوە</span>
+                <span>الباقي</span>
+            </span>
+        </div>
     </div>
 
     @if(!empty($description))

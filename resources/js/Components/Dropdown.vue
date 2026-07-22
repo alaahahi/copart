@@ -43,12 +43,16 @@ const open = ref(false);
 
 <template>
     <div class="relative">
-        <div @click="open = ! open">
+        <div
+            @click="open = !open"
+            @keydown.enter.prevent="open = !open"
+            @keydown.space.prevent="open = !open"
+        >
             <slot name="trigger" />
         </div>
 
         <!-- Full Screen Dropdown Overlay -->
-        <div v-show="open" class="fixed inset-0 z-40 " @click="open = false"></div>
+        <div v-show="open" class="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]" @click="open = false"></div>
 
         <transition
             enter-active-class="transition ease-out duration-200"
@@ -58,11 +62,11 @@ const open = ref(false);
             leave-from-class="transform opacity-100 scale-100"
             leave-to-class="transform opacity-0 scale-95">
             <div v-show="open"
-                    class="absolute z-50 mt-2 rounded-md shadow-lg"
+                    class="absolute z-50 mt-3 rounded-2xl shadow-2xl"
                     :class="[widthClass, alignmentClasses]"
                     style="display: none;"
                     @click="open = false">
-                <div class="rounded-md ring-1 ring-black ring-opacity-5" :class="contentClasses">
+                <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900/95" :class="contentClasses">
                     <slot name="content" />
                 </div>
             </div>
