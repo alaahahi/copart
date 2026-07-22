@@ -13,9 +13,10 @@
         html, body {
             margin: 0;
             padding: 0;
-            font-family: Arial, Tahoma, sans-serif;
+            font-family: Tahoma, Arial, sans-serif;
             background: #fff;
             color: #111;
+            direction: rtl;
         }
         .mkl-a4-page {
             width: 100%;
@@ -44,6 +45,7 @@
             font-size: 12px;
             line-height: 1.35;
             page-break-inside: avoid;
+            direction: rtl;
         }
         .mkl-header {
             display: flex;
@@ -52,9 +54,17 @@
             gap: 10px;
             margin-bottom: 6px;
         }
-        .mkl-logos-left {
+        .mkl-logos-brand {
             display: flex;
             align-items: center;
+            gap: 10px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .mkl-logos-partners {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
             gap: 8px;
             min-height: 44px;
             flex: 1;
@@ -65,13 +75,6 @@
             object-fit: contain;
         }
         .mkl-logo-m { height: 42px; }
-        .mkl-logos-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-align: center;
-            flex-shrink: 0;
-        }
         .mkl-haulf-img {
             height: 42px;
             max-width: 110px;
@@ -97,6 +100,8 @@
         .mkl-branch-url {
             font-size: 10px;
             color: #444;
+            direction: ltr;
+            unicode-bidi: isolate;
         }
         .mkl-type-bar {
             display: flex;
@@ -137,23 +142,26 @@
             font-weight: 700;
         }
         .mkl-kr { display: block; font-size: 10px; }
-        .mkl-ar { display: block; font-weight: 700; font-size: 11px; }
-        .mkl-en { display: block; font-size: 10px; font-style: italic; }
+        .mkl-ar { display: block; font-weight: 700; font-size: 12px; }
+        .mkl-en { display: block; font-size: 10px; font-style: italic; direction: ltr; unicode-bidi: isolate; }
         .mkl-currency-box {
             display: flex;
             align-items: stretch;
             border: 1px solid #222;
             min-width: 140px;
+            flex-shrink: 0;
         }
         .mkl-amount-cell {
             flex: 1;
             min-width: 80px;
             background: #fff;
-            border-left: 1px solid #222;
+            border-inline-start: 1px solid #222;
             padding: 6px 10px;
             font-size: 15px;
             font-weight: 700;
             text-align: center;
+            direction: ltr;
+            unicode-bidi: isolate;
         }
         .mkl-currency-label {
             background: #111;
@@ -168,7 +176,7 @@
         }
         .mkl-date-row {
             display: flex;
-            justify-content: flex-end;
+            justify-content: flex-start;
             align-items: center;
             gap: 8px;
             margin: 6px 0 8px;
@@ -183,10 +191,12 @@
             text-align: center;
             background: #fff;
             font-size: 12px;
+            direction: ltr;
+            unicode-bidi: isolate;
         }
         .mkl-field-row {
             display: grid;
-            grid-template-columns: 88px 1fr 118px;
+            grid-template-columns: 118px 1fr 88px;
             align-items: end;
             gap: 8px;
             margin-bottom: 7px;
@@ -195,12 +205,7 @@
         .mkl-split-row {
             grid-template-columns: 52px 1fr 52px 1fr;
             align-items: end;
-        }
-        .mkl-split-row .mkl-field-ar {
-            grid-column: 1 / -1;
-            text-align: center;
-            min-width: 0;
-            margin-top: -2px;
+            direction: ltr;
         }
         .mkl-dual-row {
             display: grid;
@@ -210,20 +215,17 @@
         }
         .mkl-dual-group {
             display: grid;
-            grid-template-columns: 58px 1fr;
+            grid-template-columns: 70px 1fr 58px;
             align-items: end;
             gap: 6px;
-        }
-        .mkl-dual-group .mkl-field-ar {
-            grid-column: 1 / -1;
-            text-align: center;
-            min-width: 0;
-            margin-top: 2px;
         }
         .mkl-field-en {
             font-size: 11px;
             font-weight: 600;
             white-space: nowrap;
+            direction: ltr;
+            unicode-bidi: isolate;
+            text-align: left;
         }
         .mkl-field-value {
             border-bottom: 1px dotted #333;
@@ -234,13 +236,14 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            text-align: right;
         }
         .mkl-field-ar {
-            text-align: left;
-            font-size: 10px;
+            text-align: right;
+            font-size: 11px;
             font-weight: 700;
             line-height: 1.2;
-            min-width: 110px;
+            min-width: 100px;
         }
         .mkl-signatures {
             display: grid;
@@ -258,6 +261,7 @@
         .mkl-footer {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             flex-wrap: wrap;
             gap: 6px;
             border-top: 2px solid #4fc3f7;
@@ -266,6 +270,13 @@
             font-size: 10px;
             font-weight: 600;
             color: #222;
+            direction: rtl;
+        }
+        .mkl-footer span {
+            white-space: nowrap;
+        }
+        .mkl-footer bdi {
+            unicode-bidi: isolate;
         }
         @media print {
             html, body {
