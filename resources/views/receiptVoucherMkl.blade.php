@@ -54,20 +54,19 @@
             gap: 10px;
             margin-bottom: 6px;
         }
-        .mkl-logos-brand {
+        .mkl-logos-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            flex: 1;
+        }
+        .mkl-logos-right {
             display: flex;
             align-items: center;
             gap: 10px;
             text-align: center;
             flex-shrink: 0;
-        }
-        .mkl-logos-partners {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
-            min-height: 44px;
-            flex: 1;
         }
         .mkl-partner-logo {
             height: 40px;
