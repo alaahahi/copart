@@ -2,7 +2,7 @@
     $isReceipt = ($voucherType ?? 'receipt') === 'receipt';
     $clientName = $clientName ?? ($clientData['client']->name ?? '');
     $amountDisplay = isset($amount) ? number_format((float) $amount, ($currency ?? '$') === '$' ? 2 : 0) : '';
-    $amountWords = \App\Helpers\help::numberToWords((float) ($amount ?? 0), $currency ?? '$');
+    $amountWords = \App\Helpers\Help::numberToWords((float) ($amount ?? 0), $currency ?? '$');
     $dateParts = [];
     if (!empty($created)) {
         $dt = \Carbon\Carbon::parse($created);

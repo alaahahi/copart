@@ -1,22 +1,20 @@
 <?php
 
 namespace App\Helpers;
+
 use Alkoumi\LaravelArabicTafqeet\Tafqeet;
 
-class help
+class Help
 {
-
-    public static function numberToWords($number,$currency='usd')
+    public static function numberToWords($number, $currency = 'usd')
     {
-        if($currency=='$'){
-            $currency='usd';
+        if ($currency == '$') {
+            $currency = 'usd';
         }
-        if($currency=='IQD'){
-            $currency='iqd';
+        if ($currency == 'IQD') {
+            $currency = 'iqd';
         }
-	    $tafqeetInArabic = Tafqeet::inArabic($number,$currency);
-       return $tafqeetInArabic;
-    }
-    
 
+        return Tafqeet::inArabic($number, $currency);
+    }
 }
