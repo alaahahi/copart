@@ -2,6 +2,7 @@
     $isReceipt = ($voucherType ?? 'receipt') === 'receipt';
     $clientName = $clientName ?? ($clientData['client']->name ?? '');
     $amountDisplay = isset($amount) ? number_format((float) $amount, ($currency ?? '$') === '$' ? 2 : 0) : '';
+    $amountWords = \App\Helpers\help::numberToWords((float) ($amount ?? 0), $currency ?? '$');
     $dateParts = [];
     if (!empty($created)) {
         $dt = \Carbon\Carbon::parse($created);
@@ -105,7 +106,10 @@
             <span class="mkl-kr">بڕی پارە</span>
             <span>المبلغ</span>
         </span>
-        <span class="mkl-field-value" dir="ltr">{{ $amountDisplay }} {{ $currency ?? '$' }}</span>
+        <span class="mkl-field-value mkl-amount-words">
+            <bdi dir="ltr">{{ $amountDisplay }} {{ $currency ?? '$' }}</bdi>
+            <strong>({{ $amountWords }})</strong>
+        </span>
         <span class="mkl-field-en">Amount:</span>
     </div>
 

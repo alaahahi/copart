@@ -240,6 +240,16 @@
             white-space: nowrap;
             text-align: right;
         }
+        .mkl-amount-words {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            line-height: 1.4;
+        }
+        .mkl-amount-words strong {
+            font-weight: 800;
+            margin-inline-start: 4px;
+        }
         .mkl-field-ar {
             text-align: right;
             font-size: 11px;
