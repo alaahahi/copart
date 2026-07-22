@@ -51,8 +51,8 @@ class LedgerController extends Controller
 
         foreach ($accounts as $account) {
             $lines = JournalLine::query()
-                ->where('ledger_account_id', $account->id)
-                ->where('currency', $currency)
+                ->where('journal_lines.ledger_account_id', $account->id)
+                ->where('journal_lines.currency', $currency)
                 ->whereHas('entry', function ($query) use ($ownerId, $from, $to) {
                     $query->where('owner_id', $ownerId);
                     if ($from && $to) {
@@ -60,8 +60,8 @@ class LedgerController extends Controller
                     }
                 });
 
-            $debit = round((float) (clone $lines)->sum('debit'), 2);
-            $credit = round((float) (clone $lines)->sum('credit'), 2);
+            $debit = round((float) (clone $lines)->sum('journal_lines.debit'), 2);
+            $credit = round((float) (clone $lines)->sum('journal_lines.credit'), 2);
 
             if ($debit == 0.0 && $credit == 0.0) {
                 continue;
@@ -104,8 +104,8 @@ class LedgerController extends Controller
         $account = LedgerAccount::where('owner_id', $ownerId)->findOrFail($accountId);
 
         $openingQuery = JournalLine::query()
-            ->where('ledger_account_id', $account->id)
-            ->where('currency', $currency)
+            ->where('journal_lines.ledger_account_id', $account->id)
+            ->where('journal_lines.currency', $currency)
             ->whereHas('entry', function ($query) use ($ownerId, $from) {
                 $query->where('owner_id', $ownerId);
                 if ($from) {
@@ -115,16 +115,16 @@ class LedgerController extends Controller
                 }
             });
 
-        $openingDebit = (float) (clone $openingQuery)->sum('debit');
-        $openingCredit = (float) (clone $openingQuery)->sum('credit');
+        $openingDebit = (float) (clone $openingQuery)->sum('journal_lines.debit');
+        $openingCredit = (float) (clone $openingQuery)->sum('journal_lines.credit');
         $running = in_array($account->type, ['liability', 'equity', 'income'], true)
             ? round($openingCredit - $openingDebit, 2)
             : round($openingDebit - $openingCredit, 2);
 
         $lines = JournalLine::query()
             ->with(['entry:id,voucher_no,entry_date,memo,source'])
-            ->where('ledger_account_id', $account->id)
-            ->where('currency', $currency)
+            ->where('journal_lines.ledger_account_id', $account->id)
+            ->where('journal_lines.currency', $currency)
             ->whereHas('entry', function ($query) use ($ownerId, $from, $to) {
                 $query->where('owner_id', $ownerId);
                 if ($from && $to) {

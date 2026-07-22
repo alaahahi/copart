@@ -473,23 +473,23 @@ class DashboardController extends Controller
 
     public function payCar(Request $request)
     {
-        $authUser = auth()->user();   
+        $authUser = auth()->user();
+        $owner_id = Auth::user()->owner_id;
         $client_id =$request->client_id;
         $pay_price =(int)$request->pay_price??0;
         $paid_amount_pay =(int)$request->paid_amount_pay??0;
+        $clientDebt = $pay_price - $paid_amount_pay;
 
         if( $client_id==0){
             $client = new User;
             $client->name = $request->client_name;
             $client->phone = $request->client_phone;
             $client->type_id = $this->userClient;
+            $client->owner_id = $owner_id;
             $client->created =Carbon::now()->format('Y-m-d');
             $client->save();
-            Wallet::create(['user_id' => $client->id,'balance'=>$pay_price-$paid_amount_pay]);
+            Wallet::create(['user_id' => $client->id,'balance'=>0, 'balance_dinar'=>0]);
             $client_id=$client->id;
-        }else{
-            $wallet = Wallet::where('user_id',$client_id)->first();
-            $wallet->increment('balance',$pay_price-$paid_amount_pay); 
         }
 
         $car=Car::find($request->id);
@@ -505,8 +505,10 @@ class DashboardController extends Controller
                 $desc=trans('text.buyCar').' '.$car->pay_price.trans('text.payDone').$car->paid_amount_pay;
                 $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
                 $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$this->inAccount->id,$car->id,'App\Models\Car');
-                if($pay_price-$paid_amount_pay >= 0){
-                    $this->accountingController->increaseWallet($pay_price-$paid_amount_pay, $desc,$this->debtAccount->id,$car->id,'App\Models\Car');
+                if($clientDebt != 0){
+                    // Client AR from ledger (wallet is cache only)
+                    $this->accountingController->increaseWallet($clientDebt, $desc, $client_id, $car->id, 'App\Models\Car');
+                    $this->accountingController->increaseWallet($clientDebt, $desc,$this->debtAccount->id,$car->id,'App\Models\Car');
                 }
                 if($pay_price==$paid_amount_pay){
                     $car->increment('results'); 

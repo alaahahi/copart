@@ -1366,73 +1366,65 @@ class AccountingController extends Controller
     {
         $ownerId = $owner_id ?? Auth::user()->owner_id;
         $this->accounting->loadAccounts($ownerId);
-        if($amount){
-            if($created==0){
-                $created=$this->currentDate;
-            }
-            $user=  User::with('wallet')->find($user_id);
-            if($id = $user->wallet->id){
-            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
-            $transaction = Transactions::create($transactionDetils);
-            $wallet = Wallet::find($id);
-            if($currency=='IQD'){
-                $wallet->increment('balance_dinar', $amount);
-            }else{
-                $wallet->increment('balance', $amount);
-            }
-            try {
-                $ledger = app(LedgerService::class);
-                $journal = $ledger->postClientDebtIncrease(
-                    (int) $ownerId,
-                    (int) $user_id,
-                    abs((float) $amount),
-                    $currency === 'IQD' ? 'IQD' : '$',
-                    (string) $desc,
-                    $transaction
-                );
-                if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
-                    $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
-                }
-                $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
-            } catch (\Throwable $e) {
-                Log::warning('Ledger post failed on increaseWallet', ['error' => $e->getMessage()]);
-            }
-            }
-            if (is_null($wallet)) {
-                return null;
-            }
-            // Finally return the updated wallet.
-            return $transaction;
-        }else{
-            return 0 ;
+        if(!$amount){
+            return 0;
+        }
+        if($created==0){
+            $created=$this->currentDate;
+        }
+        $user=  User::with('wallet')->find($user_id);
+        if(!$user || !$user->wallet){
+            return null;
         }
 
+        return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user) {
+            $id = $user->wallet->id;
+            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
+            $transaction = Transactions::create($transactionDetils);
+
+            $ledger = app(LedgerService::class);
+            $journal = $ledger->postClientDebtIncrease(
+                (int) $ownerId,
+                (int) $user_id,
+                abs((float) $amount),
+                $currency === 'IQD' ? 'IQD' : '$',
+                (string) $desc,
+                $transaction
+            );
+            if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
+
+            return $transaction;
+        });
     }
 
     public function decreaseWallet(int $amount,$desc,$user_id,$morphed_id=0,$morphed_type='',$is_pay=0,$discount=0,$currency='$',$created=0,$parent_id=0,$type='out',$details=[],$owner_id=null) 
     {
         $ownerId = $owner_id ?? Auth::user()->owner_id;
         $this->accounting->loadAccounts($ownerId);
-        if($amount){
+        if(!$amount){
+            return 0;
+        }
         if($created==0){
             $created=$this->currentDate;
         }
 
         $user=  User::with('wallet')->find($user_id);
-        if(!$user->wallet->id){
+        if(!$user){
+            return null;
+        }
+        if(!$user->wallet){
           Wallet::create(['user_id' => $user_id,'balance'=>0]);
+          $user->load('wallet');
         }
-  
-        if($id = $user->wallet->id){
-        $wallet = Wallet::find($id);
-        $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
-        $transaction =Transactions::create($transactionDetils);
-        if($currency=='IQD'){
-            $wallet->decrement('balance_dinar', $amount);
-        }else{
-            $wallet->decrement('balance', $amount);
-        }
-        try {
+
+        return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user) {
+            $id = $user->wallet->id;
+            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
+            $transaction =Transactions::create($transactionDetils);
+
             $ledger = app(LedgerService::class);
             $journal = $ledger->postClientPayment(
                 (int) $ownerId,
@@ -1446,45 +1438,46 @@ class AccountingController extends Controller
                 $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
             }
             $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
-        } catch (\Throwable $e) {
-            Log::warning('Ledger post failed on decreaseWallet', ['error' => $e->getMessage()]);
-        }
 
-        }
-        if (is_null($wallet)) {
-            return null;
-        }
-        // Finally return the updated wallet.
-        return $transaction;
-        }else{
-            return 0 ;
-        }
+            return $transaction;
+        });
     }
     public function debtWallet(int $amount,$desc,$user_id,$morphed_id=0,$morphed_type='',$is_pay=0,$discount=0,$currency='$',$created=0,$parent_id=0,$type='debt')  
     {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
+        $ownerId = Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+        if(!$amount){
+            return 0;
+        }
         if($created==0){
             $created=$this->currentDate ;
         }
         $user=  User::with('wallet')->find($user_id);
-        if($id = $user->wallet->id){
-        $wallet = Wallet::find($id);
-        if($currency=='IQD'){
-            $wallet->decrement('balance_dinar', $amount);
-        }else{
-            $wallet->decrement('balance', $amount);
-        }
-            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id];
-
-            $Transactions =Transactions::create($transactionDetils);
-         
-        
-        }
-        if (is_null($wallet)) {
+        if(!$user || !$user->wallet){
             return null;
         }
-        // Finally return the updated wallet.
-        return $Transactions;
+
+        return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $ownerId, $user) {
+            $id = $user->wallet->id;
+            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id];
+            $transaction = Transactions::create($transactionDetils);
+
+            $ledger = app(LedgerService::class);
+            $journal = $ledger->postClientPayment(
+                (int) $ownerId,
+                (int) $user_id,
+                abs((float) $amount),
+                $currency === 'IQD' ? 'IQD' : '$',
+                (string) $desc,
+                $transaction
+            );
+            if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
+
+            return $transaction;
+        });
     }
  
     public function delTransactions(Request $request)
@@ -1503,142 +1496,116 @@ class AccountingController extends Controller
                 File::delete(public_path('uploadsResized/' . $transactionsImage->name));
                 $transactionsImage->delete();
             }
+            $ledger = app(LedgerService::class);
+            $walletUserId = Wallet::where('id', $originalTransaction->wallet_id)->value('user_id');
+            if ($ledger->voidJournalForTransaction($originalTransaction, 'حذف أمانة #' . $originalTransaction->id)) {
+                if ($walletUserId) {
+                    $ledger->syncWalletFromLedger((int) $owner_id, (int) $walletUserId);
+                }
+            } else {
+                $this->legacyReverseWalletMovement($originalTransaction);
+            }
             $originalTransaction->delete();
+            Log::info('Transaction deleted', ['transaction_id' => $transaction_id, 'by' => Auth::id()]);
             return response()->json(['message' => 'deleted'], 200);
         }
 
-        $wallet_id=$originalTransaction->wallet_id;
-        $refundTransaction = 'مرتجع حذف حركة';
-        $firstTransaction = null;
+        $children = Transactions::where('parent_id', $transaction_id)->get();
+        $all = $children;
+        $firstTransaction = $children->first();
+        $ledger = app(LedgerService::class);
+        $affectedUserIds = [];
+        $syncedFromLedger = [];
 
-        $wallet=Wallet::find($wallet_id);
-        if($originalTransaction->currency=='$'){
-            if($originalTransaction->type=='inUserBox' || $originalTransaction->type=='outUserBox')
-            {
-                $wallet->decrement('balance', $originalTransaction->amount);
-                $all=  Transactions::where('parent_id',$transaction_id)->get();
- 
-                $firstTransaction=Transactions::where('parent_id',$transaction_id)->first();
-                 if ($all->isNotEmpty()) { // Check if there are records in the collection
-                  foreach ($all as $transaction) {
-                      if($transaction->currency=='$'){
-                          $wallet_id = $transaction->wallet_id;
-                           $wallet = Wallet::find($wallet_id);
-                          $transaction->delete();
-                      }
-                      if($transaction->currency=='IQD'){
-                          $wallet_id = $transaction->wallet_id;
-                           $wallet = Wallet::find($wallet_id);
-                          $transaction->delete();
-                      }
-                  }
-              }
-            }else{
-                $wallet->decrement('balance', $originalTransaction->amount);
-                $all=  Transactions::where('parent_id',$transaction_id)->get();
-      
-                $firstTransaction=Transactions::where('parent_id',$transaction_id)->first();
-                if ($all->isNotEmpty()) { // Check if there are records in the collection
-                  foreach ($all as $transaction) {
-                      if($transaction->currency=='$'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $wallet->decrement('balance', $transaction->amount);
-                          $transaction->delete();
-                      }
-                      if($transaction->currency=='IQD'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $wallet->decrement('balance_dinar', $transaction->amount);
-                          $transaction->delete();
-                      }
-                  }
-              }
+        $collectUser = function ($walletId) use (&$affectedUserIds) {
+            $uid = Wallet::where('id', $walletId)->value('user_id');
+            if ($uid) {
+                $affectedUserIds[] = (int) $uid;
+            }
+        };
+
+        DB::transaction(function () use (
+            $originalTransaction,
+            $children,
+            $ledger,
+            $collectUser,
+            $owner_id,
+            &$affectedUserIds,
+            &$syncedFromLedger,
+            $firstTransaction
+        ) {
+            $voidOriginal = $ledger->voidJournalForTransaction($originalTransaction, 'حذف حركة #' . $originalTransaction->id);
+            $collectUser($originalTransaction->wallet_id);
+            if ($voidOriginal) {
+                $syncedFromLedger[] = (int) Wallet::where('id', $originalTransaction->wallet_id)->value('user_id');
+            } else {
+                $this->legacyReverseWalletMovement($originalTransaction);
             }
 
-        }
-        if($originalTransaction->currency=='IQD'){
-            if($originalTransaction->type=='inUserBox'|| $originalTransaction->type=='outUserBox')
-            {
-                $wallet->decrement('balance_dinar', $originalTransaction->amount);
-                $all=  Transactions::where('parent_id',$transaction_id)->get();
-                $firstTransaction=Transactions::where('parent_id',$transaction_id)->first();
-      
-                if ($all->isNotEmpty()) { // Check if there are records in the collection
-                  foreach ($all as $transaction) {
-                      if($transaction->currency=='$'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $transaction->delete();
-                      }
-                      if($transaction->currency=='IQD'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $transaction->delete();
-                      }
-                  }
-              }
-            }else{
-                $wallet->decrement('balance_dinar', $originalTransaction->amount);
-                $all=  Transactions::where('parent_id',$transaction_id)->get();
-                $firstTransaction=Transactions::where('parent_id',$transaction_id)->first();
-      
-                if ($all->isNotEmpty()) { // Check if there are records in the collection
-                  foreach ($all as $transaction) {
-                      if($transaction->currency=='$'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $wallet->decrement('balance', $transaction->amount);
-                          $transaction->delete();
-                      }
-                      if($transaction->currency=='IQD'){
-                          $wallet_id = $transaction->wallet_id;
-                          $wallet = Wallet::find($wallet_id);
-                          $wallet->decrement('balance_dinar', $transaction->amount);
-                          $transaction->delete();
-                      }
-                  }
-              }
+            foreach ($children as $transaction) {
+                $voided = $ledger->voidJournalForTransaction($transaction, 'حذف حركة فرعية #' . $transaction->id);
+                $collectUser($transaction->wallet_id);
+                if ($voided) {
+                    $syncedFromLedger[] = (int) Wallet::where('id', $transaction->wallet_id)->value('user_id');
+                } else {
+                    $this->legacyReverseWalletMovement($transaction);
+                }
+                $transaction->delete();
             }
 
+            $walletExpensesIds = [];
+            if ($this->accounting->howler() && $this->accounting->howler()->wallet) {
+                $walletExpensesIds[] = $this->accounting->howler()->wallet->id;
+            }
+            if ($this->accounting->shippingCoc() && $this->accounting->shippingCoc()->wallet) {
+                $walletExpensesIds[] = $this->accounting->shippingCoc()->wallet->id;
+            }
+            if ($this->accounting->border() && $this->accounting->border()->wallet) {
+                $walletExpensesIds[] = $this->accounting->border()->wallet->id;
+            }
+            if ($this->accounting->iran() && $this->accounting->iran()->wallet) {
+                $walletExpensesIds[] = $this->accounting->iran()->wallet->id;
+            }
+            if ($this->accounting->dubai() && $this->accounting->dubai()->wallet) {
+                $walletExpensesIds[] = $this->accounting->dubai()->wallet->id;
+            }
+            if ($firstTransaction && in_array($firstTransaction->wallet_id, $walletExpensesIds, true)) {
+                Expenses::where('transaction_id', $firstTransaction->id)->delete();
+            }
 
-        }
-        $walletExpensesIds = [];
-        if ($this->accounting->howler() && $this->accounting->howler()->wallet) {
-            $walletExpensesIds[] = $this->accounting->howler()->wallet->id;
-        }
-        if ($this->accounting->shippingCoc() && $this->accounting->shippingCoc()->wallet) {
-            $walletExpensesIds[] = $this->accounting->shippingCoc()->wallet->id;
-        }
-        if ($this->accounting->border() && $this->accounting->border()->wallet) {
-            $walletExpensesIds[] = $this->accounting->border()->wallet->id;
-        }
-        if ($this->accounting->iran() && $this->accounting->iran()->wallet) {
-            $walletExpensesIds[] = $this->accounting->iran()->wallet->id;
-        }
-        if ($this->accounting->dubai() && $this->accounting->dubai()->wallet) {
-            $walletExpensesIds[] = $this->accounting->dubai()->wallet->id;
-        }
-        if ($firstTransaction && in_array($wallet_id, $walletExpensesIds)) {
-            $expenses = Expenses::where('transaction_id',$firstTransaction->id);
-            $expenses->delete();
-        }
-         
-        if($originalTransaction){
             foreach ($originalTransaction->TransactionsImages as $transactionsImage) {
-                // Delete the image file from the public directory
                 File::delete(public_path('uploads/' . $transactionsImage->name));
                 File::delete(public_path('uploadsResized/' . $transactionsImage->name));
-    
-                // Delete the image record from the database
                 $transactionsImage->delete();
             }
-        }
- 
- 
-        $originalTransaction->delete();
-    
+
+            $originalTransaction->delete();
+
+            foreach (array_unique(array_filter($syncedFromLedger)) as $uid) {
+                $ledger->syncWalletFromLedger((int) $owner_id, (int) $uid);
+            }
+        });
+
+        Log::info('Transaction deleted', ['transaction_id' => $transaction_id, 'by' => Auth::id()]);
+
         return response()->json(['message' => $all], 200);
+    }
+
+    /**
+     * Reverse wallet effect for transactions created before ledger linking.
+     */
+    protected function legacyReverseWalletMovement(Transactions $transaction): void
+    {
+        $wallet = Wallet::find($transaction->wallet_id);
+        if (!$wallet) {
+            return;
+        }
+
+        if ($transaction->currency === 'IQD') {
+            $wallet->decrement('balance_dinar', $transaction->amount);
+        } else {
+            $wallet->decrement('balance', $transaction->amount);
+        }
     }
 
     public function receiveCard(Request $request)
@@ -1649,22 +1616,21 @@ class AccountingController extends Controller
         $wallet = Wallet::where('user_id', $profile->user_id)->first();
         $user = User::find($profile->user_id);
         $old_card = $wallet->card;
-        $old_balance = $wallet->balance;
-        $card_price = $card->price ?? 0;
         $percentage = $user->percentage ?? 0;
-        $new_balance = $old_balance + $percentage;
 
         try {
             DB::beginTransaction();
             $profile->update(['results' => 1, 'user_accepted' => $authUser->id]);
             $this->increaseWallet($percentage, ' نسبة على البطاقة رقم ' . $profile?->card_number, $user->id);
-            $wallet->update(['card' => $old_card - 1, 'balance' => $new_balance]);
+            $wallet->update(['card' => $old_card - 1]);
+            $wallet->refresh();
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::warning('receiveCard failed', ['error' => $e->getMessage()]);
         }
 
-        return Response::json($new_balance, 200);
+        return Response::json($wallet->balance ?? 0, 200);
     }
 
     protected function renderVoucher(string $defaultView, string $voucherType, $config, array $vars)

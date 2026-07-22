@@ -159,6 +159,14 @@ class CompanyTreasuryController extends Controller
         $currency = $entry->currency;
         $entryDate = $entry->entry_date->format('Y-m-d');
         $entryId = (int) $entry->id;
+
+        if ($entry->journal_entry_id) {
+            app(LedgerService::class)->voidJournalEntry(
+                (int) $entry->journal_entry_id,
+                'حذف حركة قاصة #' . $entryId
+            );
+        }
+
         $entry->delete();
         $this->recalculateAfterDelete($ownerId, $currency, $entryDate, $entryId);
 
@@ -199,9 +207,18 @@ class CompanyTreasuryController extends Controller
         $entryId = (int) $entry->id;
 
         $entry->restore();
+        if ($entry->journal_entry_id) {
+            app(LedgerService::class)->restoreJournalEntry((int) $entry->journal_entry_id);
+        }
         $this->recalculateBalancesFrom($ownerId, $currency, $entryDate, $entryId);
 
         if ($this->getLastBalance($ownerId, $currency) < 0) {
+            if ($entry->journal_entry_id) {
+                app(LedgerService::class)->voidJournalEntry(
+                    (int) $entry->journal_entry_id,
+                    'إلغاء استرجاع قاصة #' . $entryId
+                );
+            }
             $entry->delete();
             $this->recalculateAfterDelete($ownerId, $currency, $entryDate, $entryId);
 

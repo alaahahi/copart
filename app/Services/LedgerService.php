@@ -261,6 +261,71 @@ class LedgerService
     }
 
     /**
+     * Soft-void a journal entry so it no longer affects balances (audit kept via SoftDeletes).
+     */
+    public function voidJournalEntry(?int $journalEntryId, ?string $reason = null): bool
+    {
+        if (!$journalEntryId) {
+            return false;
+        }
+
+        $entry = JournalEntry::query()->find($journalEntryId);
+        if (!$entry) {
+            return false;
+        }
+
+        DB::transaction(function () use ($entry, $reason) {
+            if ($reason) {
+                $entry->forceFill([
+                    'memo' => trim(($entry->memo ? $entry->memo . ' | ' : '') . 'VOID: ' . $reason),
+                ])->save();
+            }
+            $entry->delete();
+        });
+
+        \Illuminate\Support\Facades\Log::info('Ledger journal voided', [
+            'journal_entry_id' => $journalEntryId,
+            'reason' => $reason,
+            'by' => Auth::id(),
+        ]);
+
+        return true;
+    }
+
+    public function restoreJournalEntry(?int $journalEntryId): bool
+    {
+        if (!$journalEntryId) {
+            return false;
+        }
+
+        $entry = JournalEntry::onlyTrashed()->find($journalEntryId);
+        if (!$entry) {
+            return false;
+        }
+
+        $entry->restore();
+
+        return true;
+    }
+
+    /**
+     * Void journal linked to a wallet transaction (by journal_entry_id or reference).
+     */
+    public function voidJournalForTransaction($transaction, ?string $reason = null): bool
+    {
+        $journalId = $transaction->journal_entry_id ?? null;
+
+        if (!$journalId) {
+            $journalId = JournalEntry::query()
+                ->where('reference_type', \App\Models\Transactions::class)
+                ->where('reference_id', $transaction->id)
+                ->value('id');
+        }
+
+        return $this->voidJournalEntry($journalId ? (int) $journalId : null, $reason);
+    }
+
+    /**
      * Client AR balance from journal lines (source of truth).
      * Positive = client owes company.
      */
