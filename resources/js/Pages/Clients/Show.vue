@@ -10,14 +10,10 @@ import axios from "axios";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
 import ModalEditCars from "@/Components/ModalEditCar_S.vue";
 import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
-import ModalAddExitCar from "@/Components/ModalAddExitCar.vue";
-import ModalShowExitCar from "@/Components/ModalShowExitCar.vue";
 import print from "@/Components/icon/print.vue";
 import pay from "@/Components/icon/pay.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
-import exit from "@/Components/icon/exit.vue";
-import show from "@/Components/icon/show.vue";
 import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
 
 import { useToast } from "vue-toastification";
@@ -43,8 +39,6 @@ let showModalAddCarPayment = ref(false);
 let showErorrAmount = ref(false);
 let showTransactions= ref(false);
 let showComplatedCars = ref(false);
-let showModalAddExitCar = ref(false);
-let showModalShowExitCar = ref(false);
 let total = ref(0);
 let formData = ref({});
 let discount= ref(0);
@@ -306,17 +300,6 @@ function hideTransactionsDiv(){
   
 }
 
-function openModalAddExitCar(form={}) {
-  formData.value=form
-  formData.value.createdExit = getTodayDate()
-
-  showModalAddExitCar.value = true;
-}
-function openModalShowExitCar(form={}) {
-  formData.value=form
-  showModalShowExitCar.value = true;
-}
-
 function calculateAmountDiscount (){
   let need_payment =  laravelData?.value?.client?.wallet?.balance
   amount.value=need_payment- discount.value
@@ -340,44 +323,6 @@ function calculateAmount(){
   }
 
 }
-
-function confirmAddExitCar(v){
-
-  axios.get(`/api/makeCarExit?car_id=${v.id}&created=${v.createdExit}&phone=${v.phoneExit}&note=${v.noteExit}`)
-  .then(response => {
-    showModalAddExitCar.value = false;
-    toast.success( "تم اضافة خروجية للسيارة بنجاح ", {
-        timeout: 5000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-
-      getResultsSelect();
-
-  })
-  .catch(error => {
-    showModalAddExitCar.value = false;
-
-    toast.error("لم التعديل بنجاح", {
-        timeout: 2000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-
-  })
-  
-}
-
-function getTodayDate() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 
 function getImageUrl(name) {
       // Provide the base URL for your images
@@ -456,24 +401,6 @@ function checkClientBalance(v){
         {{ $page.props.appName }}
       </h2>
     </template>
-    <ModalAddExitCar
-            :formData="formData"
-            :show="showModalAddExitCar ? true : false"
-            @a="confirmAddExitCar($event)"
-            @close="showModalAddExitCar = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddExitCar>
-    <ModalShowExitCar
-            :formData="formData"
-            :show="showModalShowExitCar ? true : false"
-            @a="confirmAddExitCar($event)"
-            @close="showModalShowExitCar = false"
-            >
-        <template #header>
-          </template>
-    </ModalShowExitCar>
     <ModalEditCars
       :formData="formData"
       :show="showModalEditCars ? true : false"
@@ -1094,17 +1021,6 @@ function checkClientBalance(v){
                     
                  
  
-                      <button
-                        tabIndex="1"
-                        class="px-1 py-1  text-white mx-1 bg-blue-500 rounded"
-                        v-if="car.is_exit"
-                        @click="openModalShowExitCar(car)"
-
-                      >
-                        <show />
-                      </button>
-
-
                     </td>
                     <td  className="border dark:border-gray-800 text-start px-2 py-1 print:hidden">
                       <a

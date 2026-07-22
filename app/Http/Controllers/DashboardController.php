@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Models\Car;
 use App\Models\Company;
 use App\Models\Name;
-use App\Models\ExitCar;
 use App\Models\CarModel;
 use App\Models\Color;
 use App\Models\Wallet;
@@ -96,7 +95,7 @@ class DashboardController extends Controller
         ->sum('amount');
 
         $car = Car::all()->where('owner_id',$owner_id);
-        $exitCar = ExitCar::all()->where('owner_id',$owner_id)->count();
+        $exitCar = 0;
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
         $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->pluck('id');
@@ -520,10 +519,10 @@ class DashboardController extends Controller
         $to =$_GET['to'] ?? 0;
         $limit =$_GET['limit'] ?? 0;
         if($car_have_expenses||$car_have_expenses==1){
-            $data = Car::with('CarImages', 'exitcar','client','carexpenses.user')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'client','carexpenses.user')->where('owner_id', $owner_id);
             
         }else{
-            $data = Car::with('CarImages', 'exitcar', 'client')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'client')->where('owner_id', $owner_id);
         }
 
         if ($from && $to) {
@@ -654,7 +653,7 @@ class DashboardController extends Controller
         $owner_id=Auth::user()->owner_id;
 
         $term = $_GET['q']??'';
-        $data =  Car::with('exitcar')->with('client')->where('owner_id',$owner_id)->orwhere('car_number', 'LIKE','%'.$term.'%')->orwhere('vin', 'LIKE','%'.$term.'%')->orwhere('car_type', 'LIKE','%'.$term.'%')->orWhereHas('client', function ($query) use ($term) {
+        $data =  Car::with('client')->where('owner_id',$owner_id)->orwhere('car_number', 'LIKE','%'.$term.'%')->orwhere('vin', 'LIKE','%'.$term.'%')->orwhere('car_type', 'LIKE','%'.$term.'%')->orWhereHas('client', function ($query) use ($term) {
             $query->where('name', 'LIKE', '%' . $term . '%');
         });
         $data =$data->orderBy('no', 'DESC')->paginate(100);

@@ -136,7 +136,7 @@ class CarExpensesController extends Controller
         return Response::json($car, 200);    
     }
     public function getIndexExpensesPrint(Request $request){
-        $data = Car::with('contract', 'exitcar','client','carexpenses.user')->where('id', $request->car_id)->first();
+        $data = Car::with('client','carexpenses.user')->where('id', $request->car_id)->first();
         if($data){
 
             $config=SystemConfig::first();

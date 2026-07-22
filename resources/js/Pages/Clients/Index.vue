@@ -203,16 +203,16 @@ async function toggleShowInDashboardQuick(user) {
         <template #header>
           </template>
     </ModalEditClient>
-            <div class="py-12">
-                <div class=" mx-auto sm:px-6 lg:px-8">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div class="p-6  dark:bg-gray-900">
+            <div class="py-8">
+                <div class="mx-auto sm:px-6 lg:px-8">
+                    <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="p-6 dark:bg-slate-900 dark:text-slate-100">
                             <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-2 lg:gap-1">
                         <div>
                           <InputLabel for="from" :value="$t('search')" class="mb-1" />
 
                           <form class="flex items-center max-w-5xl">
-                            <label  class="dark:text-gray-200" for="simple-search"  ></label>
+                            <label  class="dark:text-slate-200" for="simple-search"  ></label>
                             <div class="relative w-full">
                               <div
                                 class="
@@ -227,7 +227,7 @@ async function toggleShowInDashboardQuick(user) {
                               >
                                 <svg
                                   aria-hidden="true"
-                                  class="w-5 h-5 text-gray-500 dark:text-gray-200 dark:text-gray-400"
+                                  class="w-5 h-5 text-gray-500 dark:text-slate-300"
                                   fill="currentColor"
                                   viewBox="0 0 20 20"
                                   xmlns="http://www.w3.org/2000/svg"
@@ -254,12 +254,12 @@ async function toggleShowInDashboardQuick(user) {
                                   w-full
                                   pl-10
                                   p-2.5
-                                  dark:bg-gray-700
-                                  dark:border-gray-600
-                                  dark:placeholder-gray-400
+                                  dark:bg-slate-950
+                                  dark:border-slate-500
+                                  dark:placeholder-slate-400
                                   dark:text-white
                                   dark:focus:ring-blue-500
-                                  dark:focus:border-blue-500
+                                  dark:focus:border-blue-400
                                 "
                                 placeholder="بحث"
                                 required
@@ -271,7 +271,7 @@ async function toggleShowInDashboardQuick(user) {
                         <div>
                           <InputLabel for="from" value="تحديد الفئة" class="mb-1" />
 
-                            <select  v-model="q" id="default" class="pr-8 bg-gray-50 border border-gray-300 text-gray-900 mb-6 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-red-500 dark:focus:border-red-500">
+                            <select  v-model="q" id="default" class="pr-8 bg-gray-50 border border-gray-300 text-gray-900 mb-6 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5 dark:bg-slate-950 dark:border-slate-500 dark:placeholder-slate-400 dark:text-white dark:focus:ring-red-500 dark:focus:border-red-400">
                               <option value="0">{{ $t("allOwners") }}</option>
                               <option value="debit">يوجد دين</option>
                               <option value="box_movement">حركة على القاسة</option>
@@ -324,8 +324,8 @@ async function toggleShowInDashboardQuick(user) {
 
                  
                       <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
-                        <table class="w-full text-sm text-right text-gray-500 dark:text-gray-200 dark:text-gray-400 text-center">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
+                        <table class="w-full text-sm text-right text-gray-700 dark:text-slate-200 text-center">
+                        <thead class="text-xs text-gray-800 uppercase bg-gray-50 dark:bg-slate-800 dark:text-white text-center" >
                         <tr  class="rounded-l-lg mb-2 sm:mb-0">
                                         <th className="px-1 py-2 text-base">#</th>
                                         <th className="px-1 py-2 text-base">{{ $t('name') }}</th>
@@ -338,20 +338,20 @@ async function toggleShowInDashboardQuick(user) {
                                         <th className="px-1 py-2 text-base">{{ $t('execute') }}</th>       
                                     </tr>
                                 </thead>
-                                <tbody class="flex-1 sm:flex-none dark:bg-gray-700 dark:text-gray-200">
+                                <tbody class="flex-1 sm:flex-none dark:bg-slate-900 dark:text-slate-200">
                                 
-                                    <tr v-for="(user,i) in laravelData" :key="user?.id"  class="border-b border-white dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600 "  :class="user.balance <= 0 ?'bg-green-100 dark:bg-green-900':'bg-red-100 dark:bg-red-900'"  >
+                                    <tr v-for="(user,i) in laravelData" :key="user?.id"  class="border-b border-white dark:bg-slate-900 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 "  :class="user.balance <= 0 ?'bg-green-100 dark:bg-emerald-950/70':'bg-red-100 dark:bg-rose-950/70'"  >
                                      <template v-if="user?.id">
-                                      <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{i}}</td>
-                                        <td className="border border-white dark:border-gray-800 text-center  dark:text-gray-200 text-black px-1 py-2 " style="font-weight: bold;font-size: 16px;">{{user.name}}</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.phone}}</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count}}</td>
+                                      <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{i}}</td>
+                                        <td className="border border-white dark:border-slate-700 text-center  dark:text-white text-black px-1 py-2 " style="font-weight: bold;font-size: 16px;">{{user.name}}</td>
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{user.phone}}</td>
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{user.car_count}}</td>
 
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count-user.car_count_completed}}</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.car_count_completed}}</td>
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{user.car_count-user.car_count_completed}}</td>
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{user.car_count_completed}}</td>
                                       
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2">{{user.balance}} $</td>
-                                        <td className="border border-white  dark:border-gray-800 text-center px-4 py-2"  style="min-height: 42px;">
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2">{{user.balance}} $</td>
+                                        <td className="border border-white  dark:border-slate-700 text-center px-4 py-2"  style="min-height: 42px;">
                           
                                         <Link
                                           style="display:inline-flex;"
@@ -382,7 +382,7 @@ async function toggleShowInDashboardQuick(user) {
                                           tabIndex="1"
                                           class="px-2 py-1 text-xs mx-1 rounded"
                                           @click="toggleShowInDashboardQuick(user)"
-                                          :class="user.show_in_dashboard ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'"
+                                          :class="user.show_in_dashboard ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600'"
                                           :title="user.show_in_dashboard ? 'القاسة مفعلة في المحاسبة' : 'تفعيل القاسة في المحاسبة'"
                                         >
                                           {{ user.show_in_dashboard ? 'قاسة ✓' : 'قاسة' }}

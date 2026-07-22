@@ -21,7 +21,6 @@ use App\Models\Massage;
 use Carbon\Carbon;
 use App\Models\Transactions;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Contract;
 use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller

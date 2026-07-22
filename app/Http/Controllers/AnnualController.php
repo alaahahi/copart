@@ -8,7 +8,6 @@ use Inertia\Inertia;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\UserType;
-use App\Models\Contract;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -19,7 +18,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use App\Models\Warehouse;
 use App\Models\CarImages;
-use App\Models\ContractImg;
 
 
 use Intervention\Image\Facades\Image;
@@ -107,7 +105,6 @@ class AnnualController extends Controller
         $carId = $request->carId;
         $path1 = public_path('uploads');
         $path2 = public_path('uploadsResized');
-        $img_type=$request->img_type??'';
     
         // Create the directories if they don't exist
         if (!file_exists($path1)) {
@@ -135,34 +132,19 @@ class AnnualController extends Controller
         });
     
         $image->save(public_path('uploadsResized/' . $name));
-        if($img_type){
-        // Create a new record in the database
-        $carImage = ContractImg::create([
-            'name' => $name,
-            'car_id' => $carId,
-        ]);
-        }else{
-        // Create a new record in the database
         $carImage = CarImages::create([
             'name' => $name,
             'car_id' => $carId,
         ]);
-    
-        }
 
         return response()->json($carImage, 200);
     }
     public function carsAnnualImageDel(Request $request){
         $name = $request->name;
-        $img_type=$request->img_type??'';
 
         File::delete(public_path('uploads/'.$name));
         File::delete(public_path('uploadsResized/'.$name));
-        if($img_type){
-            ContractImg::where('name', $name)->delete();
-        }else{
-            CarImages::where('name', $name)->delete();
-        }
+        CarImages::where('name', $name)->delete();
         
         return Response::json('deleted is done', 200);
 
