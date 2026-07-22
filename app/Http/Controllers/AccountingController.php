@@ -1253,9 +1253,11 @@ class AccountingController extends Controller
         $name = $tag->name;
         $tag->delete();
         Transactions::where('tag', $name)->update(['tag' => null]);
-        \App\Models\CompanyTreasuryEntry::where('owner_id', Auth::user()->owner_id)
-            ->where('tag', $name)
-            ->update(['tag' => null]);
+        if (\Illuminate\Support\Facades\Schema::hasTable('company_treasury_entries')) {
+            \App\Models\CompanyTreasuryEntry::where('owner_id', Auth::user()->owner_id)
+                ->where('tag', $name)
+                ->update(['tag' => null]);
+        }
         return Response::json(['message' => 'تم حذف التاغ'], 200);
     }
 

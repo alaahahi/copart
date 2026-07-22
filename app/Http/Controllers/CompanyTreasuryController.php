@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class CompanyTreasuryController extends Controller
@@ -18,6 +19,11 @@ class CompanyTreasuryController extends Controller
         if (!Auth::check()) {
             abort(403, 'غير مسموح');
         }
+    }
+
+    protected function treasuryReady(): bool
+    {
+        return Schema::hasTable('company_treasury_entries');
     }
 
     public function index()
@@ -30,6 +36,17 @@ class CompanyTreasuryController extends Controller
     public function getEntries(Request $request)
     {
         $this->authorizeTreasury();
+
+        if (!$this->treasuryReady()) {
+            return Response::json([
+                'entries' => [],
+                'pagination' => ['total' => 0, 'page' => 1, 'last_page' => 1, 'per_page' => 100],
+                'total_debit' => 0,
+                'total_credit' => 0,
+                'period_balance' => 0,
+                'message' => 'جدول القاصة غير موجود — شغّل php artisan migrate',
+            ], 200);
+        }
 
         $ownerId = Auth::user()->owner_id;
         $currency = $request->get('currency', '$');
@@ -80,6 +97,14 @@ class CompanyTreasuryController extends Controller
     {
         $this->authorizeTreasury();
 
+        if (!$this->treasuryReady()) {
+            return Response::json([
+                'balance_usd' => 0,
+                'balance_iqd' => 0,
+                'message' => 'جدول القاصة غير موجود — شغّل php artisan migrate',
+            ], 200);
+        }
+
         $ownerId = Auth::user()->owner_id;
 
         return Response::json([
@@ -92,6 +117,9 @@ class CompanyTreasuryController extends Controller
     {
         $this->authorizeTreasury();
 
+        if (!$this->treasuryReady()) {
+            return Response::json(['message' => 'جدول القاصة غير موجود — شغّل php artisan migrate'], 503);
+        }
         $validated = $request->validate([
             'entry_type' => 'required|in:deposit,withdraw',
             'amount' => 'required|numeric|min:0.01',
