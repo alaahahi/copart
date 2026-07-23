@@ -673,11 +673,11 @@ function checkClientBalance(v){
           <!-- Add payment form -->
           <div
             v-if="showPaymentForm"
-            class="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-950/40"
+            class="border-b border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/60"
           >
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div v-if="false">
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">الخصم</label>
+                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">الخصم</label>
                 <TextInput
                   id="discount"
                   v-model="discount"
@@ -687,13 +687,13 @@ function checkClientBalance(v){
                 />
               </div>
               <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                   المبلغ بالدولار المراد دفعه
                 </label>
                 <TextInput id="percentage" v-model="amount" type="number" class="mt-0 block w-full" />
               </div>
               <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظة</label>
+                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">ملاحظة</label>
                 <TextInput id="discount-note" v-model="note" type="text" class="mt-0 block w-full" />
               </div>
               <div class="flex items-end print:hidden">
@@ -703,7 +703,7 @@ function checkClientBalance(v){
                   class="min-h-[42px] w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                   @click.prevent="confirmAddPaymentTotal(amount, client_Select, discount, note)"
                 >
-                  <span v-if="showErorrAmount">يرجى مراجعة المبلغ ل</span>
+                  <span v-if="showErorrAmount" class="text-amber-100">يرجى مراجعة المبلغ ل</span>
                   <span v-if="!isLoading">دفع</span>
                   <span v-else>جاري الطباعة...</span>
                 </button>
@@ -826,13 +826,15 @@ function checkClientBalance(v){
                     v-show="(car.results == 2 && showComplatedCars) || car.results != 2"
                     :key="car.id"
                     :class="{
+                      'bg-white dark:bg-slate-900': !(car.results == 0 || car.results == 1 || car.results == 2) &&
+                        !(car.vin.startsWith(q) || (car.car_number ? car.car_number.toString().startsWith(q) : '')),
                       'bg-red-50 dark:bg-red-950/40': car.results == 0 || car.results == 1,
                       'bg-emerald-50 dark:bg-emerald-950/30': car.results == 2,
                       'bg-amber-50 dark:bg-amber-950/30':
                         car.vin.startsWith(q) ||
                         (car.car_number ? car.car_number.toString().startsWith(q) : ''),
                     }"
-                    class="hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    class="text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60"
                   >
                     <td class="px-2 py-1.5">{{ i + 1 }}</td>
                     <td class="px-2 py-1.5">{{ car.car_type }}</td>
@@ -847,9 +849,14 @@ function checkClientBalance(v){
                     <td class="px-2 py-1.5 font-mono">{{ car.checkout_s }}</td>
                     <td class="px-2 py-1.5 font-mono">{{ erbilTransferSubtotal(car, true) }}</td>
                     <td class="px-2 py-1.5 font-mono">{{ car.commission_s ?? 0 }}</td>
-                    <td class="px-2 py-1.5 font-mono font-semibold">{{ fixed(car.total_s, 0) }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.paid }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>
+                    <td class="px-2 py-1.5 font-mono font-semibold text-slate-900 dark:text-white">{{ fixed(car.total_s, 0) }}</td>
+                    <td class="px-2 py-1.5 font-mono font-semibold text-emerald-700 dark:text-emerald-400">{{ car.paid }}</td>
+                    <td
+                      class="px-2 py-1.5 font-mono font-semibold"
+                      :class="(asNumber(car.total_s) - asNumber(car.paid)) > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'"
+                    >
+                      {{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}
+                    </td>
                     <td class="px-2 py-1.5 whitespace-nowrap">{{ car.date }}</td>
                     <td class="px-2 py-1.5 text-start print:hidden">
                       <button
