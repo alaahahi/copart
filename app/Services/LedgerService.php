@@ -261,12 +261,34 @@ class LedgerService
     }
 
     /**
-     * Client payment / decreaseWallet on trader: Debit Cash / Credit AR
+     * Client payment / cash-box receipt against AR: Debit Cash (+ Discount expense) / Credit AR.
+     * $amount = cash received; $discount = AR reduction without cash (expense).
      */
-    public function postClientPayment(int $ownerId, int $clientId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
-    {
+    public function postClientPayment(
+        int $ownerId,
+        int $clientId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        float $discount = 0
+    ): JournalEntry {
+        $amount = abs($amount);
+        $discount = abs($discount);
         $cash = $this->cashAccount($ownerId, $currency);
         $ar = $this->clientReceivableAccount($ownerId, $clientId);
+
+        $lines = [
+            ['account_id' => $cash->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+        ];
+
+        if ($discount > 0) {
+            $expense = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+            $lines[] = ['account_id' => $expense->id, 'debit' => $discount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo];
+            $lines[] = ['account_id' => $ar->id, 'debit' => 0, 'credit' => $amount + $discount, 'currency' => $currency, 'memo' => $memo];
+        } else {
+            $lines[] = ['account_id' => $ar->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo];
+        }
 
         return $this->post([
             'owner_id' => $ownerId,
@@ -276,10 +298,7 @@ class LedgerService
             'currency' => $currency,
             'reference_type' => $reference ? get_class($reference) : null,
             'reference_id' => $reference?->id ?? null,
-        ], [
-            ['account_id' => $cash->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
-            ['account_id' => $ar->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
-        ]);
+        ], $lines);
     }
 
     /**

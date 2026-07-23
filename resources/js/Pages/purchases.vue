@@ -481,7 +481,7 @@ const currentWork = ref(true);
                               </svg>
                             </div>
                             <div class="mr-4" >
-                              <h2 class="font-semibold ">إجمالي التكاليف </h2>
+                              <h2 class="font-semibold ">{{ $t('total_costs') }}</h2>
                               <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumTotal) }}</p>
                             </div>
                           </div>
@@ -492,7 +492,7 @@ const currentWork = ref(true);
                               </svg>
                             </div>
                             <div class="mr-4" >
-                              <h2 class="font-semibold ">إجمالي المدفوعات من الزبائن</h2>
+                              <h2 class="font-semibold ">{{ $t('total_customer_payments') }}</h2>
                               <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumPaid) }}</p>
                             </div>
                           </div>
@@ -503,7 +503,7 @@ const currentWork = ref(true);
                               </svg>
                             </div>
                             <div class="mr-4" >
-                              <h2 class="font-semibold ">  صافي الربح</h2>
+                              <h2 class="font-semibold ">{{ $t('analytics_net_profit') }}</h2>
                               <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumProfit) }}</p>
                             </div>
                           </div>
@@ -516,7 +516,7 @@ const currentWork = ref(true);
                               </svg>
                             </div>
                             <div class="mr-4">
-                              <h2 class="font-semibold"> الدين </h2>
+                              <h2 class="font-semibold">{{ $t('debt') }}</h2>
                               <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumDebit) }}</p>
                             </div>
                           </div>
@@ -606,7 +606,7 @@ const currentWork = ref(true);
                         </div>
                         <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-2 lg:gap-1">
                           <div className="mb-4">
-                            <InputLabel for="car_total" value=" مجموع السيارات مع فلتر" />
+                            <InputLabel for="car_total" :value="$t('cars_with_filter')" />
                             <TextInput
                               id="car_total"
                               type="text"
@@ -619,7 +619,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="مجموع  التكاليف بالدولار"
+                              :value="$t('total_costs_usd')"
                             />
                             <TextInput
                               id="car_total_complete"
@@ -632,7 +632,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="مجموع  المبيعات بالدولار"
+                              :value="$t('total_sales_usd')"
                             />
                             <TextInput
                               id="car_total_complete"
@@ -645,7 +645,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="مجموع  الدين بالدولار"
+                              :value="$t('total_debt_usd')"
                             />
                             <TextInput
                               id="car_total_complete"
@@ -658,7 +658,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="مجموع  المدفوع بالدولار"
+                              :value="$t('total_paid_usd')"
                             />
                             <TextInput
                               id="car_total_complete"
@@ -671,7 +671,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="car_total_complete"
-                              value="صافي الربح"
+                              :value="$t('analytics_net_profit')"
                             />
                             <TextInput
                               id="car_total_complete"
@@ -684,7 +684,7 @@ const currentWork = ref(true);
                           <div className="mb-4  mr-2">
                             <InputLabel
                               for="expected_profit"
-                              value="الربح المتوقع"
+                              :value="$t('expected_profit')"
                             />
                             <TextInput
                               id="expected_profit"
@@ -717,34 +717,34 @@ const currentWork = ref(true);
                             </div>
                           </div>
                           <div className="mb-4  mr-2 print:hidden">
-                            <InputLabel for="pay" value="فلترة" />
+                            <InputLabel for="pay" :value="$t('filter')" />
                             <button
                               @click.prevent="refresh()"
                               class="px-6 py-2 mt-1 font-bold text-white bg-gray-500 rounded hover:bg-gray-600"
                               style="width: 100%"
                             >
-                              <span>فلترة</span>
+                              <span>{{ $t('filter') }}</span>
                             </button>
                           </div>
                           <div className="mb-4  mr-2 print:hidden">
-                            <InputLabel for="pay" value="إعادة حساب الربح" />
+                            <InputLabel for="pay" :value="$t('recalculate_profit')" />
                             <button
                               @click.prevent="recalculateProfit"
                               class="px-6 py-2 mt-1 font-bold text-white bg-blue-500 rounded hover:bg-blue-600"
                               style="width: 100%"
                             >
-                              <span>إعادة حساب الربح</span>
+                              <span>{{ $t('recalculate_profit') }}</span>
                             </button>
                           </div>
                           <div className="mb-4  mr-2  hidden">
-                            <InputLabel for="pay" value="طباعة" />
+                            <InputLabel for="pay" :value="$t('print')" />
                             <a
                               :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1`"
                               target="_blank"
                               class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-orange-500 rounded block text-center"
                               style="width: 100%"
                             >
-                              <span>طباعة</span>
+                              <span>{{ $t('print') }}</span>
                             </a>
                           </div>
                       
@@ -850,7 +850,7 @@ const currentWork = ref(true);
                                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
                                     <tr>
                                         <th scope="col" class="px-1 py-3 text-base	">
-                                          No
+                                          {{ $t('no') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base	">
                                           {{ $t('car_owner') }}
@@ -871,22 +871,22 @@ const currentWork = ref(true);
                                           {{ $t('car_number') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          سعر السيارة امريكا         
+                                          {{ $t('car_price_usa') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          نقل امريكا	
+                                          {{ $t('transfer_usa') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          ريكفري
+                                          {{ $t('recovery') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف تصليح
+                                          {{ $t('repair_expenses') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          نقل اربيل
+                                          {{ $t('transfer_erbil') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف اربيل
+                                          {{ $t('erbil_expenses') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           {{ $t('total') }}

@@ -840,7 +840,8 @@ class AccountingController extends Controller
 
         $wallet = Wallet::where('user_id',$car->client_id)->first();
         $desc=trans('text.addPayment').' '.$amount.' '.$car->car_type.' رقم الشانص'.' '.$car->vin.' '.$note;
-        $tran=$this->increaseWallet($amount,$desc,$this->accounting->mainBox()->id,$car->client_id,'App\Models\User',0,0,'$',0,0,'in',$details);
+        // Parent (mainBox) posts ONE journal: Dr Cash / Cr AR. Child legs are UI mirrors only.
+        $tran=$this->increaseWallet($amount,$desc,$this->accounting->mainBox()->id,$car->client_id,'App\Models\User',0,$discount??0,'$',0,0,'in',$details);
         $this->increaseWallet($amount, $desc,$this->accounting->mainAccount()->id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'in',$details);
         $transaction=$this->decreaseWallet($amount+$discount, $desc,$car->client_id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'out',$details);
 
@@ -876,7 +877,8 @@ class AccountingController extends Controller
         if ($amount_o) {
             $desc = trans('text.addPayment').' '.$amount_o.' '.$note;
 
-            $tran = $this->increaseWallet($amount_o, $desc, $this->accounting->mainBox()->id, $client_id, 'App\Models\User', 0, 0, '$');
+            // Parent (mainBox) posts ONE journal: Dr Cash / Cr AR. Child legs are UI mirrors only.
+            $tran = $this->increaseWallet($amount_o, $desc, $this->accounting->mainBox()->id, $client_id, 'App\Models\User', 0, $discount, '$');
 
             $this->increaseWallet($amount_o, $desc, $this->accounting->mainAccount()->id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
 
@@ -1455,19 +1457,51 @@ class AccountingController extends Controller
             $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
             $transaction = Transactions::create($transactionDetils);
 
+            // Child / mirror legs do not post journals — the root cash-box (or party) leg owns the entry.
+            // Matches receiptArrivedUser / salesDebtUser which create child rows via Transactions::create only.
+            if ((int) $parent_id > 0) {
+                return $transaction;
+            }
+
             $ledger = app(LedgerService::class);
-            $journal = $ledger->postWalletIncrease(
-                (int) $ownerId,
-                (int) $user_id,
-                abs((float) $amount),
-                $currency === 'IQD' ? 'IQD' : '$',
-                (string) $desc,
-                $transaction
-            );
+            $currencyNorm = $currency === 'IQD' ? 'IQD' : '$';
+            $absAmount = abs((float) $amount);
+            $disc = abs((float) ($discount ?? 0));
+
+            // Client payment into الصندوق: Dr Cash / Cr AR (not Cash/Revenue).
+            // Distinguish from قاصة deposits (type inUserBox) which stay Cash/Revenue.
+            $isClientPaymentOnCashBox = $ledger->walletPostingKind((int) $ownerId, (int) $user_id) === 'cash_box'
+                && $type === 'in'
+                && $this->isClientMorphed($morphed_id, $morphed_type);
+
+            if ($isClientPaymentOnCashBox) {
+                $journal = $ledger->postClientPayment(
+                    (int) $ownerId,
+                    (int) $morphed_id,
+                    $absAmount,
+                    $currencyNorm,
+                    (string) $desc,
+                    $transaction,
+                    $disc
+                );
+            } else {
+                $journal = $ledger->postWalletIncrease(
+                    (int) $ownerId,
+                    (int) $user_id,
+                    $absAmount,
+                    $currencyNorm,
+                    (string) $desc,
+                    $transaction
+                );
+            }
+
             if (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
                 $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
             }
             $ledger->syncWalletFromLedger((int) $ownerId, (int) $user_id);
+            if ($isClientPaymentOnCashBox) {
+                $ledger->syncWalletFromLedger((int) $ownerId, (int) $morphed_id);
+            }
 
             return $transaction;
         });
@@ -1497,6 +1531,10 @@ class AccountingController extends Controller
             $id = $user->wallet->id;
             $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
             $transaction =Transactions::create($transactionDetils);
+
+            if ((int) $parent_id > 0) {
+                return $transaction;
+            }
 
             $ledger = app(LedgerService::class);
             $journal = $ledger->postWalletDecrease(
@@ -1535,6 +1573,10 @@ class AccountingController extends Controller
             $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id];
             $transaction = Transactions::create($transactionDetils);
 
+            if ((int) $parent_id > 0) {
+                return $transaction;
+            }
+
             $ledger = app(LedgerService::class);
             $journal = $ledger->postWalletDecrease(
                 (int) $ownerId,
@@ -1552,15 +1594,40 @@ class AccountingController extends Controller
             return $transaction;
         });
     }
+
+    /**
+     * Whether morphed_* points at a client (trader) user — used to route cash-box
+     * receipts as Cash/AR instead of Cash/Revenue.
+     */
+    protected function isClientMorphed($morphedId, $morphedType): bool
+    {
+        if (!$morphedId) {
+            return false;
+        }
+        $isUser = $morphedType === User::class
+            || $morphedType === 'App\\Models\\User'
+            || $morphedType === 'App\Models\User';
+        if (!$isUser) {
+            return false;
+        }
+
+        $clientTypeId = (int) (\Illuminate\Support\Facades\Cache::get('user_type_client')
+            ?? \App\Models\UserType::where('name', 'client')->value('id'));
+        if (!$clientTypeId) {
+            return false;
+        }
+
+        return User::where('id', (int) $morphedId)->where('type_id', $clientTypeId)->exists();
+    }
  
     public function delTransactions(Request $request)
     {
         $this->accounting->loadAccounts(Auth::user()->owner_id);
-        $owner_id=Auth::user()->owner_id;
+        $owner_id = Auth::user()->owner_id;
         $transaction_id = $request->id ?? 0;
         $originalTransaction = Transactions::with('TransactionsImages')->find($transaction_id);
         if (!$originalTransaction) {
-          return response()->json(['message' => 'Transaction not found'], 404);
+            return response()->json(['message' => 'Transaction not found'], 404);
         }
 
         if (in_array($originalTransaction->type, ['inUserAmanah', 'outUserAmanah'], true)) {
@@ -1583,92 +1650,17 @@ class AccountingController extends Controller
             return response()->json(['message' => 'deleted'], 200);
         }
 
-        $children = Transactions::where('parent_id', $transaction_id)->get();
-        $all = $children;
-        $firstTransaction = $children->first();
-        $ledger = app(LedgerService::class);
-        $affectedUserIds = [];
-        $syncedFromLedger = [];
+        try {
+            $deleted = app(TransactionPaymentService::class)->softDeleteTransactionTree(
+                (int) $transaction_id,
+                (int) $owner_id,
+                fn (Transactions $t) => $this->legacyReverseWalletMovement($t)
+            );
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Transaction not found'], 404);
+        }
 
-        $collectUser = function ($walletId) use (&$affectedUserIds) {
-            $uid = Wallet::where('id', $walletId)->value('user_id');
-            if ($uid) {
-                $affectedUserIds[] = (int) $uid;
-            }
-        };
-
-        DB::transaction(function () use (
-            $originalTransaction,
-            $children,
-            $ledger,
-            $collectUser,
-            $owner_id,
-            &$affectedUserIds,
-            &$syncedFromLedger,
-            $firstTransaction
-        ) {
-            // Reverse car.paid / discount when deleting a car-linked payment.
-            $paymentService = app(TransactionPaymentService::class);
-            $paymentLegs = collect([$originalTransaction])->merge($children);
-            foreach ($paymentLegs as $leg) {
-                $paymentService->reverseCarPaymentAllocation($leg);
-            }
-
-            $voidOriginal = $ledger->voidJournalForTransaction($originalTransaction, 'حذف حركة #' . $originalTransaction->id);
-            $collectUser($originalTransaction->wallet_id);
-            if ($voidOriginal) {
-                $syncedFromLedger[] = (int) Wallet::where('id', $originalTransaction->wallet_id)->value('user_id');
-            } else {
-                $this->legacyReverseWalletMovement($originalTransaction);
-            }
-
-            foreach ($children as $transaction) {
-                $voided = $ledger->voidJournalForTransaction($transaction, 'حذف حركة فرعية #' . $transaction->id);
-                $collectUser($transaction->wallet_id);
-                if ($voided) {
-                    $syncedFromLedger[] = (int) Wallet::where('id', $transaction->wallet_id)->value('user_id');
-                } else {
-                    $this->legacyReverseWalletMovement($transaction);
-                }
-                $transaction->delete();
-            }
-
-            $walletExpensesIds = [];
-            if ($this->accounting->howler() && $this->accounting->howler()->wallet) {
-                $walletExpensesIds[] = $this->accounting->howler()->wallet->id;
-            }
-            if ($this->accounting->shippingCoc() && $this->accounting->shippingCoc()->wallet) {
-                $walletExpensesIds[] = $this->accounting->shippingCoc()->wallet->id;
-            }
-            if ($this->accounting->border() && $this->accounting->border()->wallet) {
-                $walletExpensesIds[] = $this->accounting->border()->wallet->id;
-            }
-            if ($this->accounting->iran() && $this->accounting->iran()->wallet) {
-                $walletExpensesIds[] = $this->accounting->iran()->wallet->id;
-            }
-            if ($this->accounting->dubai() && $this->accounting->dubai()->wallet) {
-                $walletExpensesIds[] = $this->accounting->dubai()->wallet->id;
-            }
-            if ($firstTransaction && in_array($firstTransaction->wallet_id, $walletExpensesIds, true)) {
-                Expenses::where('transaction_id', $firstTransaction->id)->delete();
-            }
-
-            foreach ($originalTransaction->TransactionsImages as $transactionsImage) {
-                File::delete(public_path('uploads/' . $transactionsImage->name));
-                File::delete(public_path('uploadsResized/' . $transactionsImage->name));
-                $transactionsImage->delete();
-            }
-
-            $originalTransaction->delete();
-
-            foreach (array_unique(array_filter($syncedFromLedger)) as $uid) {
-                $ledger->syncWalletFromLedger((int) $owner_id, (int) $uid);
-            }
-        });
-
-        Log::info('Transaction deleted', ['transaction_id' => $transaction_id, 'by' => Auth::id()]);
-
-        return response()->json(['message' => $all], 200);
+        return response()->json(['message' => $deleted->values()], 200);
     }
 
     /**

@@ -231,7 +231,7 @@ function unpaidCars(user) {
         <div class="clients-card overflow-hidden shadow-sm sm:rounded-xl">
           <div class="p-4 sm:p-6">
             <!-- Tabs: الكل | قاسة -->
-            <div class="clients-tabs mb-5" role="tablist" aria-label="عرض التجار">
+            <div class="clients-tabs mb-5" role="tablist" :aria-label="$t('clients')">
               <button
                 type="button"
                 role="tab"
@@ -240,7 +240,7 @@ function unpaidCars(user) {
                 :class="{ 'is-active': activeTab === 'all' }"
                 @click="setTab('all')"
               >
-                الكل
+                {{ $t('tab_all') }}
               </button>
               <button
                 type="button"
@@ -249,16 +249,16 @@ function unpaidCars(user) {
                 class="clients-tab"
                 :class="{ 'is-active': activeTab === 'qasa' }"
                 @click="setTab('qasa')"
-                title="التجار المعروضون في صفحة المحاسبة (قاسة)"
+                :title="$t('show_in_accounting')"
               >
-                قاسة
+                {{ $t('qasa') }}
               </button>
               <Link
                 :href="route('company_treasury')"
                 class="clients-tab clients-tab-link"
-                title="فتح قاسة الشركة"
+                :title="$t('CompanyTreasury')"
               >
-                قاسة الشركة
+                {{ $t('CompanyTreasury') }}
               </Link>
             </div>
 
@@ -277,14 +277,14 @@ function unpaidCars(user) {
                     v-model="q"
                     type="text"
                     class="clients-input w-full pl-10"
-                    placeholder="بحث بالاسم / الهاتف / الشاصي"
+                    :placeholder="$t('search_name_phone_vin')"
                     :disabled="activeTab === 'qasa'"
                   />
                 </div>
               </div>
 
               <div>
-                <InputLabel for="category" value="تحديد الفئة" class="mb-1" />
+                <InputLabel for="category" :value="$t('select_category')" class="mb-1" />
                 <select
                   id="category"
                   v-model="category"
@@ -292,8 +292,8 @@ function unpaidCars(user) {
                   :disabled="activeTab === 'qasa'"
                 >
                   <option value="0">{{ $t("allOwners") }}</option>
-                  <option value="debit">يوجد دين</option>
-                  <option value="box_movement">حركة على القاسة</option>
+                  <option value="debit">{{ $t('has_debt') }}</option>
+                  <option value="box_movement">{{ $t('qasa_movement') }}</option>
                 </select>
               </div>
 
@@ -316,7 +316,7 @@ function unpaidCars(user) {
                   :href="`api/getIndexClients?from=${from}&to=${to}&print=1&q=${effectiveQ()}`"
                   class="clients-btn clients-btn-print flex-1 min-w-[7rem] text-center print:hidden"
                 >
-                  طباعة
+                  {{ $t('print') }}
                 </a>
               </div>
             </div>
@@ -329,11 +329,11 @@ function unpaidCars(user) {
                     <th>#</th>
                     <th>{{ $t('name') }}</th>
                     <th>{{ $t('phoneNumber') }}</th>
-                    <th>السيارات</th>
-                    <th>غير مدفوع</th>
-                    <th>مدفوع</th>
+                    <th>{{ $t('cars') }}</th>
+                    <th>{{ $t('unpaid') }}</th>
+                    <th>{{ $t('paid') }}</th>
                     <th>{{ $t('debt') }}</th>
-                    <th title="عرض محفظة التاجر في صفحة المحاسبة">عرض بالمحاسبة</th>
+                    <th :title="$t('show_in_accounting')">{{ $t('show_in_accounting') }}</th>
                     <th>{{ $t('execute') }}</th>
                   </tr>
                 </thead>
@@ -363,7 +363,7 @@ function unpaidCars(user) {
                           <span class="clients-switch-track" aria-hidden="true">
                             <span class="clients-switch-thumb" />
                           </span>
-                          <span class="sr-only">عرض بالمحاسبة</span>
+                          <span class="sr-only">{{ $t('show_in_accounting') }}</span>
                         </label>
                       </td>
                       <td>

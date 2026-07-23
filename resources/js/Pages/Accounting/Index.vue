@@ -110,13 +110,17 @@ const getResults = async ($state) => {
 const getcountTotalInfo = async () => {
   axios.get('/api/totalInfo')
   .then(response => {
-    mainAccount.value = response.data.data.mainAccount;
-    allCars.value =response.data.data.allCars;
-    transactionInTodayDollar.value = response.data.data.transactionInTodayDollar
-    transactionOutTodayDollar.value = response.data.data.transactionOutTodayDollar
-    transactionInTodayDinar.value = response.data.data.transactionInTodayDinar
-    transactionOutTodayDinar.value = response.data.data.transactionOutTodayDinar
-
+    const d = response.data?.data ?? {};
+    const num = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    mainAccount.value = d.mainAccount;
+    allCars.value = d.allCars;
+    transactionInTodayDollar.value = num(d.transactionInTodayDollar);
+    transactionOutTodayDollar.value = num(d.transactionOutTodayDollar);
+    transactionInTodayDinar.value = num(d.transactionInTodayDinar);
+    transactionOutTodayDinar.value = num(d.transactionOutTodayDinar);
   })
   .catch(error => {
     console.error(error);
@@ -275,6 +279,7 @@ function delTransactions(id){
   axios.post(`/api/delTransactions?id=${id.id}`)
   .then(response => {
     refresh();
+    getcountTotalInfo();
     showModalDel.value=false;
   })
   .catch(error => {
@@ -295,15 +300,20 @@ function UpdatePage (){
   refresh();
 }
 function updateResults(input) {
-  // Ensure the input is a number
-  if (typeof input !== 'number') {
-    // Try converting the input to a number
-    input = parseFloat(input) || 0;
+  const n = Number(input);
+  if (!Number.isFinite(n)) {
+    return (0).toLocaleString();
   }
-  
-  // Use toLocaleString to format the number with commas
-  return input.toLocaleString();
+  return n.toLocaleString();
 }
+
+function safeNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+const todayDiffDollar = () => safeNum(transactionInTodayDollar.value) + safeNum(transactionOutTodayDollar.value);
+const todayDiffDinar = () => safeNum(transactionInTodayDinar.value) + safeNum(transactionOutTodayDinar.value);
 
 const IN_TYPES = ['in', 'inUser', 'inUserBox'];
 const OUT_TYPES = ['out', 'outUser', 'outUserBox', 'debt'];
@@ -610,8 +620,7 @@ function getOrangeColorClass(index) {
               <div class="pt-5  print:hidden">
               <button style=" width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5|| $page.props.auth.user.type_id==6" className="px-4 py-2 text-white bg-green-500 rounded-md focus:outline-none"
                                             @click="openAddSales()">
-                                            وصل قبض
-                                            (أضافة)
+                                            {{ $t('receipt_voucher_add') }}
               </button>
               </div>
 
@@ -625,8 +634,7 @@ function getOrangeColorClass(index) {
               <div class="pt-5  print:hidden">
               <button  style=" width: 100%; margin-top: 4px;"  v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5|| $page.props.auth.user.type_id==6" className="px-4 py-2 text-white bg-rose-500 rounded-md focus:outline-none"
                                             @click="openAddExpenses()">
-                                             وصل صرف
-                                             (سحب)
+                                             {{ $t('payment_voucher_withdraw') }}
 
               </button>
        
@@ -634,7 +642,7 @@ function getOrangeColorClass(index) {
               
               <div class=" px-4">
                           <div >
-                              <InputLabel for="from" value="من تاريخ" />
+                              <InputLabel for="from" :value="$t('from_date')" />
                               <TextInput
                                 id="from"
                                 type="date"
@@ -646,7 +654,7 @@ function getOrangeColorClass(index) {
               </div>
               <div class=" px-4">
                             <div >
-                              <InputLabel for="to" value="حتى تاريخ" />
+                              <InputLabel for="to" :value="$t('until_date')" />
                               <TextInput
                                 id="to"
                                 type="date"
@@ -656,12 +664,12 @@ function getOrangeColorClass(index) {
                             </div>
               </div>
               <div class=" mr-5 print:hidden">
-                            <InputLabel for="pay" value="فلترة" />
+                            <InputLabel for="pay" :value="$t('filter')" />
                             <button
                             @click.prevent="refresh()"
                             class="px-6 mb-6 py-2 mt-1 font-bold text-white bg-gray-500 rounded" style="width: 100%">
-                            <span v-if="!isLoading">فلترة</span>
-                            <span v-else>جاري الحفظ...</span>
+                            <span v-if="!isLoading">{{ $t('filter') }}</span>
+                            <span v-else>{{ $t('saving') }}</span>
                           </button>
               </div>
             </div>
@@ -672,7 +680,7 @@ function getOrangeColorClass(index) {
                             @click="openConvertDollarDinar()"
                             style="min-width:150px;"
                             className="px-6 mb-6 w-full py-2 font-bold text-white bg-teal-500 rounded">
-                             تحويل دولار الى دينار  
+                             {{ $t('convert_usd_to_iqd') }}
                           </button>
                         </div>
                         <div>
@@ -681,7 +689,7 @@ function getOrangeColorClass(index) {
                             @click="openConvertDinarDollar()"
                             style="min-width:150px;"
                             className="px-6 mb-6 w-full py-2 font-bold text-white bg-yellow-500 rounded">
-                             تحويل دينار الى دولار  
+                             {{ $t('convert_iqd_to_usd') }}
                           </button>
                         </div>
             </div>
@@ -702,27 +710,27 @@ function getOrangeColorClass(index) {
 
 
               <div class=" px-4">
-                              <InputLabel for="to" value="رصيد الصندوق بالدولار" />
+                              <InputLabel for="to" :value="$t('cash_balance_usd')" />
                               <TextInput
                                 id="to"
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full"
-                                :value="laravelData?.user?.wallet.balance"
+                                :value="laravelData?.user?.wallet?.balance ?? 0"
                               />
               </div>
               <div class=" px-4">
-                              <InputLabel for="to" value="رصيد الصندوق بالدينار العراقي" />
+                              <InputLabel for="to" :value="$t('cash_balance_iqd')" />
                               <TextInput
                                 id="to"
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full"
-                                :value="laravelData?.user?.wallet.balance_dinar"
+                                :value="laravelData?.user?.wallet?.balance_dinar ?? 0"
                               />
               </div>
               <div class="relative w-full px-4">
-                          <InputLabel for="to" value="بحث رقم الوصل او الوصف" />
+                          <InputLabel for="to" :value="$t('search_voucher_or_desc')" />
                           <TextInput
                                 id="q"
                                 type="text"
@@ -735,29 +743,29 @@ function getOrangeColorClass(index) {
                           <table class="w-full text-sm text-center text-gray-100 border border-gray-700 rounded-lg overflow-hidden bg-slate-900">
                             <thead class="bg-slate-800 text-gray-100">
                               <tr>
-                                <th class="border p-2">العملة</th>
-                                <th class="border p-2">الدخل</th>
-                                <th class="border p-2">الخروج</th>
-                                <th class="border p-2">الفرق</th>
+                                <th class="border p-2">{{ $t('currency') }}</th>
+                                <th class="border p-2">{{ $t('income') }}</th>
+                                <th class="border p-2">{{ $t('outcome') }}</th>
+                                <th class="border p-2">{{ $t('difference') }}</th>
                               </tr>
                             </thead>
                             <tbody>
                               <!-- دولار -->
                               <tr class="bg-slate-900">
-                                <td class="border border-gray-700 p-2 font-bold text-emerald-300">دولار</td>
+                                <td class="border border-gray-700 p-2 font-bold text-emerald-300">{{ $t('usd') }}</td>
                                 <td class="border border-gray-700 p-2 text-emerald-200 font-semibold">{{updateResults(transactionInTodayDollar)}}</td>
                                 <td class="border border-gray-700 p-2 text-rose-200 font-semibold">{{updateResults(transactionOutTodayDollar)}}</td>
                                 <td class="border border-gray-700 p-2 font-semibold">
-                                  <span :class="(transactionInTodayDollar + transactionOutTodayDollar) > 0 ? 'text-emerald-300' : 'text-rose-300'" >{{updateResults(transactionInTodayDollar + transactionOutTodayDollar)}}</span>
+                                  <span :class="todayDiffDollar() > 0 ? 'text-emerald-300' : 'text-rose-300'" >{{updateResults(todayDiffDollar())}}</span>
                                 </td>
                               </tr>
                               <!-- دينار -->
                               <tr class="bg-slate-900">
-                                <td class="border border-gray-700 p-2 font-bold text-indigo-300">دينار</td>
+                                <td class="border border-gray-700 p-2 font-bold text-indigo-300">{{ $t('iqd') }}</td>
                                 <td class="border border-gray-700 p-2 text-emerald-200 font-semibold">{{updateResults(transactionInTodayDinar)}}</td>
                                 <td class="border border-gray-700 p-2 text-rose-200 font-semibold">{{updateResults(transactionOutTodayDinar)}}</td>
                                 <td class="border border-gray-700 p-2 font-semibold">
-                                  <span :class="(transactionInTodayDinar + transactionOutTodayDinar) > 0 ? 'text-emerald-300' : 'text-rose-300'">{{updateResults(transactionInTodayDinar + transactionOutTodayDinar)}}</span>
+                                  <span :class="todayDiffDinar() > 0 ? 'text-emerald-300' : 'text-rose-300'">{{updateResults(todayDiffDinar())}}</span>
                                 </td>
                               </tr>
                             </tbody>
@@ -770,19 +778,19 @@ function getOrangeColorClass(index) {
               <table class="w-full text-right text-gray-100 dark:text-gray-100 text-center bg-slate-900 rounded-lg overflow-hidden">
                 <thead class="uppercase bg-slate-800 text-gray-100 text-center">
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
-                    <th className="px-2 py-2" style="width: 180px;">الجهة
+                    <th className="px-2 py-2" style="width: 180px;">{{ $t('party') }}
                     </th>
-                    <th className="px-2 py-2" style="width: 160px;">الحساب المحاسبي</th>
-                    <th className="px-2 py-2" style="width: 180px;">التاريخ</th>
-                    <th className="px-2 py-2">الوصف</th>
-                    <th className="px-2 py-2">ايداع</th>
-                    <th className="px-2 py-2">سحب</th>
-                    <th className="px-2 py-2" style="width: 200px;">تنفيذ</th>
+                    <th className="px-2 py-2" style="width: 160px;">{{ $t('accounting_account') }}</th>
+                    <th className="px-2 py-2" style="width: 180px;">{{ $t('date') }}</th>
+                    <th className="px-2 py-2">{{ $t('description') }}</th>
+                    <th className="px-2 py-2">{{ $t('deposit_col') }}</th>
+                    <th className="px-2 py-2">{{ $t('withdraw_col') }}</th>
+                    <th className="px-2 py-2" style="width: 200px;">{{ $t('execute') }}</th>
                     <th
                       scope="col"
                       class="px-1 py-2 text-base print:hidden" style="width: 100px;"
                     >
-                      تخزين
+                      {{ $t('storage') }}
                     </th>
                   </tr>
                 </thead>

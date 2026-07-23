@@ -171,15 +171,15 @@ function updateResults(input) {
         <div class="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-              لوحة التحكم
+              {{ $t('dashboard') }}
             </h1>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              ملخص الصندوق وديون التجار
+              {{ $t('dashboard_subtitle') }}
             </p>
           </div>
 
           <form class="w-full sm:max-w-sm" @submit.prevent>
-            <label for="dashboard-search" class="sr-only">بحث التجار</label>
+            <label for="dashboard-search" class="sr-only">{{ $t('search_traders') }}</label>
             <div class="relative">
               <div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5">
                 <svg
@@ -199,7 +199,7 @@ function updateResults(input) {
                 id="dashboard-search"
                 v-model="searchTerm"
                 type="search"
-                placeholder="بحث عن تاجر..."
+                :placeholder="$t('search_merchant')"
                 autocomplete="off"
                 class="block min-h-[44px] w-full rounded-xl border border-slate-300 bg-white py-2.5 ps-11 pe-4 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30"
                 @input="getResultsCarSearch(searchTerm)"
@@ -223,11 +223,11 @@ function updateResults(input) {
             </div>
             <div class="min-w-0">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                دين التجار
+                {{ $t('merchant_debt') }}
               </p>
               <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
                 {{ updateResults(clientDebit) }}
-                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دولار</span>
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $t('usd') }}</span>
               </p>
             </div>
           </div>
@@ -245,11 +245,11 @@ function updateResults(input) {
             </div>
             <div class="min-w-0">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                الصندوق
+                {{ $t('analytics_cash_box') }}
               </p>
               <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
                 {{ updateResults(mainBoxDollar) }}
-                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دولار</span>
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $t('usd') }}</span>
               </p>
             </div>
           </div>
@@ -267,11 +267,11 @@ function updateResults(input) {
             </div>
             <div class="min-w-0">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                الصندوق
+                {{ $t('analytics_cash_box') }}
               </p>
               <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
                 {{ updateResults(mainBoxDinar) }}
-                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دينار</span>
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $t('iqd') }}</span>
               </p>
             </div>
           </div>
@@ -281,10 +281,10 @@ function updateResults(input) {
         <section class="mt-6 sm:mt-8">
           <div class="mb-3 flex items-center justify-between gap-3 sm:mb-4">
             <h2 class="text-base font-bold text-slate-900 dark:text-white sm:text-lg">
-              ديون التجار
+              {{ $t('merchant_debts') }}
             </h2>
             <p class="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
-              نقرة مزدوجة لواتساب
+              {{ $t('double_click_whatsapp') }}
             </p>
           </div>
 
@@ -293,7 +293,7 @@ function updateResults(input) {
             class="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-12 text-center dark:border-slate-700 dark:bg-slate-900/40"
           >
             <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
-              لا توجد ديون للعرض
+              {{ $t('no_debts_to_show') }}
             </p>
           </div>
 

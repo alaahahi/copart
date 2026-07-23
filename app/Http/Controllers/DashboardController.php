@@ -88,17 +88,43 @@ class DashboardController extends Controller
     public function totalInfo(Request $request)
     {
         $owner_id=Auth::user()->owner_id;
-        $mainBoxId=$this->mainBox->where('owner_id', $owner_id)->first()->wallet->id;
+        $mainBox = $this->mainBox->where('owner_id', $owner_id)->first();
+        $mainBoxId = $mainBox?->wallet?->id;
 
-        $transactionIn = (int) Transactions::where('wallet_id', $mainBoxId)
-        ->where('currency', '$')
-        ->whereIn('type', ['in', 'inUserBox'])
-        ->sum('amount');
+        $today = Carbon::now()->toDateString();
 
-        $transactionOut =(int) Transactions::where('wallet_id', $mainBoxId)
-        ->where('currency', '$')
-        ->whereIn('type', ['out', 'debt'])
-        ->sum('amount');
+        $sumBox = function (string $currency, array $types) use ($mainBoxId, $today) {
+            if (!$mainBoxId) {
+                return 0.0;
+            }
+            return (float) Transactions::where('wallet_id', $mainBoxId)
+                ->where('currency', $currency)
+                ->whereIn('type', $types)
+                ->whereDate('created', $today)
+                ->whereNull('deleted_at')
+                ->sum('amount');
+        };
+
+        $transactionIn = (int) ($mainBoxId
+            ? Transactions::where('wallet_id', $mainBoxId)
+                ->where('currency', '$')
+                ->whereIn('type', ['in', 'inUserBox'])
+                ->whereNull('deleted_at')
+                ->sum('amount')
+            : 0);
+
+        $transactionOut = (int) ($mainBoxId
+            ? Transactions::where('wallet_id', $mainBoxId)
+                ->where('currency', '$')
+                ->whereIn('type', ['out', 'debt', 'outUserBox'])
+                ->whereNull('deleted_at')
+                ->sum('amount')
+            : 0);
+
+        $transactionInTodayDollar = $sumBox('$', ['in', 'inUserBox']);
+        $transactionOutTodayDollar = $sumBox('$', ['out', 'debt', 'outUserBox']);
+        $transactionInTodayDinar = $sumBox('IQD', ['in', 'inUserBox']);
+        $transactionOutTodayDinar = $sumBox('IQD', ['out', 'debt', 'outUserBox']);
 
         $car = Car::query()->where('owner_id', $owner_id)->get();
         $exitCar = 0;
@@ -115,8 +141,8 @@ class DashboardController extends Controller
             $mainBoxDollar = $ledger->cashAccount((int) $owner_id, '$')->balance('$');
             $mainBoxDinar = $ledger->cashAccount((int) $owner_id, 'IQD')->balance('IQD');
         } catch (\Throwable $e) {
-            $mainBoxDollar = (float) ($this->mainBox->where('owner_id', $owner_id)->first()->wallet->balance ?? 0);
-            $mainBoxDinar = (float) ($this->mainBox->where('owner_id', $owner_id)->first()->wallet->balance_dinar ?? 0);
+            $mainBoxDollar = (float) ($mainBox?->wallet?->balance ?? 0);
+            $mainBoxDinar = (float) ($mainBox?->wallet?->balance_dinar ?? 0);
         }
 
         $data = [
@@ -132,7 +158,11 @@ class DashboardController extends Controller
         'clientDebit'=>$sumDebit ?? 0,
         'mainBoxDollar'=>$mainBoxDollar,
         'mainBoxDinar'=>$mainBoxDinar,
-        'mainBoxDollarNew'=>$transactionIn+$transactionOut
+        'mainBoxDollarNew'=>$transactionIn+$transactionOut,
+        'transactionInTodayDollar' => $transactionInTodayDollar,
+        'transactionOutTodayDollar' => $transactionOutTodayDollar,
+        'transactionInTodayDinar' => $transactionInTodayDinar,
+        'transactionOutTodayDinar' => $transactionOutTodayDinar,
         ];
         return response()->json(['data'=>$data]); 
 

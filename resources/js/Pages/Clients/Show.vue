@@ -600,7 +600,7 @@ function checkClientBalance(_v) {
 
               <div class="min-w-[200px]">
                 <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  فلترة السيارات المكتملة
+                  {{ $t("filter_completed_cars") }}
                 </label>
                 <label
                   for="bordered-checkbox-1"
@@ -616,7 +616,7 @@ function checkClientBalance(_v) {
                     @change="showComplatedCars == true ? (showComplatedCars = false) : (showComplatedCars = true)"
                   />
                   <span class="text-sm text-slate-700 dark:text-slate-200">
-                    {{ showComplatedCars == false ? "تم الفلتر" : "تم عرض جميع السيارة" }}
+                    {{ showComplatedCars == false ? $t("filter_applied") : $t("showing_all_cars") }}
                   </span>
                 </label>
               </div>
@@ -641,21 +641,21 @@ function checkClientBalance(_v) {
                   class="min-h-[42px] rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
                   @click.prevent="getResults()"
                 >
-                  فلترة
+                  {{ $t("filter") }}
                 </button>
                 <a
                   :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&showComplatedCars=${showComplatedCars ? 0 : 1}`"
                   target="_blank"
                   class="inline-flex min-h-[42px] items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
                 >
-                  طباعة
+                  {{ $t("print") }}
                 </a>
                 <a
                   :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&printExcel=1&showComplatedCars=${showComplatedCars ? 0 : 1}`"
                   target="_blank"
                   class="inline-flex min-h-[42px] items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 >
-                  Excel
+                  {{ $t("export_excel") }}
                 </a>
               </div>
             </div>
@@ -665,7 +665,7 @@ function checkClientBalance(_v) {
           <div class="border-b border-slate-200 p-4 dark:border-slate-700">
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">مجموع السيارات</div>
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("total_cars") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
                   {{ laravelData.car_total ?? 0 }}
                 </div>
@@ -677,19 +677,19 @@ function checkClientBalance(_v) {
                 </div>
               </div>
               <div class="rounded-xl border border-emerald-400 bg-white px-4 py-3 shadow-sm dark:border-emerald-500/50 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">مجموع المدفوع بالدولار</div>
+                <div class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">{{ $t("total_paid_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-emerald-700 dark:text-emerald-200">
                   {{ Math.abs(asNumber(laravelData?.cars_paid)) }}
                 </div>
               </div>
               <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-500/50 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">مجموع الخصومات بالدولار</div>
+                <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">{{ $t("total_discounts_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-200">
                   {{ laravelData?.cars_discount ?? 0 }}
                 </div>
               </div>
               <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">الرصيد</div>
+                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">{{ $t("balance") }}</div>
                 <div
                   class="mt-1 font-mono text-lg font-bold"
                   :class="clientBalanceUsd > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-indigo-700 dark:text-indigo-200'"
@@ -701,7 +701,7 @@ function checkClientBalance(_v) {
                 v-if="undistributedBalanceUsd != 0"
                 class="rounded-xl border border-rose-400 bg-white px-4 py-3 shadow-sm dark:border-rose-500/50 dark:bg-slate-800"
               >
-                <div class="text-xs font-semibold text-rose-800 dark:text-rose-300">الرصيد غير موزع بالدولار</div>
+                <div class="text-xs font-semibold text-rose-800 dark:text-rose-300">{{ $t("undistributed_balance_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-rose-700 dark:text-rose-200">
                   {{ undistributedBalanceUsd }}
                 </div>
@@ -716,7 +716,7 @@ function checkClientBalance(_v) {
                 class="min-h-[42px] rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                 @click.prevent="showAddPaymentTotal()"
               >
-                اضافة دفعة
+                {{ $t("add_payment") }}
               </button>
               <button
                 v-if="showPaymentForm"
@@ -725,7 +725,7 @@ function checkClientBalance(_v) {
                 class="min-h-[42px] rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:opacity-50"
                 @click.prevent="hideAddPaymentTotal()"
               >
-                اخفاء دفعة
+                {{ $t("hide_payment") }}
               </button>
               <button
                 v-if="!showTransactions"
@@ -734,7 +734,7 @@ function checkClientBalance(_v) {
                 class="min-h-[42px] rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
                 @click.prevent="showTransactionsDiv()"
               >
-                عرض الدفعات
+                {{ $t("view_payments") }}
               </button>
               <button
                 v-if="showTransactions"
@@ -742,7 +742,7 @@ function checkClientBalance(_v) {
                 class="min-h-[42px] rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
                 @click.prevent="hideTransactionsDiv()"
               >
-                اخفاء الدفعات
+                {{ $t("hide_payments") }}
               </button>
             </div>
           </div>
@@ -752,9 +752,14 @@ function checkClientBalance(_v) {
             v-if="showPaymentForm"
             class="border-b border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
           >
+            <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              دفعات الزبائن تُسجَّل تلقائياً في
+              <span class="font-semibold text-slate-700 dark:text-slate-200">صندوق الدولار</span>
+              (حساب 1100). قاصة الشركة منفصلة من قائمة قاصة الشركة، وقاسات التجار من «عرض بالمحاسبة».
+            </p>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div v-if="false">
-                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">الخصم</label>
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">{{ $t("discount") }}</label>
                 <TextInput
                   id="discount"
                   v-model="discount"
@@ -765,7 +770,7 @@ function checkClientBalance(_v) {
               </div>
               <div>
                 <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">
-                  المبلغ بالدولار المراد دفعه
+                  {{ $t("amount_usd_to_pay") }}
                 </label>
                 <TextInput
                   id="percentage"
@@ -775,7 +780,7 @@ function checkClientBalance(_v) {
                 />
               </div>
               <div>
-                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">ملاحظة</label>
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">{{ $t("note") }}</label>
                 <TextInput
                   id="discount-note"
                   v-model="note"
@@ -790,9 +795,9 @@ function checkClientBalance(_v) {
                   class="min-h-[42px] w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                   @click.prevent="confirmAddPaymentTotal(amount, client_Select, discount, note)"
                 >
-                  <span v-if="showErorrAmount" class="text-amber-100">يرجى مراجعة المبلغ ل</span>
-                  <span v-if="!isLoading">دفع</span>
-                  <span v-else>جاري الطباعة...</span>
+                  <span v-if="showErorrAmount" class="text-amber-100">{{ $t("review_amount") }}</span>
+                  <span v-if="!isLoading">{{ $t("pay") }}</span>
+                  <span v-else>{{ $t("printing") }}</span>
                 </button>
               </div>
             </div>
@@ -807,7 +812,7 @@ function checkClientBalance(_v) {
                     <th class="px-3 py-2.5 text-sm font-semibold">#</th>
                     <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("date") }}</th>
                     <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("description") }}</th>
-                    <th class="px-3 py-2.5 text-sm font-semibold">الحساب</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("account") }}</th>
                     <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("amount") }}</th>
                     <th class="px-3 py-2.5 text-sm font-semibold print:hidden" style="width: 250px">
                       {{ $t("execute") }}
@@ -824,7 +829,7 @@ function checkClientBalance(_v) {
                         tabindex="1"
                         class="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700"
                       >
-                        جميع الدفعات
+                        {{ $t("all_payments") }}
                         <print />
                       </a>
                     </td>
@@ -846,7 +851,7 @@ function checkClientBalance(_v) {
                           v-if="user.deleted_at"
                           class="ms-2 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300"
                         >
-                          محذوف
+                          {{ $t('deleted') }}
                         </span>
                       </td>
                       <td class="px-3 py-2">
@@ -885,21 +890,21 @@ function checkClientBalance(_v) {
                             title="استعادة الدفعة"
                             @click="openModalRestorePayment(user)"
                           >
-                            استعادة
+                            {{ $t('restore') }}
                           </button>
                         </div>
                       </td>
                     </tr>
                   </template>
                   <tr class="bg-slate-100 font-semibold dark:bg-slate-800">
-                    <td class="px-3 py-2">مجموع الخصومات</td>
+                    <td class="px-3 py-2">{{ $t("total_discounts") }}</td>
                     <td class="px-3 py-2 font-mono">{{ laravelData?.cars_discount }}</td>
-                    <td class="px-3 py-2">مجموع الدفعات</td>
+                    <td class="px-3 py-2">{{ $t("total_payments") }}</td>
                     <td class="px-3 py-2 font-mono">
                       {{ asNumber(calculateTotalFilteredAmount().totalAmount) * -1 }}
                     </td>
                     <td class="px-3 py-2">
-                      النتاتج :
+                      {{ $t("net_result") }} :
                       {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_discount) }}
                     </td>
                   </tr>
@@ -921,24 +926,24 @@ function checkClientBalance(_v) {
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("vin") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_number") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden">{{ $t("note") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">سعر السيارة امريكا</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">نقل امريكا</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">ريكفري</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">مصاريف تصليح</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">نقل اربيل</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">مصاريف اربيل</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_price_usa") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("transfer_usa") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("recovery") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("repair_expenses") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("transfer_erbil") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("erbil_expenses") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("total") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("paid") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">المتبقي</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("remaining") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("date") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 250px">
                       {{ $t("execute") }}
                     </th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 100px">
-                      تخزين
+                      {{ $t("storage") }}
                     </th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 120px">
-                      الرصيد
+                      {{ $t("balance") }}
                     </th>
                   </tr>
                 </thead>
@@ -1019,7 +1024,7 @@ function checkClientBalance(_v) {
                         v-if="(asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) != 0"
                         @click="openModalAddPayFromBalanceCar(car)"
                       >
-                        دفع من الرصيد
+                        {{ $t("pay_from_balance") }}
                       </button>
                       <button
                         tabindex="1"
@@ -1031,7 +1036,7 @@ function checkClientBalance(_v) {
                         class="mx-0.5 mt-1 rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700"
                         @click="openModalDelPayFromBalanceCar(car)"
                       >
-                        اعادة للرصيد
+                        {{ $t("return_to_balance") }}
                       </button>
                     </td>
                   </tr>

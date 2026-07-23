@@ -7,6 +7,7 @@ use App\Models\Expenses;
 use App\Models\Transactions;
 use App\Models\Wallet;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,87 @@ class TransactionPaymentService
     public function __construct(
         protected LedgerService $ledger
     ) {
+    }
+
+    /**
+     * Soft-delete a payment tree (root + children), void journals, reverse car.paid.
+     * Resolves to the root parent so deleting a client "out" leg also removes the
+     * cash-box receipt that actually holds the money movement.
+     *
+     * @return Collection<int, Transactions> soft-deleted legs
+     */
+    public function softDeleteTransactionTree(int $transactionId, int $ownerId, ?callable $legacyReverseWallet = null): Collection
+    {
+        $seed = Transactions::with('TransactionsImages')->find($transactionId);
+        if (!$seed) {
+            throw (new ModelNotFoundException())->setModel(Transactions::class, [$transactionId]);
+        }
+
+        $root = $this->resolveTreeRoot($seed);
+        $legs = $this->collectPaymentTree($root);
+
+        $syncedFromLedger = [];
+        $deleted = collect();
+
+        DB::transaction(function () use (
+            $legs,
+            $ownerId,
+            $legacyReverseWallet,
+            &$syncedFromLedger,
+            &$deleted
+        ) {
+            foreach ($legs as $leg) {
+                $this->reverseCarPaymentAllocation($leg);
+            }
+
+            foreach ($legs as $leg) {
+                $voided = $this->ledger->voidJournalForTransaction(
+                    $leg,
+                    'حذف حركة #' . $leg->id
+                );
+                $uid = Wallet::where('id', $leg->wallet_id)->value('user_id');
+                if ($voided && $uid) {
+                    $syncedFromLedger[] = (int) $uid;
+                } elseif (!$voided && $legacyReverseWallet) {
+                    $legacyReverseWallet($leg);
+                }
+
+                foreach ($leg->TransactionsImages ?? [] as $transactionsImage) {
+                    $path = public_path('uploads/' . $transactionsImage->name);
+                    $pathResized = public_path('uploadsResized/' . $transactionsImage->name);
+                    if (is_file($path)) {
+                        @unlink($path);
+                    }
+                    if (is_file($pathResized)) {
+                        @unlink($pathResized);
+                    }
+                    $transactionsImage->delete();
+                }
+
+                if (!$leg->trashed()) {
+                    $leg->delete();
+                }
+                $deleted->push($leg);
+            }
+
+            $firstChild = $legs->first(fn (Transactions $t) => (int) $t->parent_id > 0) ?? $legs->first();
+            if ($firstChild) {
+                Expenses::where('transaction_id', $firstChild->id)->delete();
+            }
+
+            foreach (array_unique(array_filter($syncedFromLedger)) as $uid) {
+                $this->ledger->syncWalletFromLedger((int) $ownerId, (int) $uid);
+            }
+        });
+
+        Log::info('Transaction tree deleted', [
+            'transaction_id' => $transactionId,
+            'root_id' => $root->id,
+            'leg_ids' => $deleted->pluck('id')->all(),
+            'by' => Auth::id(),
+        ]);
+
+        return $deleted;
     }
 
     /**
@@ -74,17 +156,46 @@ class TransactionPaymentService
      */
     public function restoreTransaction(int $transactionId, int $ownerId): Transactions
     {
-        $originalTransaction = Transactions::onlyTrashed()
+        $seed = Transactions::onlyTrashed()
             ->with('TransactionsImages')
             ->find($transactionId);
 
-        if (!$originalTransaction) {
-            throw (new ModelNotFoundException())->setModel(Transactions::class, [$transactionId]);
+        if (!$seed) {
+            // Allow restore by child id even if caller passed an id that was the root
+            // but seed must be trashed — also try withTrashed and walk to trashed root.
+            $any = Transactions::withTrashed()->find($transactionId);
+            if (!$any) {
+                throw (new ModelNotFoundException())->setModel(Transactions::class, [$transactionId]);
+            }
+            $rootCandidate = $this->resolveTreeRoot($any);
+            $seed = Transactions::onlyTrashed()->with('TransactionsImages')->find($rootCandidate->id);
+            if (!$seed) {
+                throw (new ModelNotFoundException())->setModel(Transactions::class, [$transactionId]);
+            }
+        } else {
+            $rootCandidate = $this->resolveTreeRoot($seed);
+            if ((int) $rootCandidate->id !== (int) $seed->id) {
+                $rootTrashed = Transactions::onlyTrashed()
+                    ->with('TransactionsImages')
+                    ->find($rootCandidate->id);
+                if ($rootTrashed) {
+                    $seed = $rootTrashed;
+                }
+            }
         }
 
+        $originalTransaction = $seed;
         $children = Transactions::onlyTrashed()
-            ->where('parent_id', $transactionId)
+            ->where('parent_id', $originalTransaction->id)
             ->get();
+
+        // Currency-convert pairs may be mutual parents — include sibling if trashed.
+        if ((int) $originalTransaction->parent_id > 0) {
+            $mutual = Transactions::onlyTrashed()->find($originalTransaction->parent_id);
+            if ($mutual && !$children->contains('id', $mutual->id) && (int) $mutual->id !== (int) $originalTransaction->id) {
+                $children = $children->push($mutual)->unique('id');
+            }
+        }
 
         DB::transaction(function () use (
             $originalTransaction,
@@ -139,10 +250,61 @@ class TransactionPaymentService
 
         Log::info('Transaction restored', [
             'transaction_id' => $transactionId,
+            'root_id' => $originalTransaction->id,
             'by' => Auth::id(),
         ]);
 
         return $originalTransaction->fresh();
+    }
+
+    /**
+     * Walk parent_id to the payment-tree root (guards against currency-convert cycles).
+     */
+    public function resolveTreeRoot(Transactions $transaction): Transactions
+    {
+        $current = $transaction;
+        $seen = [];
+        $guard = 0;
+
+        while ((int) $current->parent_id > 0 && $guard++ < 20) {
+            if (isset($seen[$current->id])) {
+                break;
+            }
+            $seen[$current->id] = true;
+
+            $parent = Transactions::withTrashed()->find($current->parent_id);
+            if (!$parent) {
+                break;
+            }
+            // Mutual parent cycle (currency convert): treat the lower id as root.
+            if (isset($seen[$parent->id])) {
+                return ((int) $current->id <= (int) $parent->id) ? $current : $parent;
+            }
+            $current = $parent;
+        }
+
+        return $current;
+    }
+
+    /**
+     * @return Collection<int, Transactions>
+     */
+    public function collectPaymentTree(Transactions $root): Collection
+    {
+        $root = $root->loadMissing('TransactionsImages');
+        $children = Transactions::with('TransactionsImages')
+            ->where('parent_id', $root->id)
+            ->get();
+
+        // Mutual parent (currency convert): include the other leg.
+        if ((int) $root->parent_id > 0) {
+            $other = Transactions::with('TransactionsImages')->find($root->parent_id);
+            if ($other && (int) $other->id !== (int) $root->id && !$children->contains('id', $other->id)) {
+                $children->push($other);
+            }
+        }
+
+        return collect([$root])->merge($children)->unique('id')->values();
     }
 
     /**

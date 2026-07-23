@@ -742,7 +742,7 @@ function printTagDetails() {
                 <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5" 
                         className="px-4 py-2 text-white bg-green-800 rounded-md focus:outline-none hover:bg-green-900 transition"
                         @click="openAddSales()">
-                  وصل قبض (إضافة)
+                  {{ $t('receipt_voucher_add') }}
                 </button>
               </div>
 
@@ -750,7 +750,7 @@ function printTagDetails() {
                 <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5" 
                         className="px-4 py-2 text-white bg-red-800 rounded-md focus:outline-none hover:bg-red-900 transition"
                         @click="openAddExpenses()">
-                  وصل صرف (سحب)
+                  {{ $t('payment_voucher_withdraw') }}
                 </button>
               </div>
 
@@ -822,7 +822,7 @@ function printTagDetails() {
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full"
-                                :value="laravelData.sumInTransactionsUser-laravelData.sumOutTransactionsUser"
+                                :value="Number(laravelData?.sumInTransactionsUser ?? 0) - Number(laravelData?.sumOutTransactionsUser ?? 0)"
                               />
                             </div>
               </div>
@@ -836,7 +836,7 @@ function printTagDetails() {
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full"
-                                :value="laravelData.sumInTransactionsDinarUser-laravelData.sumOutTransactionsDinarUser"
+                                :value="Number(laravelData?.sumInTransactionsDinarUser ?? 0) - Number(laravelData?.sumOutTransactionsDinarUser ?? 0)"
                               />
                             </div>
               </div>
@@ -848,7 +848,7 @@ function printTagDetails() {
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full bg-blue-50"
-                                :value="(laravelData.sumInTransactionsUserAmanah||0)-(laravelData.sumOutTransactionsUserAmanah||0)"
+                                :value="Number(laravelData?.sumInTransactionsUserAmanah ?? 0) - Number(laravelData?.sumOutTransactionsUserAmanah ?? 0)"
                               />
                             </div>
               </div>
@@ -860,7 +860,7 @@ function printTagDetails() {
                                 type="number"
                                 disabled
                                 class="mt-1 block w-full bg-blue-50"
-                                :value="(laravelData.sumInTransactionsDinarUserAmanah||0)-(laravelData.sumOutTransactionsDinarUserAmanah||0)"
+                                :value="Number(laravelData?.sumInTransactionsDinarUserAmanah ?? 0) - Number(laravelData?.sumOutTransactionsDinarUserAmanah ?? 0)"
                               />
                             </div>
               </div>
@@ -968,15 +968,15 @@ function printTagDetails() {
                 >
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
                     <th className="px-2 py-2">رقم الوصل</th>
-                    <th className="px-2 py-2">الحساب المحاسبي</th>
-                    <th className="px-2 py-2">التاريخ</th>
-                    <th className="px-2 py-2">الوصف</th>
-                    <th v-if="hasWalletTags" className="px-2 py-2">التاغ / التفاصيل</th>
-                    <th className="px-2 py-2">ايداع</th>
-                    <th className="px-2 py-2">سحب</th>
-                    <th className="px-2 py-2">الرصيد</th>
+                    <th className="px-2 py-2">{{ $t('accounting_account') }}</th>
+                    <th className="px-2 py-2">{{ $t('date') }}</th>
+                    <th className="px-2 py-2">{{ $t('description') }}</th>
+                    <th v-if="hasWalletTags" className="px-2 py-2">{{ $t('tag') }}</th>
+                    <th className="px-2 py-2">{{ $t('deposit_col') }}</th>
+                    <th className="px-2 py-2">{{ $t('withdraw_col') }}</th>
+                    <th className="px-2 py-2">{{ $t('balance') }}</th>
                     <th className="px-2 py-2">المرفقات</th>
-                    <th className="px-2 py-2">تنفيذ</th>
+                    <th className="px-2 py-2">{{ $t('execute') }}</th>
                   </tr>
                 </thead>
                 <tbody>

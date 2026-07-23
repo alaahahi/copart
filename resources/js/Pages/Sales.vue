@@ -327,7 +327,7 @@ function getDownloadUrl(name) {
                               <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
                                   <tr>
                                       <th scope="col" class="px-1 py-3 text-base	">
-                                       No
+                                       {{ $t('no') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base	">
                                         {{ $t('car_owner') }}
@@ -350,22 +350,22 @@ function getDownloadUrl(name) {
                                      
                         
                                       <th scope="col" class="px-1 py-3 text-base">
-                                          سعر السيارة امريكا         
+                                          {{ $t('car_price_usa') }}
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                          نقل امريكا	
+                                          {{ $t('transfer_usa') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          ريكفري
+                                          {{ $t('recovery') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          مصاريف تصليح
+                                          {{ $t('repair_expenses') }}
                                         </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        نقل اربيل
+                                        {{ $t('transfer_erbil') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        مصاريف اربيل
+                                        {{ $t('erbil_expenses') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('total') }}
@@ -374,7 +374,7 @@ function getDownloadUrl(name) {
                                         {{ $t('paid') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        المتبقي
+                                        {{ $t('remaining') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
                                         {{ $t('date') }}
@@ -385,7 +385,7 @@ function getDownloadUrl(name) {
                                       <th scope="col" class="px-1 py-3 text-base" style="width: 180px;">
                                         {{ $t('execute') }}
                                       </th>
-                                      <th class="px-1 py-3 text-base">تخزين</th>
+                                      <th class="px-1 py-3 text-base">{{ $t('storage') }}</th>
                                   </tr>
                               </thead>
                               <tbody>

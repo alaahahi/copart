@@ -101,17 +101,13 @@ $Help = new MyHelp();
         <div class="col-12  p-2  pe-5"> 
           الملاحظات:
           {{$description??''}}
+          @if($isCarPayment && filled($lotNumber))
+            | رقم اللوت: {{ $lotNumber }}
+          @endif
+          @if($isCarPayment && filled($restAmount))
+            | المتبقي: {{ $restAmount }} {{ $currency }}
+          @endif
          </div>
-        @if($isCarPayment)
-        <div class="col-12  p-2  pe-5">
-          رقم اللوت:
-          {{ $lotNumber }}
-        </div>
-        <div class="col-12  p-2  pe-5">
-          المتبقي:
-          {{ $restAmount }} {{ $currency }}
-        </div>
-        @endif
         
         
       
@@ -263,17 +259,13 @@ $Help = new MyHelp();
           <div class="col-12  p-2  pe-5"> 
             الملاحظات:
             {{$description??''}}
+            @if($isCarPayment && filled($lotNumber))
+              | رقم اللوت: {{ $lotNumber }}
+            @endif
+            @if($isCarPayment && filled($restAmount))
+              | المتبقي: {{ $restAmount }} {{ $currency }}
+            @endif
            </div>
-          @if($isCarPayment)
-          <div class="col-12  p-2  pe-5">
-            رقم اللوت:
-            {{ $lotNumber }}
-          </div>
-          <div class="col-12  p-2  pe-5">
-            المتبقي:
-            {{ $restAmount }} {{ $currency }}
-          </div>
-          @endif
           
           
         
