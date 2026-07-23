@@ -648,31 +648,6 @@ function getOrangeColorClass(index) {
                             <span v-else>جاري الحفظ...</span>
                           </button>
               </div>
-              <div class=" mr-5 print:hidden" >
-                            <InputLabel for="pay" value="قاسه" />
-                           <Link
-                          v-if="$page.props.auth.user.owner_id==1"
-                            type="button"
-                          href="/wallet?id=2756"
-                            style="min-width:150px;"
-                            class="px-6 mb-6 py-2 font-bold text-white bg-orange-800 rounded  w-full mt-1 text-center">
-                               حولات حاجى عمران
-                          </Link>
-              </div>
-
-              <div class="mr-5">
-                <InputLabel for="to" value="مصاريف" />
-                          <Link
-                          v-if="$page.props.auth.user.owner_id==1"
-                            type="button"
-                           href="/wallet?id=588"
-                            style="min-width:150px;"
-                            class="px-6 mb-6 py-2 font-bold text-white bg-red-500 rounded  w-full mt-1 text-center">
-                              مصاريف الشركة
-                          </Link>
-              </div>
-
-              
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-3">
                         <div>

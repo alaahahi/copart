@@ -105,7 +105,10 @@ class UserController extends Controller
 
             ->orderBy('balance', 'desc');
     
-            if ($q && !in_array($q, ['debit', 'box_movement'])) {
+            // Filter: clients flagged for accounting page (عرض بالمحاسبة / قاسة tab)
+            if ($q === 'show_in_dashboard') {
+                $query->where('users.show_in_dashboard', true);
+            } elseif ($q && !in_array($q, ['debit', 'box_movement'], true)) {
                 $query->leftJoin('car', 'users.id', '=', 'car.client_id')
                     ->where(function ($subQuery) use ($q) {
                         $subQuery->where('users.name', 'like', '%' . $q . '%')
@@ -161,7 +164,7 @@ class UserController extends Controller
             return view('reportClients',compact('data','config','owner_id'));
 
         }
-        if ($q == 'debit' || $q == 'box_movement') {
+        if (in_array($q, ['debit', 'box_movement', 'show_in_dashboard'], true)) {
             if ($page == 1) {
                 if ($q == 'debit') {
                     if ($excludeZero == 1) {
@@ -261,9 +264,10 @@ class UserController extends Controller
         $client->show_in_dashboard = $validated['show_in_dashboard'];
         $client->save();
 
+        // show_in_dashboard controls visibility on Accounting page (عرض بالمحاسبة)
         return response()->json([
-            'message' => 'تم تحديث عرض القاسة في لوحة المحاسبة',
-            'show_in_dashboard' => $client->show_in_dashboard,
+            'message' => 'تم تحديث عرض التاجر في صفحة المحاسبة',
+            'show_in_dashboard' => (bool) $client->show_in_dashboard,
         ], 200);
     }
     public function delClient(Request $request)

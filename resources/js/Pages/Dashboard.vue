@@ -2,376 +2,361 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { useToast } from "vue-toastification";
 import axios from 'axios';
-import { ref, watch } from 'vue'; // Import ref and watch from Vue
+import { ref, watch } from 'vue';
 import { useI18n } from "vue-i18n";
-import { Link, usePage } from "@inertiajs/inertia-vue3";
+import { Head, Link, usePage } from "@inertiajs/inertia-vue3";
+import { debounce } from 'lodash';
 
 const auth = defineProps(['auth']);
 const appName = usePage().props.value.appName;
 
-const {t} = useI18n();
-let userType = ref(auth.auth.user.type_id)
-function selectUser(v){
-  return 'getIndexClients'
+const { t } = useI18n();
+let userType = ref(auth.auth.user.type_id);
+
+function selectUser() {
+  return 'getIndexClients';
 }
 
 let data = ref({});
-
 const laravelData = ref({});
-let  controller = new AbortController(); // Create a new AbortController
+let controller = new AbortController();
 
 const getResults = async (page = 1) => {
   axios.get(`api/${selectUser(userType.value)}?page=${page}&q=debit&exclude_zero=1`)
-  .then(response => {
-    if(userType.value==1 || userType.value==6){
-      try {
-      laravelData.value =  response.data.data
-    } catch (error) {
-      laravelData.value =  response.data.data
-
-    }
-  }
-
-
-
-  })
-  .catch(error => {
-    console.error(error);
-  })
-}
+    .then(response => {
+      if (userType.value == 1 || userType.value == 6) {
+        try {
+          laravelData.value = response.data.data;
+        } catch (error) {
+          laravelData.value = response.data.data;
+        }
+      }
+    })
+    .catch(error => {
+      console.error(error);
+    });
+};
 getResults();
 
 let expenses_type_id = ref(0);
-
 const toast = useToast();
-
-
 let showModal = ref(false);
 
 function sendWhatsAppMessage(phoneNumber) {
-  if(phoneNumber){
-    phoneNumber= '964'+phoneNumber;
+  if (phoneNumber) {
+    phoneNumber = '964' + phoneNumber;
     const message = `السلام عليكم: ${appName} - أربيل ,يرجى الأخذ بالعلم تسديد المبلغ المستحق عليكم في أقرب وقت ممكن. شكرا لتعاونكم  ..........   سڵاوی خواتان لێبێت: کۆمپانیای ${appName} - تکایە ئاگاداربن بە زووترین کات ئەو بڕە پارەیەی کە قەرزارن بیدەن. سوپاس بۆ هەماهەنگیت`;
-
-    // Construct the WhatsApp message URL
     const whatsappURL = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
-
-    // Open the WhatsApp app with the pre-filled message
     window.open(whatsappURL);
   }
-
 }
 
-
-
 let searchTerm = ref('');
-
-let mainAccount= ref(0)
-let howler= ref(0)
-let shippingCoc= ref(0)
-let border= ref(0)
-let iran= ref(0)
-let dubai= ref(0)
-let purchasesCost = ref(0)
-let clientPaid = ref(0)
-let clientDebit  = ref(0)
-let mainBoxDollar = ref(0)
-let mainBoxDinar = ref(0)
-
-let allCars= ref(0)
+let mainAccount = ref(0);
+let howler = ref(0);
+let shippingCoc = ref(0);
+let border = ref(0);
+let iran = ref(0);
+let dubai = ref(0);
+let purchasesCost = ref(0);
+let clientPaid = ref(0);
+let clientDebit = ref(0);
+let mainBoxDollar = ref(0);
+let mainBoxDinar = ref(0);
+let allCars = ref(0);
 
 function openModal() {
   showModal.value = true;
 }
+
 const formData = ref({});
 const car = ref([]);
 
-
-import { debounce } from 'lodash'; // Import debounce function from Lodash
-
-
 const debouncedGetResultsCarSearch = debounce(async (q = '', page = 1) => {
-  if(!q){
-    q='debit'
+  if (!q) {
+    q = 'debit';
   }
-    try {
-        const response = await axios.get(`api/${selectUser(userType.value)}?page=${page}&q=${q}`,{      signal: controller.signal // Pass the signal to abort the request if needed
-});
-        laravelData.value = response.data.data
-    } catch (error) {
-        console.error(error);
-    }
-}, 300); 
+  try {
+    const response = await axios.get(`api/${selectUser(userType.value)}?page=${page}&q=${q}`, {
+      signal: controller.signal,
+    });
+    laravelData.value = response.data.data;
+  } catch (error) {
+    console.error(error);
+  }
+}, 300);
 
 const getResultsCarSearch = (q = '', page = 1) => {
-    debouncedGetResultsCarSearch(q, page);
-}
-//
+  debouncedGetResultsCarSearch(q, page);
+};
+
 const getcountTotalInfo = async () => {
   axios.get('/api/totalInfo', {
     headers: {
-        Authorization: 'Bearer ' + auth.auth.accessToken,
+      Authorization: 'Bearer ' + auth.auth.accessToken,
     },
-})
-  .then(response => {
-    mainAccount.value = response.data.data.mainAccount;
-    allCars.value =response.data.data.allCars;
-    purchasesCost.value =response.data.data.purchasesCost
-    clientPaid.value =response.data.data.clientPaid
-    clientDebit.value =response.data.data.clientDebit
-    mainBoxDollar.value =response.data.data.mainBoxDollar
-    mainBoxDinar.value =response.data.data.mainBoxDinar
+  })
+    .then(response => {
+      mainAccount.value = response.data.data.mainAccount;
+      allCars.value = response.data.data.allCars;
+      purchasesCost.value = response.data.data.purchasesCost;
+      clientPaid.value = response.data.data.clientPaid;
+      clientDebit.value = response.data.data.clientDebit;
+      mainBoxDollar.value = response.data.data.mainBoxDollar;
+      mainBoxDinar.value = response.data.data.mainBoxDinar;
+    })
+    .catch(error => {
+      console.error(error);
+    });
+};
 
-  })
-  .catch(error => {
-    console.error(error);
-  })
-  
-    
-}
 const abortRequest = () => {
   if (controller) {
-    controller.abort(); // Abort previous request if it exists
+    controller.abort();
   }
-  controller = new AbortController(); // Create a new AbortController
+  controller = new AbortController();
 };
 
 watch([searchTerm], () => {
-  abortRequest(); // Abort previous request
-  debouncedGetResultsCarSearch(); // Call debounced function to fetch new results
+  abortRequest();
+  debouncedGetResultsCarSearch();
 });
 
-getcountTotalInfo()
-function changeColor(total){
-  // تحويل القيمة إلى رقم للتأكد من المقارنة الصحيحة
+getcountTotalInfo();
+
+function changeColor(total) {
   const balance = parseFloat(total) || 0;
-  
-  // إذا كان الرصيد سالباً في الوليت، فهذا يعني رصيد موجب فعلياً (العميل له رصيد)
-  // نعرضه باللون الأخضر
-  if(balance < 0){
-    return 'bg-green-600  dark:bg-green-600'
-  }
 
-  // إذا كان الرصيد موجباً في الوليت، فهذا يعني مديونية (العميل مدين)
-  if(balance >= 30000){
-    return 'bg-red-600  dark:bg-red-600'
-
+  if (balance < 0) {
+    return 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600';
   }
-  if(balance >= 25000){
-    return 'bg-pink-600  dark:bg-pink-600'
-
+  if (balance >= 30000) {
+    return 'bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600';
   }
-  if(balance >= 20000){
-    return 'bg-purple-600  dark:bg-purple-600'
+  if (balance >= 25000) {
+    return 'bg-rose-600 hover:bg-rose-500 dark:bg-rose-700 dark:hover:bg-rose-600';
   }
-  if(balance >= 15000){
-    return 'bg-indigo-600  dark:bg-indigo-600'
-
+  if (balance >= 20000) {
+    return 'bg-fuchsia-600 hover:bg-fuchsia-500 dark:bg-fuchsia-700 dark:hover:bg-fuchsia-600';
   }
-  if(balance >= 10000){
-    return 'bg-cyan-600  dark:bg-cyan-600'
-
+  if (balance >= 15000) {
+    return 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-600';
   }
-  
-  if(balance >= 1000){
-    return 'bg-teal-500  dark:bg-teal-500'
-
+  if (balance >= 10000) {
+    return 'bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-700 dark:hover:bg-cyan-600';
   }
-  if(balance >= 0){
-    return 'bg-yellow-600  dark:bg-yellow-600'
-
+  if (balance >= 1000) {
+    return 'bg-teal-600 hover:bg-teal-500 dark:bg-teal-700 dark:hover:bg-teal-600';
   }
+  return 'bg-amber-600 hover:bg-amber-500 dark:bg-amber-700 dark:hover:bg-amber-600';
 }
+
 function updateResults(input) {
-  // Ensure the input is a number
   if (typeof input !== 'number') {
-    // Try converting the input to a number
     input = parseFloat(input) || 0;
   }
-  
-  // Use toLocaleString to format the number with commas
   return input.toLocaleString();
 }
 </script>
 
 <template>
-    <Head title="Dashboard" />
-    <AuthenticatedLayout >
-        <div class="py-2"  v-if="$page.props.auth.user.type_id==1||$page.props.auth.user.type_id==6">
-        <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
-            <div class="bg-white overflow-hidden shadow-sm ">
-                <div class="p-6  dark:bg-gray-900">
-                    <div class="flex flex-col">
-         
-                      <div>
-                    
-                        <div class="relative overflow-x-auto shadow-md sm:rounded-lg" v-if="false">
-                
-                        </div>
-             
-                      </div>
-                      <div>
-                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7"> 
-                          <div>
-                          <form class="flex items-center max-w-5xl">
-                            <label  class="dark:text-gray-200" for="simple-search"  ></label>
-                            <div class="relative w-full">
-                              <div
-                                class="
-                                  absolute
-                                  inset-y-0
-                                  left-0
-                                  flex
-                                  items-center
-                                  pl-3
-                                  pointer-events-none
-                                "
-                              >
-                                <svg
-                                  aria-hidden="true"
-                                  class="w-5 h-5 text-gray-500 dark:text-gray-200 dark:text-gray-400"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  <path
-                                    fill-rule="evenodd"
-                                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                                    clip-rule="evenodd"
-                                  ></path>
-                                </svg>
-                              </div>
-                              <input
-                                v-model="searchTerm"
-                                @input="getResultsCarSearch(searchTerm)"
-                                type="text"
-                                id="simple-search"
-                                class="
-                                  bg-gray-50
-                                  border border-gray-300
-                                  text-gray-900 text-sm
-                                  rounded-lg
-                                  focus:ring-blue-500 focus:border-blue-500
-                                  block
-                                  w-full
-                                  pl-10
-                                  p-2.5
-                                  dark:bg-gray-700
-                                  dark:border-gray-600
-                                  dark:placeholder-gray-400
-                                  dark:text-white
-                                  dark:focus:ring-blue-500
-                                  dark:focus:border-blue-500
-                                "
-                                placeholder="بحث"
-                                required
-                              />
-                            </div>
-                          </form>
-                        </div>
-        
-                 
-                        </div>
-                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">     
-                          
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg"  v-if="$page.props.auth.user.type_id==1">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('capital') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(mainAccount) }}</p>
-                            </div>
-                          </div>
-                 
-                         
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">دين التجار</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{  updateResults(clientDebit) }} دولار</p>
-                            </div>
-                          </div>
+  <Head title="Dashboard" />
+  <AuthenticatedLayout>
+    <div
+      v-if="$page.props.auth.user.type_id == 1 || $page.props.auth.user.type_id == 6"
+      class="py-4 sm:py-6"
+    >
+      <div class="mx-auto max-w-9xl px-3 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+              لوحة التحكم
+            </h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              ملخص الصندوق وديون التجار
+            </p>
+          </div>
 
-                      
-
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">الصندوق</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{  updateResults(mainBoxDollar) }} دولار</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">الصندوق</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{  updateResults(mainBoxDinar) }} دينار</p>
-                            </div>
-                          </div>
-                          </div>
-                          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-                          <Link @dblclick="sendWhatsAppMessage(user.phone)"  v-for="(user,i) in laravelData" :key="i" class="flex items-start rounded-xl text-gray-200  dark:text-gray-300  p-4 shadow-lg"  :href="route('showClients', { id: user.id, q: searchTerm })"  :class="changeColor(user.balance)">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ user.name}}</h2>
-                              <p class="mt-2 text-sm text-gray-200  dark:text-gray-200">{{ '$'+updateResults(user.balance) }}
-                                <span class="inline-flex items-center justify-center w-4 h-4 ml-2 text-xs font-semibold text-blue-800 bg-blue-200 rounded-full">
-                                {{ user.car_total_un_pay}}
-                              </span>
-                              </p>
-                            
-                            </div>
-                          </Link>
-                        </div>
-                      </div>
-                      </div>
-                    </div>
-                    </div>
-                </div>
+          <form class="w-full sm:max-w-sm" @submit.prevent>
+            <label for="dashboard-search" class="sr-only">بحث التجار</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5">
+                <svg
+                  class="h-5 w-5 text-slate-400 dark:text-slate-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </div>
+              <input
+                id="dashboard-search"
+                v-model="searchTerm"
+                type="search"
+                placeholder="بحث عن تاجر..."
+                autocomplete="off"
+                class="block min-h-[44px] w-full rounded-xl border border-slate-300 bg-white py-2.5 ps-11 pe-4 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30"
+                @input="getResultsCarSearch(searchTerm)"
+              />
+            </div>
+          </form>
         </div>
-        <div >
-         
-      </div>   
-    </AuthenticatedLayout>
+
+        <!-- KPI row (capital intentionally omitted) -->
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
+          <div
+            class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 dark:border-slate-700/80 dark:bg-slate-900/80 sm:p-5"
+          >
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
+              aria-hidden="true"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                دين التجار
+              </p>
+              <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                {{ updateResults(clientDebit) }}
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دولار</span>
+              </p>
+            </div>
+          </div>
+
+          <div
+            class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 dark:border-slate-700/80 dark:bg-slate-900/80 sm:p-5"
+          >
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
+              aria-hidden="true"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                الصندوق
+              </p>
+              <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                {{ updateResults(mainBoxDollar) }}
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دولار</span>
+              </p>
+            </div>
+          </div>
+
+          <div
+            class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 dark:border-slate-700/80 dark:bg-slate-900/80 sm:col-span-2 lg:col-span-1 sm:p-5"
+          >
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400"
+              aria-hidden="true"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                الصندوق
+              </p>
+              <p class="mt-1 truncate text-lg font-bold tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                {{ updateResults(mainBoxDinar) }}
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">دينار</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trader debts -->
+        <section class="mt-6 sm:mt-8">
+          <div class="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+            <h2 class="text-base font-bold text-slate-900 dark:text-white sm:text-lg">
+              ديون التجار
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+              نقرة مزدوجة لواتساب
+            </p>
+          </div>
+
+          <div
+            v-if="!laravelData || !laravelData.length"
+            class="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-12 text-center dark:border-slate-700 dark:bg-slate-900/40"
+          >
+            <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
+              لا توجد ديون للعرض
+            </p>
+          </div>
+
+          <div
+            v-else
+            class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 sm:gap-4"
+          >
+            <Link
+              v-for="(user, i) in laravelData"
+              :key="user.id || i"
+              :href="route('showClients', { id: user.id, q: searchTerm })"
+              class="group flex min-h-[72px] items-center gap-3 rounded-2xl p-4 text-white shadow-sm transition duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-[#0b1220]"
+              :class="changeColor(user.balance)"
+              @dblclick.prevent="sendWhatsAppMessage(user.phone)"
+            >
+              <div
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition group-hover:bg-white/25"
+                aria-hidden="true"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="truncate text-sm font-bold leading-tight text-white sm:text-base">
+                  {{ user.name }}
+                </h3>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-white/95">
+                  ${{ updateResults(user.balance) }}
+                </p>
+              </div>
+            </Link>
+          </div>
+        </section>
+      </div>
+    </div>
+  </AuthenticatedLayout>
 </template>
+
 <style>
 .Vue-Toastification__container {
-width: unset !important;
+  width: unset !important;
 }
+
 .duet-date__dialog {
   direction: ltr;
-    right: 0;
-    top: 44px;
+  right: 0;
+  top: 44px;
 }
-.header-rgRow{
+
+.header-rgRow {
   text-align: center;
 }
+
 .rgRow > div {
   text-align: center !important;
 }
+
 .rgCell.disabled {
-    background-color: unset !important;
+  background-color: unset !important;
 }
-.rgCell{
+
+.rgCell {
   padding-top: 7px !important;
 }
 
@@ -388,11 +373,15 @@ body::-webkit-scrollbar-thumb {
   border-radius: 6px;
 }
 
-/* Style the scrollbars for Firefox */
 body {
   scrollbar-width: thin;
   scrollbar-color: #888 #f1f1f1;
 }
 
-
+@media (prefers-reduced-motion: reduce) {
+  .group,
+  .transition {
+    transition: none !important;
+  }
+}
 </style>
