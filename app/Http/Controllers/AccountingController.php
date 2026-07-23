@@ -1385,7 +1385,7 @@ class AccountingController extends Controller
             $transaction = Transactions::create($transactionDetils);
 
             $ledger = app(LedgerService::class);
-            $journal = $ledger->postClientDebtIncrease(
+            $journal = $ledger->postWalletIncrease(
                 (int) $ownerId,
                 (int) $user_id,
                 abs((float) $amount),
@@ -1428,7 +1428,7 @@ class AccountingController extends Controller
             $transaction =Transactions::create($transactionDetils);
 
             $ledger = app(LedgerService::class);
-            $journal = $ledger->postClientPayment(
+            $journal = $ledger->postWalletDecrease(
                 (int) $ownerId,
                 (int) $user_id,
                 abs((float) $amount),
@@ -1465,7 +1465,7 @@ class AccountingController extends Controller
             $transaction = Transactions::create($transactionDetils);
 
             $ledger = app(LedgerService::class);
-            $journal = $ledger->postClientPayment(
+            $journal = $ledger->postWalletDecrease(
                 (int) $ownerId,
                 (int) $user_id,
                 abs((float) $amount),

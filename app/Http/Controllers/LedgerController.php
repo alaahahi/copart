@@ -22,6 +22,65 @@ class LedgerController extends Controller
         return Inertia::render('Ledger/Index');
     }
 
+    public function chartOfAccounts(Request $request, LedgerService $ledger)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $currency = $request->get('currency', '$');
+        $q = trim((string) $request->get('q', ''));
+
+        $ledger->ensureSystemAccounts($ownerId);
+
+        $accounts = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($inner) use ($q) {
+                    $inner->where('code', 'like', "%{$q}%")
+                        ->orWhere('name', 'like', "%{$q}%")
+                        ->orWhere('name_ar', 'like', "%{$q}%");
+                });
+            })
+            ->orderBy('code')
+            ->get();
+
+        $typeOrder = ['asset', 'liability', 'equity', 'income', 'expense'];
+        $typeLabels = [
+            'asset' => 'الأصول',
+            'liability' => 'الخصوم',
+            'equity' => 'حقوق الملكية',
+            'income' => 'الإيرادات',
+            'expense' => 'المصاريف',
+        ];
+
+        $groups = [];
+        foreach ($typeOrder as $type) {
+            $items = $accounts->where('type', $type)->values()->map(function (LedgerAccount $account) use ($currency) {
+                return [
+                    'id' => $account->id,
+                    'code' => $account->code,
+                    'name' => $account->name_ar ?: $account->name,
+                    'balance' => $account->balance($currency),
+                ];
+            })->all();
+
+            if (count($items) === 0) {
+                continue;
+            }
+
+            $groups[] = [
+                'type' => $type,
+                'label' => $typeLabels[$type],
+                'accounts' => $items,
+                'total' => round(array_sum(array_column($items, 'balance')), 2),
+            ];
+        }
+
+        return Response::json([
+            'groups' => $groups,
+            'currency' => $currency,
+        ], 200);
+    }
+
     public function trialBalance(Request $request, LedgerService $ledger)
     {
         $ownerId = (int) Auth::user()->owner_id;

@@ -198,6 +198,7 @@ Route::post('companyTreasuryRestore',[CompanyTreasuryController::class, 'restore
 Route::post('companyTreasuryToggleSettled',[CompanyTreasuryController::class, 'toggleSettled'])->name('companyTreasuryToggleSettled');
 
 Route::get('ledgerTrialBalance',[LedgerController::class, 'trialBalance'])->name('ledgerTrialBalance');
+Route::get('ledgerChartOfAccounts',[LedgerController::class, 'chartOfAccounts'])->name('ledgerChartOfAccounts');
 Route::get('ledgerAccount',[LedgerController::class, 'accountLedger'])->name('ledgerAccount');
 Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('ledgerJournals');
 

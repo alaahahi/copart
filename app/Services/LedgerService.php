@@ -168,7 +168,7 @@ class LedgerService
     }
 
     /**
-     * Client debt increases (increaseWallet): Debit AR / Credit Revenue
+     * Client debt increases (increaseWallet on trader): Debit AR / Credit Revenue
      */
     public function postClientDebtIncrease(int $ownerId, int $clientId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
     {
@@ -190,7 +190,7 @@ class LedgerService
     }
 
     /**
-     * Client payment / decreaseWallet: Debit Cash / Credit AR
+     * Client payment / decreaseWallet on trader: Debit Cash / Credit AR
      */
     public function postClientPayment(int $ownerId, int $clientId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
     {
@@ -208,6 +208,145 @@ class LedgerService
         ], [
             ['account_id' => $cash->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
             ['account_id' => $ar->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
+     * Cash-box receipt (وصل قبض): Debit Cash / Credit Revenue
+     */
+    public function postCashReceipt(int $ownerId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $cash = $this->cashAccount($ownerId, $currency);
+        $revenue = $this->systemAccount($ownerId, self::CODE_REVENUE);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'cash_box',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $cash->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $revenue->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
+     * Cash-box payment (وصل سحب): Debit Expense / Credit Cash
+     */
+    public function postCashDisbursement(int $ownerId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $cash = $this->cashAccount($ownerId, $currency);
+        $expense = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'cash_box',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $expense->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $cash->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
+     * Route wallet increase to the correct electronic accounts.
+     * client → AR/Revenue | mainBox → Cash/Revenue | other system → Suspense via cash receipt style on opening
+     */
+    public function postWalletIncrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $kind = $this->walletPostingKind($ownerId, $userId);
+
+        return match ($kind) {
+            'client' => $this->postClientDebtIncrease($ownerId, $userId, $amount, $currency, $memo, $reference),
+            'cash_box' => $this->postCashReceipt($ownerId, $amount, $currency, $memo, $reference),
+            default => $this->postSystemWalletIncrease($ownerId, $userId, $amount, $currency, $memo, $reference),
+        };
+    }
+
+    /**
+     * Route wallet decrease to the correct electronic accounts.
+     */
+    public function postWalletDecrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $kind = $this->walletPostingKind($ownerId, $userId);
+
+        return match ($kind) {
+            'client' => $this->postClientPayment($ownerId, $userId, $amount, $currency, $memo, $reference),
+            'cash_box' => $this->postCashDisbursement($ownerId, $amount, $currency, $memo, $reference),
+            default => $this->postSystemWalletDecrease($ownerId, $userId, $amount, $currency, $memo, $reference),
+        };
+    }
+
+    /**
+     * @return 'client'|'cash_box'|'system'
+     */
+    public function walletPostingKind(int $ownerId, int $userId): string
+    {
+        $user = User::find($userId);
+        if (!$user) {
+            return 'system';
+        }
+
+        $clientTypeId = (int) (\Illuminate\Support\Facades\Cache::get('user_type_client')
+            ?? \App\Models\UserType::where('name', 'client')->value('id'));
+
+        if ($clientTypeId && (int) $user->type_id === $clientTypeId) {
+            return 'client';
+        }
+
+        if (strcasecmp((string) $user->email, 'mainBox@account.com') === 0) {
+            return 'cash_box';
+        }
+
+        return 'system';
+    }
+
+    /**
+     * Internal system wallets (main@account etc.): mirror via party AR against opening equity
+     * so trial balance stays balanced without treating them as cash-box.
+     */
+    protected function postSystemWalletIncrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $party = $this->clientReceivableAccount($ownerId, $userId);
+        $opening = $this->systemAccount($ownerId, self::CODE_OPENING);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'system_wallet',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $party->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $opening->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    protected function postSystemWalletDecrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    {
+        $party = $this->clientReceivableAccount($ownerId, $userId);
+        $opening = $this->systemAccount($ownerId, self::CODE_OPENING);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'system_wallet',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $opening->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $party->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
         ]);
     }
 
@@ -402,7 +541,8 @@ class LedgerService
     }
 
     /**
-     * Keep wallets.balance as a cache of ledger AR balances.
+     * Keep wallets.balance as a cache of the correct ledger control account.
+     * client → AR | cash box → Cash 1100/1110 | system → party mirror account
      */
     public function syncWalletFromLedger(int $ownerId, int $clientId): void
     {
@@ -411,8 +551,15 @@ class LedgerService
             return;
         }
 
-        $usd = $this->clientBalance($ownerId, $clientId, '$');
-        $iqd = $this->clientBalance($ownerId, $clientId, 'IQD');
+        $kind = $this->walletPostingKind($ownerId, $clientId);
+
+        if ($kind === 'cash_box') {
+            $usd = $this->cashAccount($ownerId, '$')->balance('$');
+            $iqd = $this->cashAccount($ownerId, 'IQD')->balance('IQD');
+        } else {
+            $usd = $this->clientBalance($ownerId, $clientId, '$');
+            $iqd = $this->clientBalance($ownerId, $clientId, 'IQD');
+        }
 
         $payload = [
             'balance' => $usd,

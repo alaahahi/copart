@@ -4,7 +4,7 @@ import { Head } from "@inertiajs/inertia-vue3";
 import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
 
-const tab = ref("trial");
+const tab = ref("tree");
 const currency = ref("$");
 const from = ref(getFirstDayOfMonth());
 const to = ref(getTodayDate());
@@ -12,6 +12,7 @@ const q = ref("");
 const loading = ref(false);
 const errorMsg = ref("");
 
+const treeGroups = ref([]);
 const trialRows = ref([]);
 const totalDebit = ref(0);
 const totalCredit = ref(0);
@@ -51,6 +52,21 @@ function typeLabel(type) {
     expense: "مصاريف",
   };
   return map[type] || type;
+}
+
+async function loadTree() {
+  loading.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.get("/api/ledgerChartOfAccounts", {
+      params: { currency: currency.value, q: q.value },
+    });
+    treeGroups.value = data.groups || [];
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر تحميل شجرة الحسابات";
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function loadTrial() {
@@ -115,12 +131,16 @@ async function loadJournals() {
 }
 
 async function refresh() {
-  if (tab.value === "trial") await loadTrial();
+  if (tab.value === "tree") await loadTree();
+  else if (tab.value === "trial") await loadTrial();
   else if (tab.value === "ledger") await loadAccountLedger();
   else await loadJournals();
 }
 
-watch([currency, from, to], () => refresh());
+watch(currency, () => refresh());
+watch([from, to], () => {
+  if (tab.value === "trial" || tab.value === "ledger") refresh();
+});
 watch(tab, () => refresh());
 
 onMounted(() => refresh());
@@ -136,9 +156,17 @@ onMounted(() => refresh());
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">دفتر الأستاذ</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">ميزان مراجعة وحركة الحسابات من القيود المزدوجة</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">شجرة الحسابات · ميزان · حركة · قيود</p>
               </div>
               <div class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class="rounded-lg px-4 py-2 text-sm font-semibold"
+                  :class="tab === 'tree' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                  @click="tab = 'tree'"
+                >
+                  شجرة الحسابات
+                </button>
                 <button
                   type="button"
                   class="rounded-lg px-4 py-2 text-sm font-semibold"
@@ -173,22 +201,22 @@ onMounted(() => refresh());
                   <option value="IQD">IQD</option>
                 </select>
               </div>
-              <div>
+              <div v-if="tab === 'trial' || tab === 'ledger'">
                 <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من</label>
                 <input v-model="from" type="date" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
               </div>
-              <div>
+              <div v-if="tab === 'trial' || tab === 'ledger'">
                 <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى</label>
                 <input v-model="to" type="date" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
               </div>
-              <div class="md:col-span-2" v-if="tab === 'trial'">
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">بحث حساب</label>
+              <div class="md:col-span-2" v-if="tab === 'trial' || tab === 'tree'">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">بحث</label>
                 <input
                   v-model="q"
                   type="text"
                   placeholder="رمز أو اسم الحساب"
                   class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
-                  @keyup.enter="loadTrial"
+                  @keyup.enter="refresh"
                 />
               </div>
             </div>
@@ -200,6 +228,42 @@ onMounted(() => refresh());
 
           <div class="p-4">
             <div v-if="loading" class="py-10 text-center text-slate-500">جاري التحميل...</div>
+
+            <!-- شجرة بسيطة جداً -->
+            <template v-else-if="tab === 'tree'">
+              <div class="mx-auto max-w-2xl space-y-4">
+                <div
+                  v-for="group in treeGroups"
+                  :key="group.type"
+                  class="rounded-xl border border-slate-200 dark:border-slate-700"
+                >
+                  <div class="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                    <span class="text-base font-bold text-slate-900 dark:text-white">{{ group.label }}</span>
+                    <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {{ formatMoney(group.total) }} {{ currencyLabel }}
+                    </span>
+                  </div>
+                  <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+                    <li
+                      v-for="acc in group.accounts"
+                      :key="acc.id"
+                      class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      @click="openAccount(acc.id)"
+                    >
+                      <div class="min-w-0 text-right">
+                        <div class="truncate font-semibold text-slate-900 dark:text-slate-100">{{ acc.name }}</div>
+                        <div class="font-mono text-xs text-slate-500">{{ acc.code }}</div>
+                      </div>
+                      <div class="shrink-0 font-mono text-sm font-bold text-slate-800 dark:text-white">
+                        {{ formatMoney(acc.balance) }}
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+                <div v-if="!treeGroups.length" class="py-10 text-center text-slate-500">لا توجد حسابات</div>
+                <p class="text-center text-xs text-slate-500">اضغط على أي حساب لعرض حركته</p>
+              </div>
+            </template>
 
             <template v-else-if="tab === 'trial'">
               <div class="mb-3 flex flex-wrap gap-4 text-sm font-semibold">
@@ -246,6 +310,15 @@ onMounted(() => refresh());
             </template>
 
             <template v-else-if="tab === 'ledger'">
+              <div class="mb-3">
+                <button
+                  type="button"
+                  class="mb-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400"
+                  @click="tab = 'tree'"
+                >
+                  ← رجوع للشجرة
+                </button>
+              </div>
               <div v-if="accountMeta" class="mb-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
                 <div class="font-bold text-slate-900 dark:text-white">
                   {{ accountMeta.code }} — {{ accountMeta.name }}
