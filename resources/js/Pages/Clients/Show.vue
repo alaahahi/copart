@@ -2,7 +2,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import { TailwindPagination } from "laravel-vue-pagination";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
@@ -87,6 +87,24 @@ function calculateTotalFilteredAmount() {
   }
   return { totalAmount: 0 };
 }
+
+/** Remaining = cars total − paid on cars − discounts (backend cars_need_paid when available). */
+const clientBalanceUsd = computed(() => {
+  if (laravelData.value?.cars_need_paid !== undefined && laravelData.value?.cars_need_paid !== null) {
+    return asNumber(laravelData.value.cars_need_paid);
+  }
+  return (
+    asNumber(laravelData.value?.cars_sum) -
+    asNumber(laravelData.value?.cars_paid) -
+    asNumber(laravelData.value?.cars_discount)
+  );
+});
+
+/** Payments received on wallet but not allocated to cars yet. */
+const undistributedBalanceUsd = computed(() => {
+  const paymentsReceived = asNumber(calculateTotalFilteredAmount().totalAmount) * -1;
+  return paymentsReceived - asNumber(laravelData.value?.cars_paid);
+});
 const getResultsSelect = async (page = 1) => {
 
   axios
@@ -606,46 +624,49 @@ function checkClientBalance(v){
             </div>
           </div>
 
-          <!-- KPI summary chips -->
+          <!-- KPI summary chips — use car.paid / need_paid, not wallet-derived math -->
           <div class="border-b border-slate-200 p-4 dark:border-slate-700">
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-              <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60">
-                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">مجموع السيارات</div>
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">مجموع السيارات</div>
                 <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
                   {{ laravelData.car_total ?? 0 }}
                 </div>
               </div>
-              <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60">
-                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ $t("Total_in_dollars") }}</div>
-                <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("Total_in_dollars") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold text-sky-700 dark:text-sky-300">
                   {{ laravelData?.cars_sum ?? 0 }}
                 </div>
               </div>
-              <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800/60 dark:bg-emerald-950/30">
-                <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">مجموع المدفوع بالدولار</div>
-                <div class="mt-1 font-mono text-lg font-bold text-emerald-800 dark:text-emerald-300">
-                  {{ asNumber(laravelData?.cars_sum) - (asNumber(laravelData?.client?.wallet?.balance) + asNumber(laravelData?.cars_discount)) }}
+              <div class="rounded-xl border border-emerald-400 bg-white px-4 py-3 shadow-sm dark:border-emerald-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">مجموع المدفوع بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-emerald-700 dark:text-emerald-200">
+                  {{ Math.abs(asNumber(laravelData?.cars_paid)) }}
                 </div>
               </div>
-              <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/60 dark:bg-amber-950/30">
-                <div class="text-xs font-semibold text-amber-700 dark:text-amber-400">مجموع الخصومات بالدولار</div>
-                <div class="mt-1 font-mono text-lg font-bold text-amber-800 dark:text-amber-300">
+              <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">مجموع الخصومات بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-200">
                   {{ laravelData?.cars_discount ?? 0 }}
                 </div>
               </div>
-              <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800/60 dark:bg-indigo-950/30">
-                <div class="text-xs font-semibold text-indigo-700 dark:text-indigo-400">الرصيد بالدولار</div>
-                <div class="mt-1 font-mono text-lg font-bold text-indigo-800 dark:text-indigo-300">
-                  {{ laravelData?.transactions ? (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) : 0 }}
+              <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">الرصيد بالدولار</div>
+                <div
+                  class="mt-1 font-mono text-lg font-bold"
+                  :class="clientBalanceUsd > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-indigo-700 dark:text-indigo-200'"
+                >
+                  {{ clientBalanceUsd }}
                 </div>
               </div>
               <div
-                v-if="(asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) != 0"
-                class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-800/60 dark:bg-rose-950/30"
+                v-if="undistributedBalanceUsd != 0"
+                class="rounded-xl border border-rose-400 bg-white px-4 py-3 shadow-sm dark:border-rose-500/50 dark:bg-slate-800"
               >
-                <div class="text-xs font-semibold text-rose-700 dark:text-rose-400">الرصيد غير موزع بالدولار</div>
-                <div class="mt-1 font-mono text-lg font-bold text-rose-800 dark:text-rose-300">
-                  {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) }}
+                <div class="text-xs font-semibold text-rose-800 dark:text-rose-300">الرصيد غير موزع بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-rose-700 dark:text-rose-200">
+                  {{ undistributedBalanceUsd }}
                 </div>
               </div>
             </div>
