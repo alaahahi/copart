@@ -982,22 +982,22 @@ class AccountingController extends Controller
         $ownerId = (int) Auth::user()->owner_id;
         $this->accounting->loadAccounts($ownerId);
         $userId = (int) $request->userId;
-        $currentBalance = (float) $request->currentBalance;
         $user = User::with('wallet')->where('id', $userId)->where('owner_id', $ownerId)->first();
         if (!$user || !$user->wallet) {
             return Response::json(['message' => 'user not found'], 404);
         }
 
         $ledger = app(LedgerService::class);
-        // Ledger is source of truth — never trust frontend to overwrite balances.
-        $systemBalance = $ledger->clientBalance($ownerId, $userId, '$');
+        // Ledger is source of truth for the wallet cache. Never trust the SPA's
+        // "currentBalance" — comparing it used to return 201 on every client
+        // page visit and spam "تم تصحيح الرصيد" while rewriting wallets.
         $ledger->syncWalletFromLedger($ownerId, $userId);
+        $systemBalance = $ledger->clientBalance($ownerId, $userId, '$');
 
-        if (round($systemBalance, 2) === round($currentBalance, 2)) {
-            return Response::json('balance is good', 200);
-        }
-
-        return Response::json($systemBalance, 201);
+        return Response::json([
+            'balance' => $systemBalance,
+            'message' => 'synced',
+        ], 200);
     }
 
     public function updateTransactionDescription(Request $request)

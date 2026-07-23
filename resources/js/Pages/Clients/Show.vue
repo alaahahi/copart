@@ -2,7 +2,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
-import { ref, onMounted, watch, computed } from "vue";
+import { ref, computed } from "vue";
 import { TailwindPagination } from "laravel-vue-pagination";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
@@ -119,15 +119,9 @@ const getResultsSelect = async (page = 1) => {
 };
 getResults();
 
-// مراقبة laravelData واستدعاء فحص الرصيد تلقائياً عند تحميل البيانات
-watch(() => laravelData.value?.cars_sum, (newVal) => {
-  if (newVal && laravelData.value?.client?.id) {
-    // تأخير بسيط للتأكد من تحميل جميع البيانات
-    setTimeout(() => {
-      checkClientBalance(newVal);
-    }, 500);
-  }
-}, { immediate: false });
+// Do NOT auto-call checkClientBalance on load — the old frontend formula
+// (payments − cars) never matches ledger AR, so every visit toasted
+// "تم تصحيح الرصيد", synced the wallet, and re-fetched in a confusing loop.
 
 const props = defineProps({
   url: String,
@@ -354,12 +348,12 @@ function hideTransactionsDiv(){
 }
 
 function calculateAmountDiscount (){
-  let need_payment =  laravelData?.value?.client?.wallet?.balance
+  let need_payment = clientBalanceUsd.value
   amount.value=need_payment- discount.value
 }
 function calculateAmount(){
   
-  let need_payment = laravelData?.value?.client?.wallet?.balance
+  let need_payment = clientBalanceUsd.value
   console.log(need_payment)
   if(amount.value > need_payment){
     amount.value=need_payment
@@ -386,60 +380,11 @@ function getDownloadUrl(name) {
       return `/public/uploads/${name}`;
     }
 
-function checkClientBalance(v){
-  // التحقق من البيانات
-  if (!laravelData.value) {
-    return;
-  }
-  
-  const userId = client_Select.value || laravelData.value?.client?.id;
-  if (!userId || userId === 'undefined') {
-    return;
-  }
-  
-  // استخدام القيم من الفرونت
-  const cars_sum = asNumber(v || laravelData.value?.cars_sum);
-  const cars_discount = asNumber(laravelData.value?.cars_discount);
-  
-  // حساب مجموع الدفعات من transactions (قيمة سالبة، نحولها لموجبة)
-  const transactionsTotal = Number(calculateTotalFilteredAmount()?.totalAmount || 0);
-  const transactionsTotalPositive = Math.abs(transactionsTotal);
-  
-  // حساب الرصيد: مجموع الدفعات + الخصم - مجموع السيارات
-  // نضرب الناتج بسالب قبل الإرسال إلى الـ API
-  const calculatedBalance = transactionsTotalPositive + cars_discount - cars_sum;
-  const currentBalance = calculatedBalance * -1;
-  
-  const params = new URLSearchParams({
-    userId: userId,
-    currentBalance: currentBalance,
-    from: from.value || "",
-    to: to.value || ""
-  }).toString();
-
-  axios.get(`/api/checkClientBalance?${params}`)
-  .then(response => {
-    if(response.status == 201){
-      toast.success(" تم تصحيح الرصيد. الرصيد القديم: " + response.data, {
-        timeout: 5000,
-        position: "bottom-right",
-        rtl: true
-      });
-      // تحديث البيانات بعد التصحيح
-      if (client_Select.value) {
-        getResultsSelect();
-      } else {
-        getResults();
-      }
-    }
-  })
-  .catch(error => {
-    toast.error("لم يتم اعادة فحص الحساب بنجاح", {
-      timeout: 5000,
-      position: "bottom-right",
-      rtl: true
-    });
-  });
+function checkClientBalance(_v) {
+  // Disabled: auto-correction compared a wrong frontend formula to ledger AR
+  // and rewrote wallets on every visit (balance-correct toast loop). This page
+  // shows cars remaining (cars_need_paid), not wallet/ledger AR.
+  return;
 }
 
 </script>
@@ -652,7 +597,7 @@ function checkClientBalance(v){
                 </div>
               </div>
               <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">الرصيد بالدولار</div>
+                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">المتبقي على السيارات ($)</div>
                 <div
                   class="mt-1 font-mono text-lg font-bold"
                   :class="clientBalanceUsd > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-indigo-700 dark:text-indigo-200'"
