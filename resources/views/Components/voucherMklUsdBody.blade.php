@@ -1,8 +1,15 @@
 @php
     $isReceipt = ($voucherType ?? 'receipt') === 'receipt';
     $clientName = $clientName ?? ($clientData['client']->name ?? '');
-    $amountDisplay = isset($amount) ? number_format((float) $amount, ($currency ?? '$') === '$' ? 2 : 0) : '';
+    $decimals = ($currency ?? '$') === '$' ? 2 : 0;
+    $amountDisplay = isset($amount) ? number_format((float) $amount, $decimals) : '';
     $amountWords = \App\Helpers\Help::numberToWords((float) ($amount ?? 0), $currency ?? '$');
+    $paidUpNum = is_numeric($paidUp ?? null) ? (float) $paidUp : null;
+    $restNum = is_numeric($rest ?? null) ? (float) $rest : null;
+    $paidUpDisplay = $paidUpNum !== null ? number_format($paidUpNum, $decimals) : ($paidUp ?? '');
+    $restDisplay = $restNum !== null ? number_format($restNum, $decimals) : ($rest ?? '');
+    $paidUpWords = $paidUpNum !== null ? \App\Helpers\Help::numberToWords($paidUpNum, $currency ?? '$') : '';
+    $restWords = $restNum !== null ? \App\Helpers\Help::numberToWords($restNum, $currency ?? '$') : '';
     $dateParts = [];
     if (!empty($created)) {
         $dt = \Carbon\Carbon::parse($created);
@@ -128,7 +135,14 @@
                 <span class="mkl-kr">وەرگیراو</span>
                 <span>المدفوع</span>
             </span>
-            <span class="mkl-field-value" dir="ltr">{{ $paidUp ?? '' }}</span>
+            <span class="mkl-field-value mkl-amount-words">
+                @if($paidUpWords !== '')
+                    <bdi dir="ltr">{{ $paidUpDisplay }} {{ $currency ?? '$' }}</bdi>
+                    <strong>({{ $paidUpWords }})</strong>
+                @else
+                    {{ $paidUp ?? '' }}
+                @endif
+            </span>
             <span class="mkl-field-en">Paid up:</span>
         </div>
         <div class="mkl-dual-group">
@@ -136,7 +150,14 @@
                 <span class="mkl-kr">ماوە</span>
                 <span>الباقي</span>
             </span>
-            <span class="mkl-field-value" dir="ltr">{{ $rest ?? '' }}</span>
+            <span class="mkl-field-value mkl-amount-words">
+                @if($restWords !== '')
+                    <bdi dir="ltr">{{ $restDisplay }} {{ $currency ?? '$' }}</bdi>
+                    <strong>({{ $restWords }})</strong>
+                @else
+                    {{ $rest ?? '' }}
+                @endif
+            </span>
             <span class="mkl-field-en">Rest:</span>
         </div>
     </div>
