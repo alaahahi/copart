@@ -11,6 +11,7 @@ const to = ref(getTodayDate());
 const q = ref("");
 const loading = ref(false);
 const errorMsg = ref("");
+const successMsg = ref("");
 
 const treeGroups = ref([]);
 const trialRows = ref([]);
@@ -23,6 +24,11 @@ const openingBalance = ref(0);
 const ledgerRows = ref([]);
 
 const journals = ref([]);
+
+const editingId = ref(null);
+const editNameAr = ref("");
+const savingEdit = ref(false);
+const deactivatingId = ref(null);
 
 const currencyLabel = computed(() => (currency.value === "$" ? "USD" : "IQD"));
 
@@ -52,6 +58,14 @@ function typeLabel(type) {
     expense: "مصاريف",
   };
   return map[type] || type;
+}
+
+function flashSuccess(msg) {
+  successMsg.value = msg;
+  errorMsg.value = "";
+  setTimeout(() => {
+    if (successMsg.value === msg) successMsg.value = "";
+  }, 3500);
 }
 
 async function loadTree() {
@@ -87,6 +101,7 @@ async function loadTrial() {
 }
 
 async function openAccount(accountId) {
+  if (editingId.value) return;
   selectedAccountId.value = accountId;
   tab.value = "ledger";
   await loadAccountLedger();
@@ -130,6 +145,74 @@ async function loadJournals() {
   }
 }
 
+function startEdit(acc, e) {
+  e?.stopPropagation?.();
+  editingId.value = acc.id;
+  editNameAr.value = acc.name_ar || acc.name || "";
+  errorMsg.value = "";
+}
+
+function cancelEdit(e) {
+  e?.stopPropagation?.();
+  editingId.value = null;
+  editNameAr.value = "";
+}
+
+async function saveEdit(acc, e) {
+  e?.stopPropagation?.();
+  const nameAr = (editNameAr.value || "").trim();
+  if (!nameAr) {
+    errorMsg.value = "الاسم العربي للحساب مطلوب";
+    return;
+  }
+
+  savingEdit.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.post("/api/ledgerAccountUpdate", {
+      id: acc.id,
+      name_ar: nameAr,
+      name: nameAr,
+    });
+    editingId.value = null;
+    editNameAr.value = "";
+    flashSuccess(data.message || "تم تحديث اسم الحساب بنجاح");
+    await loadTree();
+  } catch (err) {
+    errorMsg.value =
+      err?.response?.data?.message ||
+      err?.response?.data?.errors?.name_ar?.[0] ||
+      "تعذر تحديث اسم الحساب";
+  } finally {
+    savingEdit.value = false;
+  }
+}
+
+async function deactivateAccount(acc, e) {
+  e?.stopPropagation?.();
+  if (acc.is_system) {
+    errorMsg.value = "لا يمكن حذف أو إيقاف الحسابات النظامية";
+    return;
+  }
+
+  const ok = window.confirm(
+    `إيقاف الحساب «${acc.name}»؟\nلن يظهر في شجرة الحسابات، والقيود السابقة تبقى محفوظة.`
+  );
+  if (!ok) return;
+
+  deactivatingId.value = acc.id;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.post("/api/ledgerAccountDeactivate", { id: acc.id });
+    flashSuccess(data.message || "تم إيقاف الحساب بنجاح");
+    await loadTree();
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.message || "تعذر إيقاف الحساب";
+  } finally {
+    deactivatingId.value = null;
+  }
+}
+
 async function refresh() {
   if (tab.value === "tree") await loadTree();
   else if (tab.value === "trial") await loadTrial();
@@ -141,7 +224,10 @@ watch(currency, () => refresh());
 watch([from, to], () => {
   if (tab.value === "trial" || tab.value === "ledger") refresh();
 });
-watch(tab, () => refresh());
+watch(tab, () => {
+  editingId.value = null;
+  refresh();
+});
 
 onMounted(() => refresh());
 </script>
@@ -224,6 +310,9 @@ onMounted(() => refresh());
             <div v-if="errorMsg" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
               {{ errorMsg }}
             </div>
+            <div v-if="successMsg" class="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              {{ successMsg }}
+            </div>
           </div>
 
           <div class="p-4">
@@ -247,21 +336,84 @@ onMounted(() => refresh());
                     <li
                       v-for="acc in group.accounts"
                       :key="acc.id"
-                      class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      class="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      :class="editingId === acc.id ? '' : 'cursor-pointer'"
                       @click="openAccount(acc.id)"
                     >
-                      <div class="min-w-0 text-right">
-                        <div class="truncate font-semibold text-slate-900 dark:text-slate-100">{{ acc.name }}</div>
-                        <div class="font-mono text-xs text-slate-500">{{ acc.code }}</div>
-                      </div>
-                      <div class="shrink-0 font-mono text-sm font-bold text-slate-800 dark:text-white">
-                        {{ formatMoney(acc.balance) }}
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0 flex-1 text-right">
+                          <template v-if="editingId === acc.id">
+                            <div class="flex flex-wrap items-center justify-end gap-2" @click.stop>
+                              <input
+                                v-model="editNameAr"
+                                type="text"
+                                class="min-w-[10rem] flex-1 rounded-lg border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                                placeholder="الاسم العربي"
+                                @keyup.enter="saveEdit(acc)"
+                                @keyup.escape="cancelEdit"
+                              />
+                              <button
+                                type="button"
+                                class="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                                :disabled="savingEdit"
+                                @click="saveEdit(acc, $event)"
+                              >
+                                حفظ
+                              </button>
+                              <button
+                                type="button"
+                                class="rounded bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                :disabled="savingEdit"
+                                @click="cancelEdit($event)"
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <div class="truncate font-semibold text-slate-900 dark:text-slate-100">
+                              {{ acc.name }}
+                              <span
+                                v-if="acc.is_system"
+                                class="mr-1 text-[10px] font-normal text-slate-400"
+                              >نظامي</span>
+                            </div>
+                            <div class="font-mono text-xs text-slate-500">{{ acc.code }}</div>
+                          </template>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-2">
+                          <div
+                            v-if="editingId !== acc.id"
+                            class="font-mono text-sm font-bold text-slate-800 dark:text-white"
+                          >
+                            {{ formatMoney(acc.balance) }}
+                          </div>
+                          <button
+                            v-if="editingId !== acc.id"
+                            type="button"
+                            class="rounded px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+                            title="تعديل الاسم"
+                            @click="startEdit(acc, $event)"
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            v-if="editingId !== acc.id && !acc.is_system"
+                            type="button"
+                            class="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                            title="إيقاف الحساب"
+                            :disabled="deactivatingId === acc.id"
+                            @click="deactivateAccount(acc, $event)"
+                          >
+                            إيقاف
+                          </button>
+                        </div>
                       </div>
                     </li>
                   </ul>
                 </div>
                 <div v-if="!treeGroups.length" class="py-10 text-center text-slate-500">لا توجد حسابات</div>
-                <p class="text-center text-xs text-slate-500">اضغط على أي حساب لعرض حركته</p>
+                <p class="text-center text-xs text-slate-500">اضغط على أي حساب لعرض حركته · تعديل لتغيير الاسم · إيقاف لإخفاء الحساب غير النظامي</p>
               </div>
             </template>
 

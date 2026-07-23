@@ -20,6 +20,7 @@ use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CompanyTreasuryController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
 
 
@@ -201,6 +202,11 @@ Route::get('ledgerTrialBalance',[LedgerController::class, 'trialBalance'])->name
 Route::get('ledgerChartOfAccounts',[LedgerController::class, 'chartOfAccounts'])->name('ledgerChartOfAccounts');
 Route::get('ledgerAccount',[LedgerController::class, 'accountLedger'])->name('ledgerAccount');
 Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('ledgerJournals');
+Route::post('ledgerAccountUpdate',[LedgerController::class, 'updateAccount'])->name('ledgerAccountUpdate');
+Route::post('ledgerAccountDeactivate',[LedgerController::class, 'deactivateAccount'])->name('ledgerAccountDeactivate');
+
+Route::get('analyticsDashboard',[AnalyticsController::class, 'dashboard'])->name('analyticsDashboard');
+Route::get('analyticsExportTraders',[AnalyticsController::class, 'exportTraders'])->name('analyticsExportTraders');
 
 Route::get('sync-monitor/migrations',[SyncMonitorController::class, 'getMigrations'])->name('sync.monitor.migrations');
 Route::post('sync-monitor/check-migration',[SyncMonitorController::class, 'checkMigration'])->name('sync.monitor.check.migration');

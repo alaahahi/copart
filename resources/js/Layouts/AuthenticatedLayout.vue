@@ -34,16 +34,18 @@ const primaryItems = computed(() => [
   { key: "sales", label: "sales", href: route("sales"), active: route().current("sales"), show: true },
   { key: "clients", label: "clients", href: route("clients"), active: route().current("clients"), show: hasRole(1, 6) },
   { key: "accounting", label: "accounting", href: route("accounting"), active: route().current("accounting"), show: hasRole(1, 6) },
+  { key: "analytics", label: "Analytics", href: route("analytics"), active: route().current("analytics"), show: hasRole(1, 6) },
 ]);
 
-const operationsItems = computed(() => [
+const moreItems = computed(() => [
   { key: "treasury", label: "CompanyTreasury", href: route("company_treasury"), active: route().current("company_treasury"), show: true },
   { key: "ledger", label: "Ledger", href: route("ledger"), active: route().current("ledger"), show: hasRole(1, 6) },
   { key: "sync", label: "SyncMonitor", href: route("sync-monitor"), active: route().current("sync-monitor"), show: true },
 ]);
 
 const visiblePrimaryItems = computed(() => primaryItems.value.filter((item) => item.show));
-const visibleOperationsItems = computed(() => operationsItems.value.filter((item) => item.show));
+const visibleMoreItems = computed(() => moreItems.value.filter((item) => item.show));
+const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item.active));
 </script>
 
 <template>
@@ -67,29 +69,48 @@ const visibleOperationsItems = computed(() => operationsItems.value.filter((item
                 </div>
               </Link>
 
-              <div class="hidden xl:flex xl:items-center xl:gap-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <NavLink
-                    v-for="item in visiblePrimaryItems"
-                    :key="item.key"
-                    :href="item.href"
-                    :active="item.active"
-                  >
-                    {{ $t(item.label) }}
-                  </NavLink>
-                </div>
+              <div class="hidden lg:flex lg:items-center lg:gap-1 xl:gap-2">
+                <NavLink
+                  v-for="item in visiblePrimaryItems"
+                  :key="item.key"
+                  :href="item.href"
+                  :active="item.active"
+                  class="whitespace-nowrap"
+                >
+                  {{ $t(item.label) }}
+                </NavLink>
 
-                <div class="mx-1 h-8 w-px bg-slate-200 dark:bg-slate-700"></div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                  <NavLink
-                    v-for="item in visibleOperationsItems"
-                    :key="item.key"
-                    :href="item.href"
-                    :active="item.active"
-                  >
-                    {{ $t(item.label) }}
-                  </NavLink>
+                <div v-if="visibleMoreItems.length" class="relative ms-1">
+                  <Dropdown align="left" width="56">
+                    <template #trigger>
+                      <button
+                        type="button"
+                        class="inline-flex min-h-[44px] items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold outline-none transition duration-200 ease-out focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                        :class="moreMenuActive
+                          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                          : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/80 dark:hover:text-white'"
+                        :aria-expanded="undefined"
+                        aria-haspopup="true"
+                      >
+                        {{ $t("more") }}
+                        <svg class="h-4 w-4 opacity-80" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </button>
+                    </template>
+                    <template #content>
+                      <div class="py-1">
+                        <DropdownLink
+                          v-for="item in visibleMoreItems"
+                          :key="item.key"
+                          :href="item.href"
+                          :active="item.active"
+                        >
+                          {{ $t(item.label) }}
+                        </DropdownLink>
+                      </div>
+                    </template>
+                  </Dropdown>
                 </div>
               </div>
             </div>
@@ -223,11 +244,11 @@ const visibleOperationsItems = computed(() => operationsItems.value.filter((item
 
               <div class="border-t border-slate-200 pt-4 dark:border-slate-800">
                 <div class="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                  Tools
+                  {{ $t("more") }}
                 </div>
                 <div class="space-y-2">
                   <ResponsiveNavLink
-                    v-for="item in visibleOperationsItems"
+                    v-for="item in visibleMoreItems"
                     :key="item.key"
                     :href="item.href"
                     :active="item.active"

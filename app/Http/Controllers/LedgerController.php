@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeactivateLedgerAccountRequest;
+use App\Http\Requests\UpdateLedgerAccountRequest;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
@@ -10,20 +12,30 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
+use InvalidArgumentException;
+use RuntimeException;
+use Throwable;
 
 class LedgerController extends Controller
 {
+    protected function authorizeLedger(): void
+    {
+        if (!Auth::check() || !in_array((int) Auth::user()->type_id, [1, 6], true)) {
+            abort(403, 'غير مسموح');
+        }
+    }
+
     public function index()
     {
-        if (!Auth::check()) {
-            abort(403);
-        }
+        $this->authorizeLedger();
 
         return Inertia::render('Ledger/Index');
     }
 
     public function chartOfAccounts(Request $request, LedgerService $ledger)
     {
+        $this->authorizeLedger();
+
         $ownerId = (int) Auth::user()->owner_id;
         $currency = $request->get('currency', '$');
         $q = trim((string) $request->get('q', ''));
@@ -59,6 +71,9 @@ class LedgerController extends Controller
                     'id' => $account->id,
                     'code' => $account->code,
                     'name' => $account->name_ar ?: $account->name,
+                    'name_ar' => $account->name_ar,
+                    'name_en' => $account->name,
+                    'is_system' => (bool) $account->is_system,
                     'balance' => $account->balance($currency),
                 ];
             })->all();
@@ -81,8 +96,69 @@ class LedgerController extends Controller
         ], 200);
     }
 
+    public function updateAccount(UpdateLedgerAccountRequest $request, LedgerService $ledger)
+    {
+        $this->authorizeLedger();
+
+        $ownerId = (int) Auth::user()->owner_id;
+
+        try {
+            $account = $ledger->renameAccount(
+                $ownerId,
+                (int) $request->validated('id'),
+                (string) $request->validated('name_ar'),
+                $request->validated('name')
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            return Response::json(['message' => 'تعذر تحديث اسم الحساب'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم تحديث اسم الحساب بنجاح',
+            'account' => [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name_ar ?: $account->name,
+                'name_ar' => $account->name_ar,
+                'name_en' => $account->name,
+                'is_system' => (bool) $account->is_system,
+            ],
+        ], 200);
+    }
+
+    public function deactivateAccount(DeactivateLedgerAccountRequest $request, LedgerService $ledger)
+    {
+        $this->authorizeLedger();
+
+        $ownerId = (int) Auth::user()->owner_id;
+
+        try {
+            $account = $ledger->deactivateAccount(
+                $ownerId,
+                (int) $request->validated('id')
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            return Response::json(['message' => 'تعذر إيقاف الحساب'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم إيقاف الحساب بنجاح (لن يظهر في شجرة الحسابات)',
+            'account' => [
+                'id' => $account->id,
+                'code' => $account->code,
+                'is_active' => (bool) $account->is_active,
+            ],
+        ], 200);
+    }
+
     public function trialBalance(Request $request, LedgerService $ledger)
     {
+        $this->authorizeLedger();
+
         $ownerId = (int) Auth::user()->owner_id;
         $currency = $request->get('currency', '$');
         $from = $request->get('from');
@@ -154,6 +230,8 @@ class LedgerController extends Controller
 
     public function accountLedger(Request $request)
     {
+        $this->authorizeLedger();
+
         $ownerId = (int) Auth::user()->owner_id;
         $accountId = (int) $request->get('account_id');
         $currency = $request->get('currency', '$');
@@ -232,6 +310,8 @@ class LedgerController extends Controller
 
     public function recentJournals(Request $request)
     {
+        $this->authorizeLedger();
+
         $ownerId = (int) Auth::user()->owner_id;
         $currency = $request->get('currency');
         $limit = min(max((int) $request->get('limit', 50), 1), 200);

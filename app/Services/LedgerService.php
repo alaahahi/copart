@@ -7,6 +7,7 @@ use App\Models\LedgerAccount;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -90,6 +91,73 @@ class LedgerService
         $this->ensureSystemAccounts($ownerId);
 
         return LedgerAccount::where('owner_id', $ownerId)->where('code', $code)->firstOrFail();
+    }
+
+    /**
+     * Rename display names for an owner-scoped ledger account.
+     * System accounts may be renamed; codes/types stay unchanged.
+     */
+    public function renameAccount(int $ownerId, int $accountId, string $nameAr, ?string $name = null): LedgerAccount
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail($accountId);
+
+        $nameAr = trim($nameAr);
+        if ($nameAr === '') {
+            throw new InvalidArgumentException('اسم الحساب مطلوب.');
+        }
+
+        $english = ($name !== null && trim($name) !== '') ? trim($name) : $nameAr;
+
+        $account->forceFill([
+            'name_ar' => $nameAr,
+            'name' => $english,
+        ])->save();
+
+        Log::info('Ledger account renamed', [
+            'account_id' => $account->id,
+            'code' => $account->code,
+            'owner_id' => $ownerId,
+            'name_ar' => $nameAr,
+            'name' => $english,
+            'by' => Auth::id(),
+        ]);
+
+        return $account->fresh();
+    }
+
+    /**
+     * Soft-deactivate a non-system account (never hard-delete).
+     * Keeps journal history intact; account disappears from active chart.
+     */
+    public function deactivateAccount(int $ownerId, int $accountId): LedgerAccount
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail($accountId);
+
+        if ($account->is_system) {
+            throw new RuntimeException('لا يمكن حذف أو إيقاف الحسابات النظامية.');
+        }
+
+        if (!$account->is_active) {
+            throw new RuntimeException('الحساب موقوف مسبقاً.');
+        }
+
+        $hadLines = $account->lines()->exists();
+
+        $account->forceFill(['is_active' => false])->save();
+
+        Log::info('Ledger account deactivated', [
+            'account_id' => $account->id,
+            'code' => $account->code,
+            'owner_id' => $ownerId,
+            'had_journal_lines' => $hadLines,
+            'by' => Auth::id(),
+        ]);
+
+        return $account->fresh();
     }
 
     /**

@@ -71,7 +71,7 @@ const submit = () => {
         <header class="erp-modal-header">
           <div class="erp-modal-header-text">
             <p class="erp-modal-eyebrow">صرف العملات</p>
-            <h2 id="convert-iqd-title" class="erp-modal-title">تحويل دينار → دولار</h2>
+            <h2 id="convert-iqd-title" class="erp-modal-title">تحويل دينار إلى دولار</h2>
             <p class="erp-modal-subtitle">سحب من صندوق الدينار وإضافة إلى صندوق الدولار</p>
           </div>
           <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="emit('close')">
@@ -84,9 +84,9 @@ const submit = () => {
         <div class="erp-modal-body">
           <div class="erp-flow" aria-hidden="true">
             <span class="erp-flow-chip">د.ع</span>
-            <span class="erp-flow-arrow">←</span>
+            <span class="erp-flow-sep">إلى</span>
             <span class="erp-flow-chip erp-flow-chip--accent">سعر</span>
-            <span class="erp-flow-arrow">←</span>
+            <span class="erp-flow-sep">إلى</span>
             <span class="erp-flow-chip">$</span>
           </div>
 
@@ -276,8 +276,9 @@ const submit = () => {
   color: #fff;
 }
 
-.erp-flow-arrow {
-  color: #64748b;
+.erp-flow-sep {
+  color: #94a3b8;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
