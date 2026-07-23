@@ -538,12 +538,7 @@ function getOrangeColorClass(index) {
             :showExtendedFields="false"
             @a="confirm($event)"
             @close="showModalAddSales = false"
-            >
-          <template #header>
-            <h3 class="text-center">المحاسبة</h3>
-            
-           </template>
-      </ModalAddSales>
+            />
       <ModalAddDebt
             :show="showModaldebtSales ? true : false"
             :data="users"
@@ -571,23 +566,13 @@ function getOrangeColorClass(index) {
             :boxes="boxes"
             @a="confirmConvertDollarDinar($event)"
             @close="showModalConvertDollarDinar = false"
-            >
-          <template #header>
-            <h3 class="text-center">تحويل من الدولار الى دينار</h3>
-            
-           </template>
-      </ModalConvertDollarDinar>
+            />
       <ModalConvertDinarDollar 
             :show="showModalConvertDinarDollar ? true : false"
             :boxes="boxes"
             @a="confirmConvertDinarDollar ($event)"
             @close="showModalConvertDinarDollar = false"
-            >
-          <template #header>
-            <h3 class="text-center">تحويل من الدينار الى دولار</h3>
-            
-           </template>
-      </ModalConvertDinarDollar>
+            />
     <div v-if="$page.props.success">
       <div
         id="alert-2"

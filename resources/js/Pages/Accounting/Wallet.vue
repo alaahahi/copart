@@ -616,12 +616,7 @@ function printTagDetails() {
             :showTagSelect="hasWalletTags"
             @a="confirm($event)"
             @close="showModalAddSales = false"
-            >
-          <template #header>
-            <h3 class="text-center">المحاسبة</h3>
-            
-           </template>
-      </ModalAddSales>
+            />
  
       <ModalAddExpensesWallet 
             :show="showModalAddExpensesWallet ? true : false"
@@ -644,14 +639,11 @@ function printTagDetails() {
             :show="showModalAddSalesAmanah ? true : false"
             :tagOptions="tagOptions"
             :showExtendedFields="false"
+            title="وصل قبض أمانة"
+            subtitle="تسجيل أمانة واردة بالدولار أو الدينار"
             @a="confirmAmanah($event)"
             @close="showModalAddSalesAmanah = false"
-            >
-          <template #header>
-            <h3 class="text-center">أمانة - إيداع</h3>
-            
-           </template>
-      </ModalAddSales>
+            />
  
       <ModalAddExpensesWallet 
             :show="showModaldebtSalesAmanah ? true : false"
@@ -671,22 +663,13 @@ function printTagDetails() {
             :boxes="boxes"
             @a="confirmConvertDollarDinar($event)"
             @close="showModalConvertDollarDinar = false"
-            >
-          <template #header>
-            <h3 class="text-center">تحويل من الدولار للدينار</h3>
-            
-           </template>
-      </ModalConvertDollarDinar>
+            />
       <ModalConvertDinarDollar 
             :show="showModalConvertDinarDollar ? true : false"
             :boxes="boxes"
             @a="confirmConvertDinarDollar ($event)"
             @close="showModalConvertDinarDollar = false"
-            >
-          <template #header>
-            <h3 class="text-center">تحويل من الدينار للدولار</h3>
-           </template>
-      </ModalConvertDinarDollar>
+            />
     <div v-if="$page.props.success">
       <div
         id="alert-2"
