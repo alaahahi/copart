@@ -24,7 +24,7 @@ return new class extends Migration
             && !Schema::hasColumn('car', 'auction_id')
         ) {
             Schema::table('car', function (Blueprint $table) {
-                $table->unsignedBigInteger('auction_id')->nullable()->after('car_number');
+                $table->unsignedBigInteger('auction_id')->nullable();
                 $table->index('auction_id');
                 $table->foreign('auction_id')->references('id')->on('auctions')->onDelete('set null');
             });
@@ -34,6 +34,11 @@ return new class extends Migration
     public function down(): void
     {
         if (Schema::hasTable('car') && Schema::hasColumn('car', 'auction_id')) {
+            // SQLite cannot drop foreign keys without rebuilding the table.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                return;
+            }
+
             Schema::table('car', function (Blueprint $table) {
                 $table->dropForeign(['auction_id']);
                 $table->dropColumn('auction_id');

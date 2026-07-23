@@ -21,19 +21,11 @@ return new class extends Migration
 
         Schema::table('car', function (Blueprint $table) {
             if (!Schema::hasColumn('car', 'commission')) {
-                if (Schema::hasColumn('car', 'expenses')) {
-                    $table->integer('commission')->default(0)->after('expenses');
-                } else {
-                    $table->integer('commission')->default(0);
-                }
+                $table->integer('commission')->default(0);
             }
 
             if (!Schema::hasColumn('car', 'commission_s')) {
-                if (Schema::hasColumn('car', 'expenses_s')) {
-                    $table->integer('commission_s')->default(0)->after('expenses_s');
-                } else {
-                    $table->integer('commission_s')->default(0);
-                }
+                $table->integer('commission_s')->default(0);
             }
         });
     }

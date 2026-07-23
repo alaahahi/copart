@@ -14,7 +14,7 @@ return new class extends Migration
 
         Schema::table('company_treasury_entries', function (Blueprint $table) {
             if (!Schema::hasColumn('company_treasury_entries', 'tag')) {
-                $table->string('tag', 255)->nullable()->after('description');
+                $table->string('tag', 255)->nullable();
                 $table->index(['owner_id', 'tag']);
             }
         });

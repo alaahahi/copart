@@ -35,6 +35,8 @@ return [
 
     'connections' => [
 
+        // Dual-driver: use DB_CONNECTION=sqlite for empty local projects
+        // (see .env.sqlite.example). Do not point DB_DATABASE at MySQL name.
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DATABASE_URL'),

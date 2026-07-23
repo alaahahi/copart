@@ -14,6 +14,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('auctions')) {
+            return;
+        }
+
         Schema::create('auctions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('owner_id');

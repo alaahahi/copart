@@ -77,19 +77,19 @@ return new class extends Migration
 
         if (Schema::hasTable('transactions') && !Schema::hasColumn('transactions', 'journal_entry_id')) {
             Schema::table('transactions', function (Blueprint $table) {
-                $table->unsignedBigInteger('journal_entry_id')->nullable()->after('tag')->index();
+                $table->unsignedBigInteger('journal_entry_id')->nullable()->index();
             });
         }
 
         if (Schema::hasTable('company_treasury_entries') && !Schema::hasColumn('company_treasury_entries', 'journal_entry_id')) {
             Schema::table('company_treasury_entries', function (Blueprint $table) {
-                $table->unsignedBigInteger('journal_entry_id')->nullable()->after('is_settled')->index();
+                $table->unsignedBigInteger('journal_entry_id')->nullable()->index();
             });
         }
 
         if (Schema::hasTable('wallets') && !Schema::hasColumn('wallets', 'ledger_synced_at')) {
             Schema::table('wallets', function (Blueprint $table) {
-                $table->timestamp('ledger_synced_at')->nullable()->after('card');
+                $table->timestamp('ledger_synced_at')->nullable();
             });
         }
     }

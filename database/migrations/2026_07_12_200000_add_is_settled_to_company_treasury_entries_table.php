@@ -14,7 +14,7 @@ return new class extends Migration
 
         Schema::table('company_treasury_entries', function (Blueprint $table) {
             if (!Schema::hasColumn('company_treasury_entries', 'is_settled')) {
-                $table->boolean('is_settled')->default(false)->after('balance');
+                $table->boolean('is_settled')->default(false);
             }
         });
     }

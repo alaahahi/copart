@@ -38,13 +38,13 @@ return new class extends Migration
 
         Schema::table('company_treasury_entries', function (Blueprint $table) {
             if (!Schema::hasColumn('company_treasury_entries', 'tag')) {
-                $table->string('tag', 255)->nullable()->after('description');
+                $table->string('tag', 255)->nullable();
             }
             if (!Schema::hasColumn('company_treasury_entries', 'is_settled')) {
-                $table->boolean('is_settled')->default(false)->after('balance');
+                $table->boolean('is_settled')->default(false);
             }
             if (!Schema::hasColumn('company_treasury_entries', 'journal_entry_id')) {
-                $table->unsignedBigInteger('journal_entry_id')->nullable()->index()->after('is_settled');
+                $table->unsignedBigInteger('journal_entry_id')->nullable()->index();
             }
             if (!Schema::hasColumn('company_treasury_entries', 'deleted_at')) {
                 $table->softDeletes();

@@ -19,6 +19,12 @@ return new class extends Migration
             return;
         }
 
+        // SQLite cannot drop foreign keys without rebuilding the table.
+        // Fresh SQLite installs never create auctions.owner_id FK (see create_auctions).
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         Schema::table('auctions', function (Blueprint $table) {
             try {
                 $table->dropForeign(['owner_id']);
@@ -28,18 +34,24 @@ return new class extends Migration
         });
 
         // Fallback for MySQL when Laravel's dropForeign name doesn't match.
-        try {
-            Schema::getConnection()->statement(
-                'ALTER TABLE `auctions` DROP FOREIGN KEY `auctions_owner_id_foreign`'
-            );
-        } catch (\Throwable $e) {
-            // Already gone.
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            try {
+                Schema::getConnection()->statement(
+                    'ALTER TABLE `auctions` DROP FOREIGN KEY `auctions_owner_id_foreign`'
+                );
+            } catch (\Throwable $e) {
+                // Already gone.
+            }
         }
     }
 
     public function down(): void
     {
         if (!Schema::hasTable('auctions')) {
+            return;
+        }
+
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
             return;
         }
 
