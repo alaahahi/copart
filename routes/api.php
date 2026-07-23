@@ -157,6 +157,7 @@ Route::post('companyStoreEdit',[CarConfigController::class, 'storeEdit'])->name(
 
 Route::post('salesDebt',[AccountingController::class, 'salesDebt'])->name('salesDebt');
 Route::post('delTransactions',[AccountingController::class, 'delTransactions'])->name('delTransactions');
+Route::post('restoreTransactions',[AccountingController::class, 'restoreTransactions'])->name('restoreTransactions');
 Route::post('receiptArrived',[AccountingController::class, 'receiptArrived'])->name('receiptArrived');
 Route::post('receiptArrivedUser',[AccountingController::class, 'receiptArrivedUser'])->name('receiptArrivedUser');
 Route::post('salesDebtUser',[AccountingController::class, 'salesDebtUser'])->name('salesDebtUser');

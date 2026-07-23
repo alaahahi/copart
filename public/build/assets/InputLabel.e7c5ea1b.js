@@ -1,0 +1,1 @@
+import{o as e,a as t,t as o,d as l}from"./app.dd3085da.js";const n={class:"block font-medium text-sm text-gray-700 dark:text-slate-200"},r={key:0},c={key:1},d={__name:"InputLabel",props:["value"],setup(a){return(s,_)=>(e(),t("label",n,[a.value?(e(),t("span",r,o(a.value),1)):(e(),t("span",c,[l(s.$slots,"default")]))]))}};export{d as _};

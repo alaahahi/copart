@@ -731,6 +731,23 @@ class LedgerService
     }
 
     /**
+     * Restore soft-voided journal linked to a wallet transaction.
+     */
+    public function restoreJournalForTransaction($transaction): bool
+    {
+        $journalId = $transaction->journal_entry_id ?? null;
+
+        if (!$journalId) {
+            $journalId = JournalEntry::withTrashed()
+                ->where('reference_type', \App\Models\Transactions::class)
+                ->where('reference_id', $transaction->id)
+                ->value('id');
+        }
+
+        return $this->restoreJournalEntry($journalId ? (int) $journalId : null);
+    }
+
+    /**
      * Client AR balance from journal lines (source of truth).
      * Positive = client owes company.
      */

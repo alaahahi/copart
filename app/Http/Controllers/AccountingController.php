@@ -37,7 +37,10 @@ use App\Exports\ExportInfo;
 use App\Exports\ExportAccount;
 use App\Services\AccountingCacheService;
 use App\Services\LedgerService;
+use App\Services\TransactionPaymentService;
+use App\Http\Requests\RestoreTransactionRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Log;
 
 
@@ -595,6 +598,8 @@ class AccountingController extends Controller
         $showComplatedCars=$_GET['showComplatedCars'] ?? 0;
         $tag = $_GET['tag'] ?? '';
         $transactions_id = $_GET['transactions_id'] ?? 0;
+        // Clients/Show only: include soft-deleted payments for restore UI.
+        $includeTrashed = (int) ($_GET['include_trashed'] ?? 0) === 1;
         $client = User::with('wallet')->where('id', $user_id)->first();
         $contract_total = 0;
         $contract_total_debit_Dollar = 0;
@@ -625,13 +630,19 @@ class AccountingController extends Controller
             $exit_car_total=   Car::where('client_id',$client->id)->where('is_exit','!=',0)->count();
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }
+        if ($includeTrashed) {
+            $transactions->withTrashed();
+        }
         // مجموع الدفعات بالدولار (type=out, is_pay=1, currency=$) - للمطابقة مع cars_paid
+        // Always exclude soft-deleted rows from totals even when include_trashed is on.
         $payments_sum_dollar = (clone $transactions)
+            ->whereNull('deleted_at')
             ->where('type', 'out')
             ->where('is_pay', 1)
             ->where('currency', '$')
             ->where('amount', '<', 0)
             ->sum('amount');
+        $activeTotalAmount = (clone $transactions)->whereNull('deleted_at')->sum('amount');
 
         //$data = $transactions->paginate(10);
  
@@ -639,7 +650,7 @@ class AccountingController extends Controller
         if($print==1){
             if($showComplatedCars==1){
                 $clientData = [
-                    'totalAmount' =>   $transactions->sum('amount'),
+                    'totalAmount' =>   $activeTotalAmount,
                     'data' => $cars->where('results','!=','2')->get(),
                     'client'=>$client,
                     'car_total'=>$cars->where('results','!=','2')->count(),
@@ -659,7 +670,7 @@ class AccountingController extends Controller
                 ];
             }else{
                 $clientData = [
-                    'totalAmount' =>   $transactions->sum('amount'),
+                    'totalAmount' =>   $activeTotalAmount,
                     'data' => $cars->get(),
                     'client'=>$client,
                     'car_total'=>$car_total,
@@ -693,7 +704,7 @@ class AccountingController extends Controller
          if($print==6){
             $config=SystemConfig::first();
             $clientData = [
-                'totalAmount' =>   $transactions->sum('amount'),
+                'totalAmount' =>   $activeTotalAmount,
                 'data' => $cars->where('id',$car_id)->get(),
                 'client'=>$client,
                 'car_total'=>$cars->where('id',$car_id)->count(),
@@ -717,7 +728,7 @@ class AccountingController extends Controller
 
                  // Additional logic to retrieve client data
         $clientData = [
-            'totalAmount' =>   $transactions->sum('amount'),
+            'totalAmount' =>   $activeTotalAmount,
             'data' => $cars->get(),
             'client'=>$client,
             'car_total'=>$car_total,
@@ -1587,9 +1598,10 @@ class AccountingController extends Controller
             $firstTransaction
         ) {
             // Reverse car.paid / discount when deleting a car-linked payment.
+            $paymentService = app(TransactionPaymentService::class);
             $paymentLegs = collect([$originalTransaction])->merge($children);
             foreach ($paymentLegs as $leg) {
-                $this->reverseCarPaymentAllocation($leg);
+                $paymentService->reverseCarPaymentAllocation($leg);
             }
 
             $voidOriginal = $ledger->voidJournalForTransaction($originalTransaction, 'حذف حركة #' . $originalTransaction->id);
@@ -1650,55 +1662,34 @@ class AccountingController extends Controller
     }
 
     /**
+     * Restore a soft-deleted payment (transaction + journals + car.paid allocation).
+     */
+    public function restoreTransactions(RestoreTransactionRequest $request)
+    {
+        $this->accounting->loadAccounts(Auth::user()->owner_id);
+        $ownerId = (int) Auth::user()->owner_id;
+        $transactionId = (int) $request->validated()['id'];
+
+        try {
+            $restored = app(TransactionPaymentService::class)
+                ->restoreTransaction($transactionId, $ownerId);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'الحركة المحذوفة غير موجودة'], 404);
+        }
+
+        return response()->json([
+            'message' => 'restored',
+            'transaction' => $restored,
+        ], 200);
+    }
+
+    /**
      * When deleting a payment that was applied to a car, undo car.paid / discount.
+     * @deprecated Prefer TransactionPaymentService::reverseCarPaymentAllocation
      */
     protected function reverseCarPaymentAllocation(Transactions $transaction): void
     {
-        $isCar = $transaction->morphed_type === Car::class
-            || $transaction->morphed_type === 'App\\Models\\Car';
-
-        if (!$isCar || (int) $transaction->morphed_id <= 0) {
-            return;
-        }
-
-        // Only reverse once per payment tree — prefer the client "out" leg
-        // (is_pay=1) which carries the paid/discount details.
-        if ($transaction->type !== 'out' || (int) $transaction->is_pay !== 1) {
-            return;
-        }
-
-        $car = Car::find($transaction->morphed_id);
-        if (!$car) {
-            return;
-        }
-
-        $details = is_array($transaction->details) ? $transaction->details : [];
-        $paidPart = (float) ($details['paid'] ?? 0);
-        $discPart = (float) ($details['discount'] ?? $transaction->discount ?? 0);
-
-        if ($paidPart <= 0 && $discPart <= 0) {
-            // Fallback: out amount is -(paid+discount)
-            $gross = abs((float) $transaction->amount);
-            $discPart = (float) ($transaction->discount ?? 0);
-            $paidPart = max(0, $gross - $discPart);
-        }
-
-        if ($paidPart > 0) {
-            $car->paid = max(0, (float) $car->paid - $paidPart);
-        }
-        if ($discPart > 0) {
-            $car->discount = max(0, (float) $car->discount - $discPart);
-        }
-
-        $remaining = (float) $car->total_s - (float) $car->paid - (float) $car->discount;
-        if ((float) $car->paid + (float) $car->discount <= 0) {
-            $car->results = 0;
-        } elseif ($remaining > 0) {
-            $car->results = 1;
-        } else {
-            $car->results = 2;
-        }
-        $car->save();
+        app(TransactionPaymentService::class)->reverseCarPaymentAllocation($transaction);
     }
 
     /**

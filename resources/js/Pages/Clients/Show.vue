@@ -46,6 +46,7 @@ let showPaymentForm = ref(false);
 let showModalEditCars = ref(false);
 let showModalDelCar = ref(false);
 let showModalDelPayment = ref(false);
+let showModalRestorePayment = ref(false);
 let showModalAddCarPayment = ref(false);
 let showErorrAmount = ref(false);
 let showTransactions= ref(false);
@@ -64,7 +65,7 @@ let showModalDelPayFromBalanceCar = ref(false);
 
 let getResults = async (page = 1) => {
   axios
-    .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${props.client_id}&from=${from.value}&to=${to.value}`)
+    .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${props.client_id}&from=${from.value}&to=${to.value}&include_trashed=1`)
     .then((response) => {
       laravelData.value = response.data;
       client_Select.value = response.data.client.id;
@@ -76,7 +77,7 @@ let getResults = async (page = 1) => {
 function calculateTotalFilteredAmount() {
   if(laravelData.value && laravelData.value.transactions && Array.isArray(laravelData.value.transactions)){
      const filteredTransactions = laravelData.value.transactions.filter(user =>
-    user.type === 'out' && asNumber(user?.amount) < 0 && asNumber(user?.is_pay) === 1
+    user.type === 'out' && asNumber(user?.amount) < 0 && asNumber(user?.is_pay) === 1 && !user.deleted_at
   );
   
   const totalAmount = filteredTransactions.reduce((sum, user) => {
@@ -109,7 +110,7 @@ const undistributedBalanceUsd = computed(() => {
 const getResultsSelect = async (page = 1) => {
 
   axios
-    .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${client_Select.value}&from=${from.value}&to=${to.value}`)
+    .get(`/api/getIndexAccountsSelas?page=${page}&user_id=${client_Select.value}&from=${from.value}&to=${to.value}&include_trashed=1`)
     .then((response) => {
       laravelData.value = response.data;
       client_Select.value = response.data.client.id;
@@ -174,6 +175,10 @@ function openModalDelPayment(tran = {}) {
   formData.value = tran;
   showModalDelPayment.value = true;
 }
+function openModalRestorePayment(tran = {}) {
+  formData.value = tran;
+  showModalRestorePayment.value = true;
+}
 function confirmDelPayment(V) {
   axios
     .post(`/api/delTransactions?id=${V.id}`)
@@ -193,6 +198,32 @@ function confirmDelPayment(V) {
     .catch((error) => {
       console.error(error);
       toast.error("فشل حذف الدفعة", {
+        timeout: 4000,
+        position: "bottom-right",
+        rtl: true,
+      });
+    });
+}
+function confirmRestorePayment(V) {
+  axios
+    .post(`/api/restoreTransactions?id=${V.id}`)
+    .then(() => {
+      showModalRestorePayment.value = false;
+      toast.success("تم استعادة الدفعة", {
+        timeout: 3000,
+        position: "bottom-right",
+        rtl: true,
+      });
+      if (client_Select.value) {
+        getResultsSelect();
+      } else {
+        getResults();
+      }
+    })
+    .catch((error) => {
+      console.error(error);
+      const msg = error?.response?.data?.message || "فشل استعادة الدفعة";
+      toast.error(msg, {
         timeout: 4000,
         position: "bottom-right",
         rtl: true,
@@ -462,6 +493,18 @@ function checkClientBalance(_v) {
       <template #header>
         <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
           هل متأكد من حذف الدفعة رقم {{ formData.id }} ؟
+        </h2>
+      </template>
+    </ModalDelCar>
+    <ModalDelCar
+      :show="showModalRestorePayment ? true : false"
+      :formData="formData"
+      @a="confirmRestorePayment($event)"
+      @close="showModalRestorePayment = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
+          هل متأكد من استعادة الدفعة رقم {{ formData.id }} ؟
         </h2>
       </template>
     </ModalDelCar>
@@ -782,21 +825,33 @@ function checkClientBalance(_v) {
                   <template v-for="user in laravelData.transactions" :key="user.id">
                     <tr
                       v-if="user.type == 'out' && user.amount < 0 && user.is_pay == 1"
-                      class="hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      :class="
+                        user.deleted_at
+                          ? 'bg-slate-100/80 text-slate-500 dark:bg-slate-900/60 dark:text-slate-400'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      "
                     >
-                      <td class="px-3 py-2">{{ user.id }}</td>
-                      <td class="px-3 py-2">{{ user.created }}</td>
-                      <td class="px-3 py-2">{{ user.description }}</td>
+                      <td class="px-3 py-2" :class="{ 'line-through': user.deleted_at }">{{ user.id }}</td>
+                      <td class="px-3 py-2" :class="{ 'line-through': user.deleted_at }">{{ user.created }}</td>
+                      <td class="px-3 py-2">
+                        <span :class="{ 'line-through': user.deleted_at }">{{ user.description }}</span>
+                        <span
+                          v-if="user.deleted_at"
+                          class="ms-2 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                        >
+                          محذوف
+                        </span>
+                      </td>
                       <td class="px-3 py-2">
                         <span :class="getMoneyAccountBadgeClass(user)">
                           {{ getMoneyAccountLabel(user) ?? '—' }}
                         </span>
                       </td>
-                      <td class="px-3 py-2 font-mono">{{ user.amount * -1 }}</td>
+                      <td class="px-3 py-2 font-mono" :class="{ 'line-through': user.deleted_at }">{{ user.amount * -1 }}</td>
                       <td class="px-3 py-2 print:hidden">
                         <div class="inline-flex items-center gap-1">
                           <a
-                            v-if="user.type == 'out' && user.amount < 0"
+                            v-if="user.type == 'out' && user.amount < 0 && !user.deleted_at"
                             target="_blank"
                             :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
                             tabindex="1"
@@ -806,6 +861,7 @@ function checkClientBalance(_v) {
                             <print />
                           </a>
                           <button
+                            v-if="!user.deleted_at"
                             type="button"
                             tabindex="1"
                             class="inline-flex items-center rounded-lg bg-rose-600 px-3 py-1.5 text-white hover:bg-rose-700"
@@ -813,6 +869,16 @@ function checkClientBalance(_v) {
                             @click="openModalDelPayment(user)"
                           >
                             <trash />
+                          </button>
+                          <button
+                            v-else
+                            type="button"
+                            tabindex="1"
+                            class="inline-flex items-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                            title="استعادة الدفعة"
+                            @click="openModalRestorePayment(user)"
+                          >
+                            استعادة
                           </button>
                         </div>
                       </td>
