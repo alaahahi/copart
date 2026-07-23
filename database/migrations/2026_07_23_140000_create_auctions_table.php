@@ -20,9 +20,10 @@ return new class extends Migration
             $table->string('name', 255);
             $table->timestamps();
 
+            // No FK on owner_id — same as payment_tags. Tenant owner_id may
+            // not exist as a users.id row (legacy multi-tenant convention).
             $table->index('owner_id');
             $table->unique(['owner_id', 'name']);
-            $table->foreign('owner_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 
