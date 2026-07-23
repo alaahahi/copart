@@ -45,6 +45,7 @@ let to = ref(0);
 let showPaymentForm = ref(false);
 let showModalEditCars = ref(false);
 let showModalDelCar = ref(false);
+let showModalDelPayment = ref(false);
 let showModalAddCarPayment = ref(false);
 let showErorrAmount = ref(false);
 let showTransactions= ref(false);
@@ -168,6 +169,35 @@ function method1(id) {
 function openModalDelCar(form = {}) {
   formData.value = form;
   showModalDelCar.value = true;
+}
+function openModalDelPayment(tran = {}) {
+  formData.value = tran;
+  showModalDelPayment.value = true;
+}
+function confirmDelPayment(V) {
+  axios
+    .post(`/api/delTransactions?id=${V.id}`)
+    .then(() => {
+      showModalDelPayment.value = false;
+      toast.success("تم حذف الدفعة", {
+        timeout: 3000,
+        position: "bottom-right",
+        rtl: true,
+      });
+      if (client_Select.value) {
+        getResultsSelect();
+      } else {
+        getResults();
+      }
+    })
+    .catch((error) => {
+      console.error(error);
+      toast.error("فشل حذف الدفعة", {
+        timeout: 4000,
+        position: "bottom-right",
+        rtl: true,
+      });
+    });
 }
 function openModalAddPayFromBalanceCar(form = {}) {
   formData.value = form;
@@ -423,6 +453,18 @@ function checkClientBalance(_v) {
         </h2>
       </template>
     </ModalDelCar>
+    <ModalDelCar
+      :show="showModalDelPayment ? true : false"
+      :formData="formData"
+      @a="confirmDelPayment($event)"
+      @close="showModalDelPayment = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
+          هل متأكد من حذف الدفعة رقم {{ formData.id }} ؟
+        </h2>
+      </template>
+    </ModalDelCar>
 
     <ModalDelCar
       :show="showModalAddPayFromBalanceCar ? true : false"
@@ -658,28 +700,38 @@ function checkClientBalance(_v) {
           <!-- Add payment form -->
           <div
             v-if="showPaymentForm"
-            class="border-b border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/60"
+            class="border-b border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
           >
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div v-if="false">
-                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">الخصم</label>
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">الخصم</label>
                 <TextInput
                   id="discount"
                   v-model="discount"
                   type="number"
-                  class="mt-0 block w-full"
+                  class="mt-0 block w-full !bg-white !text-slate-900 !border-slate-400 dark:!bg-slate-950 dark:!text-white dark:!border-slate-500"
                   @input="calculateAmountDiscount"
                 />
               </div>
               <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">
                   المبلغ بالدولار المراد دفعه
                 </label>
-                <TextInput id="percentage" v-model="amount" type="number" class="mt-0 block w-full" />
+                <TextInput
+                  id="percentage"
+                  v-model="amount"
+                  type="number"
+                  class="mt-0 block w-full !bg-white !text-slate-900 !border-slate-400 dark:!bg-slate-950 dark:!text-white dark:!border-slate-500"
+                />
               </div>
               <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">ملاحظة</label>
-                <TextInput id="discount-note" v-model="note" type="text" class="mt-0 block w-full" />
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">ملاحظة</label>
+                <TextInput
+                  id="discount-note"
+                  v-model="note"
+                  type="text"
+                  class="mt-0 block w-full !bg-white !text-slate-900 !border-slate-400 dark:!bg-slate-950 dark:!text-white dark:!border-slate-500"
+                />
               </div>
               <div class="flex items-end print:hidden">
                 <button
@@ -742,15 +794,27 @@ function checkClientBalance(_v) {
                       </td>
                       <td class="px-3 py-2 font-mono">{{ user.amount * -1 }}</td>
                       <td class="px-3 py-2 print:hidden">
-                        <a
-                          v-if="user.type == 'out' && user.amount < 0"
-                          target="_blank"
-                          :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
-                          tabindex="1"
-                          class="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
-                        >
-                          <print />
-                        </a>
+                        <div class="inline-flex items-center gap-1">
+                          <a
+                            v-if="user.type == 'out' && user.amount < 0"
+                            target="_blank"
+                            :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
+                            tabindex="1"
+                            class="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
+                            title="طباعة"
+                          >
+                            <print />
+                          </a>
+                          <button
+                            type="button"
+                            tabindex="1"
+                            class="inline-flex items-center rounded-lg bg-rose-600 px-3 py-1.5 text-white hover:bg-rose-700"
+                            title="حذف الدفعة"
+                            @click="openModalDelPayment(user)"
+                          >
+                            <trash />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   </template>

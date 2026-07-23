@@ -1586,6 +1586,12 @@ class AccountingController extends Controller
             &$syncedFromLedger,
             $firstTransaction
         ) {
+            // Reverse car.paid / discount when deleting a car-linked payment.
+            $paymentLegs = collect([$originalTransaction])->merge($children);
+            foreach ($paymentLegs as $leg) {
+                $this->reverseCarPaymentAllocation($leg);
+            }
+
             $voidOriginal = $ledger->voidJournalForTransaction($originalTransaction, 'حذف حركة #' . $originalTransaction->id);
             $collectUser($originalTransaction->wallet_id);
             if ($voidOriginal) {
@@ -1641,6 +1647,58 @@ class AccountingController extends Controller
         Log::info('Transaction deleted', ['transaction_id' => $transaction_id, 'by' => Auth::id()]);
 
         return response()->json(['message' => $all], 200);
+    }
+
+    /**
+     * When deleting a payment that was applied to a car, undo car.paid / discount.
+     */
+    protected function reverseCarPaymentAllocation(Transactions $transaction): void
+    {
+        $isCar = $transaction->morphed_type === Car::class
+            || $transaction->morphed_type === 'App\\Models\\Car';
+
+        if (!$isCar || (int) $transaction->morphed_id <= 0) {
+            return;
+        }
+
+        // Only reverse once per payment tree — prefer the client "out" leg
+        // (is_pay=1) which carries the paid/discount details.
+        if ($transaction->type !== 'out' || (int) $transaction->is_pay !== 1) {
+            return;
+        }
+
+        $car = Car::find($transaction->morphed_id);
+        if (!$car) {
+            return;
+        }
+
+        $details = is_array($transaction->details) ? $transaction->details : [];
+        $paidPart = (float) ($details['paid'] ?? 0);
+        $discPart = (float) ($details['discount'] ?? $transaction->discount ?? 0);
+
+        if ($paidPart <= 0 && $discPart <= 0) {
+            // Fallback: out amount is -(paid+discount)
+            $gross = abs((float) $transaction->amount);
+            $discPart = (float) ($transaction->discount ?? 0);
+            $paidPart = max(0, $gross - $discPart);
+        }
+
+        if ($paidPart > 0) {
+            $car->paid = max(0, (float) $car->paid - $paidPart);
+        }
+        if ($discPart > 0) {
+            $car->discount = max(0, (float) $car->discount - $discPart);
+        }
+
+        $remaining = (float) $car->total_s - (float) $car->paid - (float) $car->discount;
+        if ((float) $car->paid + (float) $car->discount <= 0) {
+            $car->results = 0;
+        } elseif ($remaining > 0) {
+            $car->results = 1;
+        } else {
+            $car->results = 2;
+        }
+        $car->save();
     }
 
     /**
