@@ -30,6 +30,44 @@ const editNameAr = ref("");
 const savingEdit = ref(false);
 const deactivatingId = ref(null);
 
+// --- تحويل بين الحسابات ---
+const transferAccounts = ref([]);
+const transferLoading = ref(false);
+const transferSubmitting = ref(false);
+const transferForm = ref({
+  from_user_id: "",
+  to_user_id: "",
+  amount: "",
+  currency: "$",
+  entry_date: getTodayDate(),
+  notes: "",
+});
+
+// --- أرباح التجار ---
+const profitsBalance = ref(0);
+const profitsCurrency = ref("$");
+const profitsEntries = ref([]);
+const profitsLoading = ref(false);
+const traderRows = ref([]);
+const traderRowsLoading = ref(false);
+const postForm = ref({
+  client_id: "",
+  amount: "",
+  currency: "$",
+  period_from: getFirstDayOfMonth(),
+  period_to: getTodayDate(),
+  entry_date: getTodayDate(),
+  notes: "",
+});
+const withdrawForm = ref({
+  amount: "",
+  currency: "$",
+  entry_date: getTodayDate(),
+  notes: "",
+});
+const postSubmitting = ref(false);
+const withdrawSubmitting = ref(false);
+
 const currencyLabel = computed(() => (currency.value === "$" ? "USD" : "IQD"));
 
 function getTodayDate() {
@@ -145,6 +183,164 @@ async function loadJournals() {
   }
 }
 
+// --- تحويل بين الحسابات ---
+async function loadTransferAccounts() {
+  transferLoading.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.get("/api/accountTransfer/accounts");
+    transferAccounts.value = data.accounts || [];
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر تحميل قائمة الحسابات";
+  } finally {
+    transferLoading.value = false;
+  }
+}
+
+function accountBalanceLabel(userId, currencyCode) {
+  const acc = transferAccounts.value.find((a) => a.id === userId);
+  if (!acc) return "";
+  const val = currencyCode === "IQD" ? acc.balance_dinar : acc.balance;
+  return formatMoney(val);
+}
+
+async function submitTransfer() {
+  errorMsg.value = "";
+  if (!transferForm.value.from_user_id || !transferForm.value.to_user_id) {
+    errorMsg.value = "اختر الحساب المرسل والمستقبل";
+    return;
+  }
+  if (transferForm.value.from_user_id === transferForm.value.to_user_id) {
+    errorMsg.value = "لا يمكن التحويل من وإلى نفس الحساب";
+    return;
+  }
+  if (!transferForm.value.amount || Number(transferForm.value.amount) <= 0) {
+    errorMsg.value = "أدخل مبلغاً صحيحاً أكبر من صفر";
+    return;
+  }
+
+  transferSubmitting.value = true;
+  try {
+    const { data } = await axios.post("/api/accountTransfer", transferForm.value);
+    flashSuccess(data.message || "تم تنفيذ التحويل بنجاح");
+    transferForm.value.amount = "";
+    transferForm.value.notes = "";
+    await loadTransferAccounts();
+  } catch (err) {
+    errorMsg.value =
+      err?.response?.data?.message ||
+      Object.values(err?.response?.data?.errors || {})[0]?.[0] ||
+      "تعذر تنفيذ التحويل";
+  } finally {
+    transferSubmitting.value = false;
+  }
+}
+
+// --- أرباح التجار ---
+async function loadProfitsSummary() {
+  profitsLoading.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.get("/api/traderProfits/summary", {
+      params: { currency: profitsCurrency.value },
+    });
+    profitsBalance.value = data.balance || 0;
+    profitsEntries.value = data.entries || [];
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر تحميل ملخص حساب الأرباح";
+  } finally {
+    profitsLoading.value = false;
+  }
+}
+
+async function loadTraderRows() {
+  traderRowsLoading.value = true;
+  try {
+    const { data } = await axios.get("/api/analyticsDashboard", {
+      params: {
+        from: postForm.value.period_from,
+        to: postForm.value.period_to,
+        currency: postForm.value.currency,
+      },
+    });
+    traderRows.value = data.data?.trader_profits || [];
+  } catch (e) {
+    // اختياري فقط لتعبئة القيم — لا نوقف الصفحة عند الفشل
+  } finally {
+    traderRowsLoading.value = false;
+  }
+}
+
+function pickTraderRow(row) {
+  postForm.value.client_id = row.client_id;
+  postForm.value.amount = row.profit;
+}
+
+async function submitPostProfit() {
+  errorMsg.value = "";
+  if (!postForm.value.client_id) {
+    errorMsg.value = "اختر التاجر أولاً";
+    return;
+  }
+  if (!postForm.value.amount || Number(postForm.value.amount) <= 0) {
+    errorMsg.value = "أدخل مبلغاً صحيحاً أكبر من صفر";
+    return;
+  }
+
+  postSubmitting.value = true;
+  try {
+    const { data } = await axios.post("/api/traderProfits/post", postForm.value);
+    flashSuccess(data.message || "تم ترحيل أرباح التاجر بنجاح");
+    postForm.value.amount = "";
+    postForm.value.notes = "";
+    await loadProfitsSummary();
+  } catch (err) {
+    errorMsg.value =
+      err?.response?.data?.message ||
+      Object.values(err?.response?.data?.errors || {})[0]?.[0] ||
+      "تعذر ترحيل أرباح التاجر";
+  } finally {
+    postSubmitting.value = false;
+  }
+}
+
+async function submitWithdrawProfit() {
+  errorMsg.value = "";
+  if (!withdrawForm.value.amount || Number(withdrawForm.value.amount) <= 0) {
+    errorMsg.value = "أدخل مبلغاً صحيحاً أكبر من صفر";
+    return;
+  }
+
+  withdrawSubmitting.value = true;
+  try {
+    const { data } = await axios.post("/api/traderProfits/withdraw", withdrawForm.value);
+    flashSuccess(data.message || "تم السحب من حساب الأرباح بنجاح");
+    withdrawForm.value.amount = "";
+    withdrawForm.value.notes = "";
+    await loadProfitsSummary();
+  } catch (err) {
+    errorMsg.value =
+      err?.response?.data?.message ||
+      Object.values(err?.response?.data?.errors || {})[0]?.[0] ||
+      "تعذر السحب من حساب الأرباح";
+  } finally {
+    withdrawSubmitting.value = false;
+  }
+}
+
+async function deleteProfitEntry(entry) {
+  const ok = window.confirm(`حذف هذه الحركة (${formatMoney(entry.amount)} ${entry.currency})؟`);
+  if (!ok) return;
+
+  try {
+    const { data } = await axios.post("/api/traderProfits/delete", { id: entry.id });
+    flashSuccess(data.message || "تم حذف الحركة بنجاح");
+    await loadProfitsSummary();
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.message || "تعذر حذف الحركة";
+  }
+}
+
 function startEdit(acc, e) {
   e?.stopPropagation?.();
   editingId.value = acc.id;
@@ -217,7 +413,12 @@ async function refresh() {
   if (tab.value === "tree") await loadTree();
   else if (tab.value === "trial") await loadTrial();
   else if (tab.value === "ledger") await loadAccountLedger();
-  else await loadJournals();
+  else if (tab.value === "journals") await loadJournals();
+  else if (tab.value === "transfer") await loadTransferAccounts();
+  else if (tab.value === "profits") {
+    await loadProfitsSummary();
+    await loadTraderRows();
+  }
 }
 
 watch(currency, () => refresh());
@@ -227,6 +428,10 @@ watch([from, to], () => {
 watch(tab, () => {
   editingId.value = null;
   refresh();
+});
+watch(profitsCurrency, () => loadProfitsSummary());
+watch([() => postForm.value.period_from, () => postForm.value.period_to, () => postForm.value.currency], () => {
+  if (tab.value === "profits") loadTraderRows();
 });
 
 onMounted(() => refresh());
@@ -268,6 +473,22 @@ onMounted(() => refresh());
                   @click="tab = 'journals'"
                 >
                   آخر القيود
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg px-4 py-2 text-sm font-semibold"
+                  :class="tab === 'transfer' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                  @click="tab = 'transfer'"
+                >
+                  حركة بين الحسابات
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg px-4 py-2 text-sm font-semibold"
+                  :class="tab === 'profits' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                  @click="tab = 'profits'"
+                >
+                  أرباح التجار
                 </button>
                 <button
                   type="button"
@@ -512,7 +733,7 @@ onMounted(() => refresh());
               </div>
             </template>
 
-            <template v-else>
+            <template v-else-if="tab === 'journals'">
               <div class="space-y-3">
                 <div
                   v-for="entry in journals"
@@ -544,6 +765,301 @@ onMounted(() => refresh());
                   </table>
                 </div>
                 <div v-if="!journals.length" class="py-8 text-center text-slate-500">لا توجد قيود بعد</div>
+              </div>
+            </template>
+
+            <!-- حركة بين الحسابات -->
+            <template v-else-if="tab === 'transfer'">
+              <div class="mx-auto max-w-3xl space-y-6">
+                <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل بين الحسابات</h2>
+                  <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitTransfer">
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من حساب</label>
+                      <select
+                        v-model="transferForm.from_user_id"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                      >
+                        <option value="" disabled>اختر الحساب المرسل</option>
+                        <option v-for="acc in transferAccounts" :key="acc.id" :value="acc.id">
+                          {{ acc.name }}
+                        </option>
+                      </select>
+                      <p v-if="transferForm.from_user_id" class="mt-1 text-xs text-slate-500">
+                        الرصيد: {{ accountBalanceLabel(transferForm.from_user_id, transferForm.currency) }} {{ transferForm.currency === '$' ? 'USD' : 'IQD' }}
+                      </p>
+                    </div>
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى حساب</label>
+                      <select
+                        v-model="transferForm.to_user_id"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                      >
+                        <option value="" disabled>اختر الحساب المستقبل</option>
+                        <option v-for="acc in transferAccounts" :key="acc.id" :value="acc.id">
+                          {{ acc.name }}
+                        </option>
+                      </select>
+                      <p v-if="transferForm.to_user_id" class="mt-1 text-xs text-slate-500">
+                        الرصيد: {{ accountBalanceLabel(transferForm.to_user_id, transferForm.currency) }} {{ transferForm.currency === '$' ? 'USD' : 'IQD' }}
+                      </p>
+                    </div>
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">المبلغ</label>
+                      <input
+                        v-model="transferForm.amount"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">العملة</label>
+                      <select
+                        v-model="transferForm.currency"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                      >
+                        <option value="$">USD</option>
+                        <option value="IQD">IQD</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">التاريخ</label>
+                      <input
+                        v-model="transferForm.entry_date"
+                        type="date"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                      />
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظات</label>
+                      <input
+                        v-model="transferForm.notes"
+                        type="text"
+                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        placeholder="سبب التحويل (اختياري)"
+                      />
+                    </div>
+                    <div class="md:col-span-2">
+                      <button
+                        type="submit"
+                        class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                        :disabled="transferSubmitting"
+                      >
+                        {{ transferSubmitting ? "جاري التنفيذ..." : "تنفيذ التحويل" }}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div class="border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">أرصدة الحسابات الحالية</span>
+                  </div>
+                  <div v-if="transferLoading" class="py-6 text-center text-slate-500">جاري التحميل...</div>
+                  <table v-else class="w-full text-center text-sm">
+                    <thead class="bg-slate-50 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                      <tr>
+                        <th class="px-3 py-2">الحساب</th>
+                        <th class="px-3 py-2">USD</th>
+                        <th class="px-3 py-2">IQD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="acc in transferAccounts" :key="acc.id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
+                        <td class="px-3 py-2 text-right font-semibold">{{ acc.name }}</td>
+                        <td class="px-3 py-2 font-mono">{{ formatMoney(acc.balance) }}</td>
+                        <td class="px-3 py-2 font-mono">{{ acc.balance_dinar?.toLocaleString() }}</td>
+                      </tr>
+                      <tr v-if="!transferAccounts.length">
+                        <td colspan="3" class="px-3 py-8 text-slate-500">لا توجد حسابات</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+
+            <!-- أرباح التجار -->
+            <template v-else-if="tab === 'profits'">
+              <div class="mx-auto max-w-4xl space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-emerald-50 p-4 dark:border-slate-700 dark:bg-emerald-950/30">
+                  <div>
+                    <div class="text-sm text-slate-600 dark:text-slate-300">رصيد حساب أرباح التجار الحالي</div>
+                    <div class="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                      {{ formatMoney(profitsBalance) }} {{ profitsCurrency === '$' ? 'USD' : 'IQD' }}
+                    </div>
+                  </div>
+                  <select
+                    v-model="profitsCurrency"
+                    class="rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  >
+                    <option value="$">USD</option>
+                    <option value="IQD">IQD</option>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <h2 class="mb-3 text-base font-bold text-slate-900 dark:text-white">ترحيل أرباح تاجر</h2>
+
+                    <div class="mb-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من تاريخ</label>
+                        <input v-model="postForm.period_from" type="date" class="w-full rounded-lg border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى تاريخ</label>
+                        <input v-model="postForm.period_to" type="date" class="w-full rounded-lg border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                      </div>
+                    </div>
+
+                    <div class="mb-3 max-h-40 overflow-y-auto rounded-lg border border-slate-100 dark:border-slate-800">
+                      <table class="w-full text-center text-xs">
+                        <thead class="sticky top-0 bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <tr>
+                            <th class="px-2 py-1">التاجر</th>
+                            <th class="px-2 py-1">الربح المحسوب</th>
+                            <th class="px-2 py-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="row in traderRows" :key="row.client_id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
+                            <td class="px-2 py-1 text-right">{{ row.trader }}</td>
+                            <td class="px-2 py-1 font-mono" :class="row.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'">{{ formatMoney(row.profit) }}</td>
+                            <td class="px-2 py-1">
+                              <button type="button" class="rounded bg-indigo-600 px-2 py-0.5 text-white" @click="pickTraderRow(row)">استخدام</button>
+                            </td>
+                          </tr>
+                          <tr v-if="!traderRows.length && !traderRowsLoading">
+                            <td colspan="3" class="px-2 py-3 text-slate-500">لا توجد أرباح محسوبة لهذه الفترة</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <form class="space-y-3" @submit.prevent="submitPostProfit">
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">التاجر المختار (client_id)</label>
+                        <input
+                          v-model="postForm.client_id"
+                          type="number"
+                          class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                          placeholder="اختر تاجراً من الجدول أعلاه"
+                        />
+                      </div>
+                      <div class="grid grid-cols-2 gap-2">
+                        <div>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">المبلغ</label>
+                          <input v-model="postForm.amount" type="number" min="0.01" step="0.01" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                        </div>
+                        <div>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">العملة</label>
+                          <select v-model="postForm.currency" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+                            <option value="$">USD</option>
+                            <option value="IQD">IQD</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظات</label>
+                        <input v-model="postForm.notes" type="text" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" placeholder="اختياري" />
+                      </div>
+                      <button
+                        type="submit"
+                        class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                        :disabled="postSubmitting"
+                      >
+                        {{ postSubmitting ? "جاري الترحيل..." : "ترحيل الأرباح" }}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <h2 class="mb-3 text-base font-bold text-slate-900 dark:text-white">سحب من حساب الأرباح</h2>
+                    <form class="space-y-3" @submit.prevent="submitWithdrawProfit">
+                      <div class="grid grid-cols-2 gap-2">
+                        <div>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">المبلغ</label>
+                          <input v-model="withdrawForm.amount" type="number" min="0.01" step="0.01" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                        </div>
+                        <div>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">العملة</label>
+                          <select v-model="withdrawForm.currency" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+                            <option value="$">USD</option>
+                            <option value="IQD">IQD</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">التاريخ</label>
+                        <input v-model="withdrawForm.entry_date" type="date" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظات</label>
+                        <input v-model="withdrawForm.notes" type="text" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" placeholder="اختياري" />
+                      </div>
+                      <button
+                        type="submit"
+                        class="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                        :disabled="withdrawSubmitting"
+                      >
+                        {{ withdrawSubmitting ? "جاري السحب..." : "سحب من الأرباح" }}
+                      </button>
+                    </form>
+
+                    <p class="mt-3 text-xs text-slate-500">
+                      السحب يخفض رصيد حساب الأرباح ويخفض صندوق النقد بنفس العملة (قيد: مدين حساب الأرباح / دائن الصندوق).
+                    </p>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div class="border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">آخر حركات حساب الأرباح</span>
+                  </div>
+                  <div v-if="profitsLoading" class="py-6 text-center text-slate-500">جاري التحميل...</div>
+                  <table v-else class="w-full text-center text-sm">
+                    <thead class="bg-slate-50 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                      <tr>
+                        <th class="px-3 py-2">التاريخ</th>
+                        <th class="px-3 py-2">النوع</th>
+                        <th class="px-3 py-2">التاجر</th>
+                        <th class="px-3 py-2">الفترة</th>
+                        <th class="px-3 py-2">المبلغ</th>
+                        <th class="px-3 py-2">ملاحظات</th>
+                        <th class="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="entry in profitsEntries" :key="entry.id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
+                        <td class="px-3 py-2 text-xs">{{ entry.created_at }}</td>
+                        <td class="px-3 py-2">
+                          <span
+                            class="rounded px-2 py-0.5 text-xs font-semibold"
+                            :class="entry.type === 'post' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'"
+                          >
+                            {{ entry.type === 'post' ? 'ترحيل' : 'سحب' }}
+                          </span>
+                        </td>
+                        <td class="px-3 py-2">{{ entry.trader || '—' }}</td>
+                        <td class="px-3 py-2 text-xs">{{ entry.period_from ? `${entry.period_from} → ${entry.period_to}` : '—' }}</td>
+                        <td class="px-3 py-2 font-mono font-bold">{{ formatMoney(entry.amount) }} {{ entry.currency === '$' ? 'USD' : 'IQD' }}</td>
+                        <td class="px-3 py-2 text-right text-xs text-slate-500">{{ entry.memo }}</td>
+                        <td class="px-3 py-2">
+                          <button type="button" class="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40" @click="deleteProfitEntry(entry)">
+                            حذف
+                          </button>
+                        </td>
+                      </tr>
+                      <tr v-if="!profitsEntries.length">
+                        <td colspan="7" class="px-3 py-8 text-slate-500">لا توجد حركات بعد</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </template>
           </div>

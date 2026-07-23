@@ -372,6 +372,26 @@ function getDownloadUrl(name) {
   return `/public/uploads/${name}`;
 }
 
+// اسم الحساب المحاسبي الحقيقي (صندوق دولار/دينار أو حساب القاصة) الذي أثرت به الحركة،
+// قادم من القيد المحاسبي (journal) المرتبط بالحركة أو بالحركة الأم لها.
+function getMoneyAccountLabel(tran) {
+  return tran?.money_account?.name_ar || tran?.money_account?.name || null;
+}
+
+function getMoneyAccountBadgeClass(tran) {
+  const code = tran?.money_account?.code ?? '';
+  if (code === '1100' || code === '1110') {
+    return 'money-account-badge money-account-badge--cash';
+  }
+  if (code === '1120' || code === '1130') {
+    return 'money-account-badge money-account-badge--treasury';
+  }
+  if (tran?.money_account) {
+    return 'money-account-badge money-account-badge--other';
+  }
+  return 'money-account-badge money-account-badge--none';
+}
+
 // حساب الرصيد التراكمي
 function calculateBalance(transaction, index) {
   let balance = 0;
@@ -948,6 +968,7 @@ function printTagDetails() {
                 >
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
                     <th className="px-2 py-2">رقم الوصل</th>
+                    <th className="px-2 py-2">الحساب المحاسبي</th>
                     <th className="px-2 py-2">التاريخ</th>
                     <th className="px-2 py-2">الوصف</th>
                     <th v-if="hasWalletTags" className="px-2 py-2">التاغ / التفاصيل</th>
@@ -972,9 +993,12 @@ function printTagDetails() {
                     {{ tran.id }}
                     <span v-if="tran.type == 'inUserAmanah' || tran.type == 'outUserAmanah'" class="text-xs text-blue-600 dark:text-blue-300 font-bold">(أمانة)</span>
                   </td>
-                  <!-- <td className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.morphed?.name }}</td> -->
+                  <td className="border dark:border-gray-800 text-center px-2 py-1">
+                    <span :class="getMoneyAccountBadgeClass(tran)">
+                      {{ getMoneyAccountLabel(tran) ?? '—' }}
+                    </span>
+                  </td>
 
-                  
                   <td className="border dark:border-gray-800 text-center px-2 py-1">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
                   <th className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.description }}</th>
                   <td v-if="hasWalletTags" className="border dark:border-gray-800 text-center px-2 py-1 text-sm">
@@ -1175,6 +1199,58 @@ function printTagDetails() {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.money-account-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.money-account-badge--cash {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.money-account-badge--treasury {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.money-account-badge--other {
+  background-color: rgba(99, 102, 241, 0.18);
+  color: #4338ca;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.money-account-badge--none {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.dark .money-account-badge--cash {
+  color: #34d399;
+}
+
+.dark .money-account-badge--treasury {
+  color: #fbbf24;
+}
+
+.dark .money-account-badge--other {
+  color: #a5b4fc;
+}
+
+.dark .money-account-badge--none {
+  color: #94a3b8;
 }
 
 .action-group {

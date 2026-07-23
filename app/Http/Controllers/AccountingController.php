@@ -124,6 +124,9 @@ class AccountingController extends Controller
         $clientTypeId = $this->accounting->userClient();
         $walletUsers = User::query()
             ->where('owner_id', $owner_id)
+            // نفس علم الإخفاء المستخدم في صفحة العملاء (عرض بالمحاسبة / إخفاء من المحاسبة)،
+            // بحيث لا يظهر أي حساب/عميل تم إخفاؤه هناك في قائمة "إسناد إلى قاسة".
+            ->where('show_in_dashboard', true)
             ->where(function ($query) use ($clientTypeId) {
                 $query->where(function ($base) {
                     $base->where('email', '!=', 'mainBox@account.com')
@@ -178,6 +181,29 @@ class AccountingController extends Controller
             'message' => 'تم تحديث تفعيل إدارة التاغات',
             'has_wallet_tags' => (bool) $user->has_wallet_tags,
         ], 200);
+    }
+
+    /**
+     * Attach a computed `money_account` (id/code/name/name_ar/type) to each transaction,
+     * derived from the double-entry journal already posted for it (or its parent leg).
+     * Never invents fields — purely a read-time projection over existing ledger data,
+     * so the UI can show which real account (cash box / قاصة / client AR) the movement hit.
+     */
+    private function attachMoneyAccounts($transactions)
+    {
+        $ledger = app(LedgerService::class);
+        foreach ($transactions as $transaction) {
+            $account = $ledger->resolveMoneyAccount($transaction);
+            $transaction->setAttribute('money_account', $account ? [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name,
+                'name_ar' => $account->name_ar,
+                'type' => $account->type,
+            ] : null);
+        }
+
+        return $transactions;
     }
 
     public function getIndexAccounting(Request $request)
@@ -238,7 +264,8 @@ class AccountingController extends Controller
         $allTransactions = $transactions->paginate(100);
      }
      // التأكد من تحميل المرفقات (TransactionsImages) في كل الحالات بما فيها عند الفلترة بالتاريخ
-     $allTransactions->getCollection()->load('TransactionsImages');
+     $allTransactions->getCollection()->load(['TransactionsImages', 'journalEntry.lines.account', 'parent.journalEntry.lines.account']);
+     $this->attachMoneyAccounts($allTransactions->getCollection());
      $sumAllTransactions = $allTransactions->where('currency','$')->sum('amount');
      $sumDebitTransactions = $allTransactions->where('currency','$')->whereIn('type', ['debt','outUserBox'])->sum('amount');
      $sumInTransactions = $allTransactions->where('currency','$')->whereIn('type', ['in', 'inUserBox'])->sum('amount');
@@ -563,7 +590,7 @@ class AccountingController extends Controller
         $contract_total_debit_Dinar = 0;
 
         if($from && $to ){
-            $transactions = Transactions::where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
+            $transactions = Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])->where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
             $cars = Car::with('CarImages')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
@@ -575,7 +602,7 @@ class AccountingController extends Controller
             $exit_car_total=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->where('is_exit','!=',0)->count();
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }else{
-            $transactions = Transactions::where('wallet_id', $client?->wallet?->id);
+            $transactions = Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])->where('wallet_id', $client?->wallet?->id);
             $cars =  Car::with('CarImages')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
@@ -616,7 +643,7 @@ class AccountingController extends Controller
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
                     'cars_need_paid'=>$cars_need_paid,
-                    'transactions'=>$transactions->get(),
+                    'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                     'date'=> Carbon::now()->format('Y-m-d')
                 ];
             }else{
@@ -636,7 +663,7 @@ class AccountingController extends Controller
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
                     'cars_need_paid'=>$cars_need_paid,
-                    'transactions'=>$transactions->get(),
+                    'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                     'date'=> Carbon::now()->format('Y-m-d')
                 ];
             }
@@ -670,7 +697,7 @@ class AccountingController extends Controller
                 'cars_paid'=> $cars->where('id',$car_id)->first()->paid,
                 'cars_discount'=>$cars->where('id',$car_id)->first()->discount,
                 'cars_need_paid'=>$cars->where('id',$car_id)->first()->total_s - $cars->where('id',$car_id)->first()->paid,
-                'transactions'=>$transactions->get(),
+                'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                 'date'=> Carbon::now()->format('Y-m-d'),
                 'print'=> 6
             ];
@@ -695,7 +722,7 @@ class AccountingController extends Controller
             'cars_discount'=>$cars_discount,
             'cars_need_paid'=>$cars_need_paid,
             'payments_sum_dollar'=>$payments_sum_dollar,
-            'transactions'=>$transactions->get(),
+            'transactions'=>$this->attachMoneyAccounts($transactions->get()),
             'date'=> Carbon::now()->format('Y-m-d')
         ];
 

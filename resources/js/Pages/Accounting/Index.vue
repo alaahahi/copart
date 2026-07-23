@@ -371,6 +371,26 @@ function getRowClasses(tran) {
   return base;
 }
 
+// اسم الحساب المحاسبي الحقيقي (صندوق دولار/دينار أو حساب القاصة) الذي أثرت به الحركة،
+// قادم من القيد المحاسبي (journal) المرتبط بالحركة أو بالحركة الأم لها — وليس تخمينًا في الواجهة.
+function getMoneyAccountLabel(tran) {
+  return tran?.money_account?.name_ar || tran?.money_account?.name || null;
+}
+
+function getMoneyAccountBadgeClass(tran) {
+  const code = tran?.money_account?.code ?? '';
+  if (code === '1100' || code === '1110') {
+    return 'money-account-badge money-account-badge--cash';
+  }
+  if (code === '1120' || code === '1130') {
+    return 'money-account-badge money-account-badge--treasury';
+  }
+  if (tran?.money_account) {
+    return 'money-account-badge money-account-badge--other';
+  }
+  return 'money-account-badge money-account-badge--none';
+}
+
 function getAccountLink(tran) {
   if (!tran) {
     return null;
@@ -496,11 +516,7 @@ function getOrangeColorClass(index) {
       :wallet-users="walletUsers"
       @saved="onAssignToWalletSaved"
       @close="showModalAssignToWallet = false; tranForAssignWallet = null"
-    >
-      <template #header>
-        <h2 class="text-center text-lg font-semibold">إسناد السحب إلى قاسة</h2>
-      </template>
-    </ModalAssignTransactionToWallet>
+    />
 
     <ModalDel
             :show="showModalDel ? true : false"
@@ -754,9 +770,9 @@ function getOrangeColorClass(index) {
               <table class="w-full text-right text-gray-100 dark:text-gray-100 text-center bg-slate-900 rounded-lg overflow-hidden">
                 <thead class="uppercase bg-slate-800 text-gray-100 text-center">
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
-                    <th className="px-2 py-2" style="width: 200px;">حساب
+                    <th className="px-2 py-2" style="width: 180px;">الجهة
                     </th>
-                    <!-- <th className="px-2 py-2">الحساب</th> -->
+                    <th className="px-2 py-2" style="width: 160px;">الحساب المحاسبي</th>
                     <th className="px-2 py-2" style="width: 180px;">التاريخ</th>
                     <th className="px-2 py-2">الوصف</th>
                     <th className="px-2 py-2">ايداع</th>
@@ -787,6 +803,12 @@ function getOrangeColorClass(index) {
                       </Link>
                       <span v-else>
                         {{ tran.morphed?.name ?? '—' }}
+                      </span>
+                    </td>
+
+                    <td class="border border-transparent text-center px-2 py-1 whitespace-nowrap">
+                      <span :class="getMoneyAccountBadgeClass(tran)">
+                        {{ getMoneyAccountLabel(tran) ?? '—' }}
                       </span>
                     </td>
 
@@ -1035,5 +1057,41 @@ function getOrangeColorClass(index) {
   transform: translateY(-1px);
   box-shadow: 0 18px 32px -18px rgba(59, 130, 246, 0.7);
   filter: brightness(1.08);
+}
+
+.money-account-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.money-account-badge--cash {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.money-account-badge--treasury {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.money-account-badge--other {
+  background-color: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.money-account-badge--none {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.25);
 }
 </style>

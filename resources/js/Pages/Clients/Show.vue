@@ -4,7 +4,6 @@ import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
 import { ref, onMounted, watch } from "vue";
 import { TailwindPagination } from "laravel-vue-pagination";
-import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
@@ -27,6 +26,17 @@ const asNumber = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
+
+// اسم الحساب المحاسبي الحقيقي (صندوق دولار/دينار أو حساب القاصة) الذي ذهب إليه المبلغ،
+// قادم من القيد المحاسبي (journal) المرتبط بالحركة أو بحركة الصندوق الأم لها.
+const getMoneyAccountLabel = (tran) => tran?.money_account?.name_ar || tran?.money_account?.name || null;
+const getMoneyAccountBadgeClass = (tran) => {
+  const code = tran?.money_account?.code ?? '';
+  if (code === '1100' || code === '1110') return 'money-account-badge money-account-badge--cash';
+  if (code === '1120' || code === '1130') return 'money-account-badge money-account-badge--treasury';
+  if (tran?.money_account) return 'money-account-badge money-account-badge--other';
+  return 'money-account-badge money-account-badge--none';
+};
 let sums= ref(0);
 let laravelData = ref({});
 let isLoading = ref(0);
@@ -469,611 +479,460 @@ function checkClientBalance(v){
       @close="showModal = false"
     >
     </modal>
-    <div v-if="$page.props.success" >
+    <div v-if="$page.props.success" class="mx-auto max-w-8xl px-4 pt-4 sm:px-6 lg:px-8">
       <div
         id="alert-2"
-        class="p-4 mb-4 bg-red-100 rounded-lg dark:bg-red-200 text-center"
+        class="rounded-xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-800 dark:bg-red-950/40"
         role="alert"
       >
-        <div class="ml-3 text-sm font-medium text-red-700 dark:text-red-800">
+        <div class="text-sm font-medium text-red-700 dark:text-red-300">
           {{ $page.props.success }}
         </div>
       </div>
     </div>
-    <div class="py-4" v-if="$page.props.auth.user.type_id==1||$page.props.auth.user.type_id==6">
-      <h2 class="text-center pb-2 dark:text-gray-400">
-        {{ $t("sales_bill") }}
-      </h2>
-      <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 p-6 dark:bg-gray-900">
-        <div class="overflow-hidden shadow-sm sm:rounded-lg">
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-1">
-            <div class="pr-4">
-              <InputLabel
-                class="mb-1"
-                for="invoice_number"
-                :value="$t('Account')"
-              />
-              <select
-                @change="getResultsSelect()"
-                v-model="client_Select"
-                id="default"
-                class="pr-8 border border-gray-300 text-gray-900 mb-6 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5 dark:border-gray-400 dark:placeholder-gray-400 dark:text-gray-600 dark:focus:ring-red-500 dark:focus:border-red-500"
-              >
-                <option value="undefined" disabled>
-                  {{ $t("selectCustomer") }}
-                </option>
-                <template v-for="(user, index) in clients" :key="index">
-                <option
-                  v-if="user.wallet.balance > 0 || user.id ==client_Select"
-                  :value="user.id">
-                  {{ user.name }}
-                </option>
-              </template>
-              </select>
+
+    <div
+      class="py-6"
+      v-if="$page.props.auth.user.type_id == 1 || $page.props.auth.user.type_id == 6"
+    >
+      <div class="mx-auto max-w-8xl sm:px-4 lg:px-6">
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <!-- Filters toolbar -->
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="flex flex-wrap items-end gap-3">
+              <div class="min-w-[180px] flex-1">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {{ $t("Account") }}
+                </label>
+                <select
+                  id="default"
+                  v-model="client_Select"
+                  class="w-full rounded-lg border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  @change="getResultsSelect()"
+                >
+                  <option value="undefined" disabled>
+                    {{ $t("selectCustomer") }}
+                  </option>
+                  <template v-for="(user, index) in clients" :key="index">
+                    <option
+                      v-if="user.wallet.balance > 0 || user.id == client_Select"
+                      :value="user.id"
+                    >
+                      {{ user.name }}
+                    </option>
+                  </template>
+                </select>
+              </div>
+
+              <div class="min-w-[200px]">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  فلترة السيارات المكتملة
+                </label>
+                <label
+                  for="bordered-checkbox-1"
+                  class="flex min-h-[42px] cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 dark:border-slate-600 dark:bg-slate-950"
+                >
+                  <input
+                    id="bordered-checkbox-1"
+                    type="checkbox"
+                    name="bordered-checkbox"
+                    :value="showComplatedCars"
+                    :checked="!showComplatedCars"
+                    class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800"
+                    @change="showComplatedCars == true ? (showComplatedCars = false) : (showComplatedCars = true)"
+                  />
+                  <span class="text-sm text-slate-700 dark:text-slate-200">
+                    {{ showComplatedCars == false ? "تم الفلتر" : "تم عرض جميع السيارة" }}
+                  </span>
+                </label>
+              </div>
+
+              <div class="min-w-[150px]">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {{ $t("from_date") }}
+                </label>
+                <TextInput id="from" v-model="from" type="date" class="mt-0 block w-full" />
+              </div>
+
+              <div class="min-w-[150px]">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {{ $t("to_date") }}
+                </label>
+                <TextInput id="to" v-model="to" type="date" class="mt-0 block w-full" />
+              </div>
+
+              <div class="flex flex-wrap gap-2 print:hidden">
+                <button
+                  type="button"
+                  class="min-h-[42px] rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                  @click.prevent="getResults()"
+                >
+                  فلترة
+                </button>
+                <a
+                  :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&showComplatedCars=${showComplatedCars ? 0 : 1}`"
+                  target="_blank"
+                  class="inline-flex min-h-[42px] items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+                >
+                  طباعة
+                </a>
+                <a
+                  :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&printExcel=1&showComplatedCars=${showComplatedCars ? 0 : 1}`"
+                  target="_blank"
+                  class="inline-flex min-h-[42px] items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Excel
+                </a>
+              </div>
             </div>
-            <div>
-              <div className="mb-4  mr-5">
-                <InputLabel for="totalAmount" value="فلترة السيارات المكتملة" />
-                <div class="flex items-center ps-4  rounded-lg border border-gray-300 text-gray-900 mt-1">
-                    <input id="bordered-checkbox-1" type="checkbox" @change="showComplatedCars== true? showComplatedCars=false: showComplatedCars=true" :value="showComplatedCars" :checked="!showComplatedCars" name="bordered-checkbox" class="w-4 h-4 mx-2 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
-                    <label for="bordered-checkbox-1" class="w-full pt-3 py-2 mx-4 text-sm  font-medium text-gray-900 dark:text-gray-300"> 
-                      {{showComplatedCars== false?' تم الفلتر':'تم عرض جميع السيارة'}}
-                    </label>
+          </div>
+
+          <!-- KPI summary chips -->
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+              <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60">
+                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">مجموع السيارات</div>
+                <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
+                  {{ laravelData.car_total ?? 0 }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60">
+                <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ $t("Total_in_dollars") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
+                  {{ laravelData?.cars_sum ?? 0 }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800/60 dark:bg-emerald-950/30">
+                <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">مجموع المدفوع بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-emerald-800 dark:text-emerald-300">
+                  {{ asNumber(laravelData?.cars_sum) - (asNumber(laravelData?.client?.wallet?.balance) + asNumber(laravelData?.cars_discount)) }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/60 dark:bg-amber-950/30">
+                <div class="text-xs font-semibold text-amber-700 dark:text-amber-400">مجموع الخصومات بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-amber-800 dark:text-amber-300">
+                  {{ laravelData?.cars_discount ?? 0 }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800/60 dark:bg-indigo-950/30">
+                <div class="text-xs font-semibold text-indigo-700 dark:text-indigo-400">الرصيد بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-indigo-800 dark:text-indigo-300">
+                  {{ laravelData?.transactions ? (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) : 0 }}
+                </div>
+              </div>
+              <div
+                v-if="(asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) != 0"
+                class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-800/60 dark:bg-rose-950/30"
+              >
+                <div class="text-xs font-semibold text-rose-700 dark:text-rose-400">الرصيد غير موزع بالدولار</div>
+                <div class="mt-1 font-mono text-lg font-bold text-rose-800 dark:text-rose-300">
+                  {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) }}
                 </div>
               </div>
             </div>
-            <div class="px-4">
-              <div className="mb-4 mx-5">
-                <InputLabel for="from" :value="$t('from_date')" />
-                <TextInput
-                  id="from"
-                  type="date"
-                  class="mt-1 block w-full"
-                  v-model="from"
-                />
-              </div>
-            </div>
-            <div class="px-4">
-              <div className="mb-4 mx-5">
-                <InputLabel for="to" :value="$t('to_date')" />
-                <TextInput
-                  id="to"
-                  type="date"
-                  class="mt-1 block w-full"
-                  v-model="to"
-                />
-              </div>
-            </div>
-            <div className="mb-4  mr-5 print:hidden">
-              <InputLabel for="pay" value="فلترة" />
+
+            <div class="mt-4 flex flex-wrap gap-2 print:hidden">
               <button
-                @click.prevent="getResults()"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-gray-500 rounded"
-                style="width: 100%"
-              >
-                <span>فلترة</span>
-              </button>
-            </div>
-            <div className="mb-4  mr-5 print:hidden">
-              <InputLabel for="pay" value="طباعة" />
-              <a
-                :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&showComplatedCars=${ showComplatedCars ? 0:1}`"
-                target="_blank"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-orange-500 rounded block text-center"
-                style="width: 100%"
-              >
-                <span>طباعة</span>
-              </a>
-            </div>
-            <div className="mb-4  mr-5 print:hidden">
-              <InputLabel for="pay" value="طباعة" />
-              <a
-                :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1&printExcel=1&showComplatedCars=${ showComplatedCars ? 0:1}`"
-                target="_blank"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-green-500 rounded block text-center"
-                style="width: 100%"
-              >
-                <span>Excel</span>
-              </a>
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel for="car_total" value="مجموع السيارات" />
-              <TextInput
-                id="car_total"
-                type="text"
-                class="mt-1 block w-full"
-                :value="laravelData.car_total"
-                disabled
-              />
-            </div>
- 
- 
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_sum" :value="$t('Total_in_dollars')" />
-              <TextInput
-                id="cars_sum"
-                type="text"
-                class="mt-1 block w-full"
-                :value="laravelData?.cars_sum"
-                disabled
-              />
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_paid" value="مجموع المدفوع بالدولار" />
-              <TextInput
-                id="cars_paid"
-                type="number"
-                class="mt-1 block w-full"
-                :value="asNumber(laravelData?.cars_sum) - (asNumber(laravelData?.client?.wallet?.balance) + asNumber(laravelData?.cars_discount))"
-                disabled
-              />
-            </div>
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_discount" value="مجموع الخصومات بالدولار" />
-              <TextInput
-                id="cars_discount"
-                type="text"
-                class="mt-1 block w-full"
-                :value="laravelData?.cars_discount"
-                disabled
-              />
-            </div>
-           
-            <div className="mb-4  mr-5">
-              <InputLabel for="cars_need_paid" value="الرصيد بالدولار" />
-              <input
-                id="cars_need_paid"
-                type="number"
-                class="border-gray-300 focus:border-indigo-300 dark:bg-gray-800 dark:text-gray-200 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm mt-1 block w-full"
-                :value="laravelData?.transactions ? ((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum)) : 0"
-                readonly
-              />
-            </div>
-            <div className="mb-4  mr-5 print:hidden"  >
-              <InputLabel for="pay" value="اضافة دفعة" />
-              <button
-                @click.prevent="showAddPaymentTotal()"
                 v-if="!showPaymentForm"
+                type="button"
                 :disabled="isLoading"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-green-500 rounded"
-                style="width: 100%">
-                <span>اضافة دفعة</span>
-              </button>
-              <button
-                @click.prevent="hideAddPaymentTotal()"
-                v-if="showPaymentForm"
-                :disabled="isLoading"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-pink-500 rounded"
-                style="width: 100%">
-                <span>اخفاء دفعة</span>
-              </button>
-            </div>
-            <div className="mb-4  mr-5 print:hidden" >
-              <InputLabel for="pay" value="عرض الدفعات" />
-              <button
-                @click.prevent="showTransactionsDiv()"
-                v-if="!showTransactions"
-                :disabled="isLoading"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-purple-500 rounded"
-                style="width: 100%">
-                <span>عرض الدفعات</span>
-              </button>
-              <button
-                @click.prevent="hideTransactionsDiv()"
-                v-if="showTransactions"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-pink-500 rounded"
-                style="width: 100%">
-                <span>اخفاء الدفعات</span>
-              </button>
-            </div>
-            <div className="mb-4  mr-5"   v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid)) != 0">
-              <InputLabel for="cars_need_paid" value="الرصيد غير موزع بالدولار" />
-              <TextInput
-                id="cars_need_paid"
-                type="number"
-                class="mt-1 block w-full"
-               
-                :value="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid))"
-              />
-            </div>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-1" v-if="showPaymentForm">
-            <div className="mb-4  mr-5" v-if="false">
-              <InputLabel
-              
-                for="discount"
-                value="الخصم"
-              />
-              <TextInput
-                id="discount"
-                type="number"
-                @input="calculateAmountDiscount"
-
-                class="mt-1 block w-full"
-                v-model="discount"
-              />
-            </div>
-
-            <div className="mb-4  mr-5">
-              <InputLabel
-                for="percentage"
-                value=" المبلغ بالدولار المراد دفعه"
-              />
-              <TextInput
-                id="percentage"
-                type="number"
-                class="mt-1 block w-full"
-                v-model="amount"
-              />
-            </div>
-
-            <div className="mb-4  mr-5">
-              <InputLabel
-                for="discount"
-                value="ملاحظة"
-              />
-              <TextInput
-                id="discount"
-                type="text"
-                class="mt-1 block w-full"
-                v-model="note"
-              />
-            </div>
-            <div className="mb-4  mr-5 print:hidden">
-              <InputLabel for="pay" value="تأكيد الدفع" />
-              <button
-                @click.prevent="confirmAddPaymentTotal(amount, client_Select,discount,note)"
-                :disabled="isLoading"
-                class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-green-500 rounded"
-                style="width: 100%"
+                class="min-h-[42px] rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                @click.prevent="showAddPaymentTotal()"
               >
-                <span v-if="showErorrAmount">يرجى مراجعة المبلغ ل</span>
-                <span v-if="!isLoading">دفع</span>
-                <span v-else>جاري الطباعة...</span>
+                اضافة دفعة
+              </button>
+              <button
+                v-if="showPaymentForm"
+                type="button"
+                :disabled="isLoading"
+                class="min-h-[42px] rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:opacity-50"
+                @click.prevent="hideAddPaymentTotal()"
+              >
+                اخفاء دفعة
+              </button>
+              <button
+                v-if="!showTransactions"
+                type="button"
+                :disabled="isLoading"
+                class="min-h-[42px] rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+                @click.prevent="showTransactionsDiv()"
+              >
+                عرض الدفعات
+              </button>
+              <button
+                v-if="showTransactions"
+                type="button"
+                class="min-h-[42px] rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                @click.prevent="hideTransactionsDiv()"
+              >
+                اخفاء الدفعات
               </button>
             </div>
           </div>
-          <div class="relative overflow-x-auto shadow-md sm:rounded-lg mt-4 mb-5"  v-if="showTransactions">
-                  <table class="w-full text-sm text-right text-gray-500 dark:text-gray-200 dark:text-gray-400 text-center">
-                  <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
-                  <tr  class="bg-rose-500 text-gray-100 rounded-l-lg mb-2 sm:mb-0">
-                    <th className="px-1 py-2 text-base">#</th>
-                    <th className="px-1 py-2 text-base">{{$t('date')}}</th>
-                    <th className="px-1 py-2 text-base">{{$t('description')}}</th>
-                    <th className="px-1 py-2 text-base">{{$t('amount')}}</th>
-                    <th
-                      scope="col"
-                      class="px-1 py-2 text-base print:hidden"
-                      style="width: 250px"
-                    >
+
+          <!-- Add payment form -->
+          <div
+            v-if="showPaymentForm"
+            class="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-950/40"
+          >
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div v-if="false">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">الخصم</label>
+                <TextInput
+                  id="discount"
+                  v-model="discount"
+                  type="number"
+                  class="mt-0 block w-full"
+                  @input="calculateAmountDiscount"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  المبلغ بالدولار المراد دفعه
+                </label>
+                <TextInput id="percentage" v-model="amount" type="number" class="mt-0 block w-full" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظة</label>
+                <TextInput id="discount-note" v-model="note" type="text" class="mt-0 block w-full" />
+              </div>
+              <div class="flex items-end print:hidden">
+                <button
+                  type="button"
+                  :disabled="isLoading"
+                  class="min-h-[42px] w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  @click.prevent="confirmAddPaymentTotal(amount, client_Select, discount, note)"
+                >
+                  <span v-if="showErorrAmount">يرجى مراجعة المبلغ ل</span>
+                  <span v-if="!isLoading">دفع</span>
+                  <span v-else>جاري الطباعة...</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payments table -->
+          <div v-if="showTransactions" class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-center text-sm text-slate-700 dark:text-slate-200">
+                <thead>
+                  <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                    <th class="px-3 py-2.5 text-sm font-semibold">#</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("date") }}</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("description") }}</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold">الحساب</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold">{{ $t("amount") }}</th>
+                    <th class="px-3 py-2.5 text-sm font-semibold print:hidden" style="width: 250px">
                       {{ $t("execute") }}
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr class="text-center px-4 py-2 border dark:border-gray-800 dark:text-gray-200" >
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200"> 
-                    <a  target="_blank"
-                    style="display: inline-flex;"
-                    :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=4`"
-                    tabIndex="1"
-                    class="px-4 py-1  text-white  m-1 bg-blue-500 rounded"
-                    >
-                    جميع الدفعات
-                    <print />
-                    </a>
-            
-                     </td>
-                   
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tr class="bg-slate-50 dark:bg-slate-900/50">
+                    <td colspan="5"></td>
+                    <td class="px-3 py-2 print:hidden">
+                      <a
+                        target="_blank"
+                        :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=4`"
+                        tabindex="1"
+                        class="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700"
+                      >
+                        جميع الدفعات
+                        <print />
+                      </a>
+                    </td>
                   </tr>
-                  <template  v-for="user in laravelData.transactions" :key="user.id">
-                  <tr class="text-center" v-if="user.type=='out' && user.amount < 0 && user.is_pay == 1 ">
-                  <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200">{{ user.id }}</td>
-                  <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200">{{ user.created }}</td>
-                  <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200">{{ user.description }}</td>
-                  <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200">{{ user.amount*-1  }}</td>
-                  <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200">  
-                    <a v-if="user.type =='out' && user.amount<0" target="_blank"
-                    style="display: inline-flex;"
-                    :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
-                    tabIndex="1"
-                    class="px-4 py-1  text-white  m-1 bg-green-500 rounded"
+                  <template v-for="user in laravelData.transactions" :key="user.id">
+                    <tr
+                      v-if="user.type == 'out' && user.amount < 0 && user.is_pay == 1"
+                      class="hover:bg-slate-50 dark:hover:bg-slate-800/50"
                     >
-                    <print />
-                    </a>
-            
-                    <!-- <button
-                      tabIndex="1"
-                      class="px-1 py-1  text-white mx-1 bg-orange-500 rounded"
-                      @click="openModalDelClient(user)"
-                    >
-                      <trash />
-                    </button> -->
-                  </td>
-                  </tr>
+                      <td class="px-3 py-2">{{ user.id }}</td>
+                      <td class="px-3 py-2">{{ user.created }}</td>
+                      <td class="px-3 py-2">{{ user.description }}</td>
+                      <td class="px-3 py-2">
+                        <span :class="getMoneyAccountBadgeClass(user)">
+                          {{ getMoneyAccountLabel(user) ?? '—' }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2 font-mono">{{ user.amount * -1 }}</td>
+                      <td class="px-3 py-2 print:hidden">
+                        <a
+                          v-if="user.type == 'out' && user.amount < 0"
+                          target="_blank"
+                          :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
+                          tabindex="1"
+                          class="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
+                        >
+                          <print />
+                        </a>
+                      </td>
+                    </tr>
                   </template>
-                  <tr class="text-center px-4 py-2 border dark:border-gray-800 dark:text-gray-200" >
-                    <td>مجموع الخصومات</td>
-                    <td>{{ laravelData?.cars_discount }}</td>
-                    <td>مجموع الدفعات</td>
-                    <td className="px-4 py-2 border dark:border-gray-800 dark:text-gray-200"> 
-                      {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) }}
-                     </td>
-                     <td>النتاتج : {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_discount) }}</td>
-
+                  <tr class="bg-slate-100 font-semibold dark:bg-slate-800">
+                    <td class="px-3 py-2">مجموع الخصومات</td>
+                    <td class="px-3 py-2 font-mono">{{ laravelData?.cars_discount }}</td>
+                    <td class="px-3 py-2">مجموع الدفعات</td>
+                    <td class="px-3 py-2 font-mono">
+                      {{ asNumber(calculateTotalFilteredAmount().totalAmount) * -1 }}
+                    </td>
+                    <td class="px-3 py-2">
+                      النتاتج :
+                      {{ (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_discount) }}
+                    </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
           </div>
-          <div>
-            <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
-              <table
-                class="w-full text-sm text-right text-gray-500 dark:text-gray-200 dark:text-gray-400 text-center"
-              >
-                <thead
-                  class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center"
-                >
-                  <tr class="rounded-l-lg mb-2 sm:mb-0">
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("no") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("car_type") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("year") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("color") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("vin") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("car_number") }} copart
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base print:hidden">
-                      {{ $t("note") }}
-                    </th>
-                    <th scope="col" class="px-1 py-3 text-base">
-                      سعر السيارة امريكا         
-                    </th>
-                    <th scope="col" class="px-1 py-3 text-base">
-                    نقل امريكا	
-                    </th>
-                    <th scope="col" class="px-1 py-3 text-base">
-                      ريكفري
-                    </th>
-                    <th scope="col" class="px-1 py-3 text-base">
-                      مصاريف تصليح
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      نقل اربيل
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      مصاريف اربيل
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("total") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("paid") }}
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                    المتبقي
-                    </th>
-                    <th scope="col" class="px-1 py-2 text-base">
-                      {{ $t("date") }}
-                    </th>
 
-                    <th
-                      scope="col"
-                      class="px-1 py-2 text-base print:hidden"
-                      style="width:250px"
-                    >
+          <!-- Cars table -->
+          <div class="p-4">
+            <div class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full min-w-[1400px] text-center text-sm text-slate-700 dark:text-slate-200">
+                <thead>
+                  <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("no") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_type") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("year") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("color") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("vin") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_number") }} copart</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden">{{ $t("note") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">سعر السيارة امريكا</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">نقل امريكا</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">ريكفري</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">مصاريف تصليح</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">نقل اربيل</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">مصاريف اربيل</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("total") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("paid") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">المتبقي</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("date") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 250px">
                       {{ $t("execute") }}
                     </th>
-                    <th
-                      scope="col"
-                      class="px-1 py-2 text-base print:hidden"
-                      style="width:100px"
-                    >
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 100px">
                       تخزين
                     </th>
-                    <th
-                      scope="col"
-                      class="px-1 py-2 text-base print:hidden"
-                      style="width:120px"
-                    >
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 120px">
                       الرصيد
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                   <tr
                     v-for="(car, i) in laravelData.data"
-                    v-show="(car.results == 2 && showComplatedCars)|| car.results!=2"
+                    v-show="(car.results == 2 && showComplatedCars) || car.results != 2"
                     :key="car.id"
                     :class="{
-                      'bg-red-100 dark:bg-red-900': car.results == 0,
-                      'bg-red-100 dark:bg-red-900': car.results == 1,
-                      'bg-green-100 dark:bg-green-900': car.results == 2,
-                      'bg-yellow-100 dark:bg-yellow-900':(car.vin.startsWith(q)|| ( car.car_number ? car.car_number.toString().startsWith(q) : '')),
-                    }
-                    "
-                    class="border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      'bg-red-50 dark:bg-red-950/40': car.results == 0 || car.results == 1,
+                      'bg-emerald-50 dark:bg-emerald-950/30': car.results == 2,
+                      'bg-amber-50 dark:bg-amber-950/30':
+                        car.vin.startsWith(q) ||
+                        (car.car_number ? car.car_number.toString().startsWith(q) : ''),
+                    }"
+                    class="hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   >
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ i + 1 }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.car_type }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.year }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.car_color }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.vin }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.car_number }}
-                    </td>
-                    
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1 print:hidden"
-                    >
-                      {{ car.note }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.shipping_dolar_s }}
-                    </td>        
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.dinar_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.coc_dolar_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.checkout_s }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ erbilTransferSubtotal(car, true) }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.commission_s ?? 0 }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ fixed(car.total_s, 0) }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.paid }}
-                    </td>
-                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>
-
-                    <td
-                      className="border dark:border-gray-800 text-center px-2 py-1"
-                    >
-                      {{ car.date }}
-                    </td>
-                    <td
-                      className="border dark:border-gray-800 text-start px-2 py-1 print:hidden"
-                    >
-    
+                    <td class="px-2 py-1.5">{{ i + 1 }}</td>
+                    <td class="px-2 py-1.5">{{ car.car_type }}</td>
+                    <td class="px-2 py-1.5">{{ car.year }}</td>
+                    <td class="px-2 py-1.5">{{ car.car_color }}</td>
+                    <td class="px-2 py-1.5 font-mono text-xs">{{ car.vin }}</td>
+                    <td class="px-2 py-1.5">{{ car.car_number }}</td>
+                    <td class="px-2 py-1.5 print:hidden">{{ car.note }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.shipping_dolar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.dinar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.coc_dolar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.checkout_s }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ erbilTransferSubtotal(car, true) }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.commission_s ?? 0 }}</td>
+                    <td class="px-2 py-1.5 font-mono font-semibold">{{ fixed(car.total_s, 0) }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ car.paid }}</td>
+                    <td class="px-2 py-1.5 font-mono">{{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}</td>
+                    <td class="px-2 py-1.5 whitespace-nowrap">{{ car.date }}</td>
+                    <td class="px-2 py-1.5 text-start print:hidden">
                       <button
-                        tabIndex="1"
-                        
-                        class="px-1 py-1  text-white mx-1 bg-slate-500 rounded"
+                        tabindex="1"
+                        class="mx-0.5 rounded-lg bg-slate-500 px-1.5 py-1 text-white hover:bg-slate-600"
                         @click="openModalEditCars(car)"
                       >
                         <edit />
                       </button>
                       <button
-                        tabIndex="1"
-                        
-                        class="px-1 py-1  text-white mx-1 bg-orange-500 rounded"
+                        tabindex="1"
+                        class="mx-0.5 rounded-lg bg-orange-500 px-1.5 py-1 text-white hover:bg-orange-600"
                         @click="openModalDelCar(car)"
                       >
                         <trash />
                       </button>
                       <button
-                        v-if="car.total_s != (car.paid+ car.discount)"
-                        tabIndex="1"
-                        class="px-1 py-1  text-white mx-1 bg-green-500 rounded"
+                        v-if="car.total_s != car.paid + car.discount"
+                        tabindex="1"
+                        class="mx-0.5 rounded-lg bg-emerald-600 px-1.5 py-1 text-white hover:bg-emerald-700"
                         @click="openAddCarPayment(car)"
                       >
                         <pay />
                       </button>
-                    
-                 
- 
                     </td>
-                    <td  className="border dark:border-gray-800 text-start px-2 py-1 print:hidden">
+                    <td class="px-2 py-1.5 text-start print:hidden">
                       <a
-                                      v-for="(image, index) in car.car_images"
-                                      :key="index"
-                                      :href="getDownloadUrl(image.name)"
-                                      style="cursor: pointer;"
-                                      target="_blank"
-                                    >
-                                      <img :src="getImageUrl(image.name)" alt="" class="px-1" style="max-width: 80px;max-height: 50px;display: inline;" />
-                                    </a>
+                        v-for="(image, index) in car.car_images"
+                        :key="index"
+                        :href="getDownloadUrl(image.name)"
+                        style="cursor: pointer"
+                        target="_blank"
+                      >
+                        <img
+                          :src="getImageUrl(image.name)"
+                          alt=""
+                          class="inline px-1"
+                          style="max-width: 80px; max-height: 50px"
+                        />
+                      </a>
                     </td>
-
-                    <td
-                      className="border dark:border-gray-800 text-start px-2 py-1 print:hidden"
-                    >
+                    <td class="px-2 py-1.5 text-start print:hidden">
                       <button
-                        tabIndex="1"
-                        style="min-width: 100px;"
-                        class="px-1 py-1  text-white mx-1 bg-green-500 rounded"
-                        v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid)) != 0"
+                        tabindex="1"
+                        style="min-width: 100px"
+                        class="mx-0.5 rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                        v-if="(asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) != 0"
                         @click="openModalAddPayFromBalanceCar(car)"
                       >
                         دفع من الرصيد
                       </button>
                       <button
-                        tabIndex="1"
-                        style="min-width: 100px;"
-                        v-if="((asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum)) != 0 && asNumber(car.paid)"
-                        class="px-1 py-1 mt-1 text-white mx-1 bg-red-500 rounded"
+                        tabindex="1"
+                        style="min-width: 100px"
+                        v-if="
+                          (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) != 0 &&
+                          asNumber(car.paid)
+                        "
+                        class="mx-0.5 mt-1 rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700"
                         @click="openModalDelPayFromBalanceCar(car)"
                       >
-                       اعادة للرصيد
+                        اعادة للرصيد
                       </button>
-                      </td>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </div>
 
-          <div class="mt-3 text-center" style="direction: ltr">
-            <TailwindPagination
-              :data="laravelData"
-              @pagination-change-page="getResults"
-              :limit="2"
-            />
+            <div class="mt-4 text-center" style="direction: ltr">
+              <TailwindPagination
+                :data="laravelData"
+                :limit="2"
+                @pagination-change-page="getResults"
+              />
+            </div>
           </div>
         </div>
       </div>
     </div>
+
     <div
-      class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 dark:text-gray-400 hidden print:block"
+      class="mx-auto hidden max-w-7xl px-4 text-slate-600 dark:text-slate-400 sm:px-6 lg:px-8 print:block"
     >
       <div class="flex flex-row">
         <div class="basis-1/2">
@@ -1094,5 +953,57 @@ function checkClientBalance(v){
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.money-account-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.money-account-badge--cash {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.money-account-badge--treasury {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.money-account-badge--other {
+  background-color: rgba(99, 102, 241, 0.18);
+  color: #4338ca;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.money-account-badge--none {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.dark .money-account-badge--cash {
+  color: #34d399;
+}
+
+.dark .money-account-badge--treasury {
+  color: #fbbf24;
+}
+
+.dark .money-account-badge--other {
+  color: #a5b4fc;
+}
+
+.dark .money-account-badge--none {
+  color: #94a3b8;
 }
 </style>

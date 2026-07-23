@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\JournalEntry;
 use App\Models\LedgerAccount;
+use App\Models\Transactions;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class LedgerService
     public const CODE_REVENUE = '4100';
     public const CODE_EXPENSE = '5100';
     public const CODE_OPENING = '3900';
+    public const CODE_TRADER_PROFITS = '3200';
 
     /**
      * Ensure default chart of accounts exists for an owner.
@@ -35,6 +37,7 @@ class LedgerService
             ['code' => self::CODE_REVENUE, 'name' => 'Shipping Revenue', 'name_ar' => 'إيرادات الشحن', 'type' => 'income', 'currency' => null],
             ['code' => self::CODE_EXPENSE, 'name' => 'General Expenses', 'name_ar' => 'مصاريف عامة', 'type' => 'expense', 'currency' => null],
             ['code' => self::CODE_OPENING, 'name' => 'Opening Balances Equity', 'name_ar' => 'أرصدة افتتاحية', 'type' => 'equity', 'currency' => null],
+            ['code' => self::CODE_TRADER_PROFITS, 'name' => 'Trader Profits Reserve', 'name_ar' => 'حساب أرباح التجار', 'type' => 'equity', 'currency' => null],
         ];
 
         foreach ($defaults as $row) {
@@ -460,11 +463,206 @@ class LedgerService
         ]);
     }
 
+    /**
+     * Ledger account that actually backs a wallet-holding user (حساب/account users:
+     * mainBox/cash box, Dubai, Iran, border, howler, etc.), matching the same routing
+     * used by postWalletIncrease/postWalletDecrease so balances stay consistent.
+     * cash_box → Cash 1100/1110 | client & system wallets → party mirror account (1200-{userId})
+     */
+    public function walletLedgerAccount(int $ownerId, int $userId, string $currency): LedgerAccount
+    {
+        $kind = $this->walletPostingKind($ownerId, $userId);
+
+        return $kind === 'cash_box'
+            ? $this->cashAccount($ownerId, $currency)
+            : $this->clientReceivableAccount($ownerId, $userId);
+    }
+
+    public function profitsAccount(int $ownerId): LedgerAccount
+    {
+        return $this->systemAccount($ownerId, self::CODE_TRADER_PROFITS);
+    }
+
+    /**
+     * حركة بين الحسابات (Transfer between accounts): ONE balanced journal,
+     * Debit destination account / Credit source account. Pure transfer — never
+     * touches revenue/expense, so P&L stays unaffected by internal cash movement.
+     */
+    public function postAccountTransfer(
+        int $ownerId,
+        int $fromUserId,
+        int $toUserId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?string $entryDate = null
+    ): JournalEntry {
+        if ($fromUserId === $toUserId) {
+            throw new InvalidArgumentException('لا يمكن التحويل من وإلى نفس الحساب.');
+        }
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ التحويل يجب أن يكون أكبر من صفر.');
+        }
+
+        $fromAccount = $this->walletLedgerAccount($ownerId, $fromUserId, $currency);
+        $toAccount = $this->walletLedgerAccount($ownerId, $toUserId, $currency);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => $entryDate ?? now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'account_transfer',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $toAccount->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $fromAccount->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
+     * ترحيل أرباح التاجر (post trader profit to the Profits reserve):
+     * Dr Shipping Revenue (4100) / Cr Trader Profits Reserve (3200).
+     * This is an appropriation entry — it reclassifies revenue that has already
+     * been recognized against the trader's account into a segregated equity
+     * reserve, so the profit can later be tracked and withdrawn/distributed
+     * independently from ongoing client AR/revenue activity. It never touches
+     * the client's AR balance.
+     */
+    public function postTraderProfitAppropriation(
+        int $ownerId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?string $entryDate = null
+    ): JournalEntry {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ الترحيل يجب أن يكون أكبر من صفر.');
+        }
+
+        $revenue = $this->systemAccount($ownerId, self::CODE_REVENUE);
+        $profits = $this->profitsAccount($ownerId);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => $entryDate ?? now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'trader_profit_post',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $revenue->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $profits->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
+     * سحب من الأرباح (withdraw/distribute from the Profits reserve):
+     * Dr Trader Profits Reserve (3200) / Cr Cash (1100/1110).
+     * Standard profit-distribution pattern: cash leaves the box, the reserve
+     * shrinks by the same amount. Caller must verify both balances beforehand.
+     */
+    public function postProfitWithdraw(
+        int $ownerId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?string $entryDate = null
+    ): JournalEntry {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ السحب يجب أن يكون أكبر من صفر.');
+        }
+
+        $profits = $this->profitsAccount($ownerId);
+        $cash = $this->cashAccount($ownerId, $currency);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => $entryDate ?? now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'trader_profit_withdraw',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $profits->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $cash->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
     public function accountBalance(int $accountId, ?string $currency = null): float
     {
         $account = LedgerAccount::findOrFail($accountId);
 
         return $account->balance($currency);
+    }
+
+    /**
+     * Resolve the real "money" ledger account a wallet transaction hit — the
+     * physical cash/treasury box when one exists on the journal, otherwise the
+     * asset-side party account (client AR or system-box mirror account).
+     *
+     * Some wallet legs are created alongside a parent cash-box leg and never
+     * get their own journal_entry_id (e.g. a car-payment allocation on the
+     * client's wallet is linked via parent_id to the mainBox receipt that
+     * actually carries the journal). In that case we fall back to the
+     * parent's journal — never inventing data, only reading what
+     * LedgerService already posted at creation time.
+     */
+    public function resolveMoneyAccount(?Transactions $transaction): ?LedgerAccount
+    {
+        if (!$transaction) {
+            return null;
+        }
+
+        $source = $transaction;
+
+        if (!$source->journal_entry_id && $source->parent_id) {
+            $parent = $source->relationLoaded('parent')
+                ? $source->parent
+                : Transactions::with('journalEntry.lines.account')->find($source->parent_id);
+
+            if ($parent && $parent->journal_entry_id) {
+                $source = $parent;
+            }
+        }
+
+        if (!$source->journal_entry_id) {
+            return null;
+        }
+
+        $entry = $source->relationLoaded('journalEntry')
+            ? $source->journalEntry
+            : JournalEntry::with('lines.account')->find($source->journal_entry_id);
+
+        if (!$entry) {
+            return null;
+        }
+
+        $lines = $entry->lines instanceof \Illuminate\Support\Collection
+            ? $entry->lines
+            : collect($entry->lines);
+
+        $cashCodes = [self::CODE_CASH_USD, self::CODE_CASH_IQD, self::CODE_TREASURY_USD, self::CODE_TREASURY_IQD];
+
+        // Prefer the physical cash/treasury box: it's literally "where the money went".
+        $cashLine = $lines->first(fn ($line) => $line->account && in_array($line->account->code, $cashCodes, true));
+        if ($cashLine) {
+            return $cashLine->account;
+        }
+
+        // Otherwise fall back to the asset-side party account (AR / system mirror).
+        $assetLine = $lines->first(fn ($line) => $line->account && $line->account->type === 'asset');
+        if ($assetLine) {
+            return $assetLine->account;
+        }
+
+        return $lines->first()?->account;
     }
 
     /**

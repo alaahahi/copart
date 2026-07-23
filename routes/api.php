@@ -22,6 +22,8 @@ use App\Http\Controllers\CompanyTreasuryController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
+use App\Http\Controllers\AccountTransferController;
+use App\Http\Controllers\TraderProfitController;
 
 
 use App\Models\SystemConfig;
@@ -204,6 +206,14 @@ Route::get('ledgerAccount',[LedgerController::class, 'accountLedger'])->name('le
 Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('ledgerJournals');
 Route::post('ledgerAccountUpdate',[LedgerController::class, 'updateAccount'])->name('ledgerAccountUpdate');
 Route::post('ledgerAccountDeactivate',[LedgerController::class, 'deactivateAccount'])->name('ledgerAccountDeactivate');
+
+Route::get('accountTransfer/accounts',[AccountTransferController::class, 'accounts'])->name('accountTransfer.accounts');
+Route::post('accountTransfer',[AccountTransferController::class, 'store'])->name('accountTransfer.store');
+
+Route::get('traderProfits/summary',[TraderProfitController::class, 'summary'])->name('traderProfits.summary');
+Route::post('traderProfits/post',[TraderProfitController::class, 'post'])->name('traderProfits.post');
+Route::post('traderProfits/withdraw',[TraderProfitController::class, 'withdraw'])->name('traderProfits.withdraw');
+Route::post('traderProfits/delete',[TraderProfitController::class, 'destroy'])->name('traderProfits.delete');
 
 Route::get('analyticsDashboard',[AnalyticsController::class, 'dashboard'])->name('analyticsDashboard');
 Route::get('analyticsExportTraders',[AnalyticsController::class, 'exportTraders'])->name('analyticsExportTraders');

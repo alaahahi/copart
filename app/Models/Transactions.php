@@ -43,4 +43,21 @@ class Transactions extends Model
     {
         return $this->hasMany(TransactionsImages::class, 'transactions_id');
     }
+    /**
+     * The double-entry journal posted for this transaction (source of truth
+     * for which real ledger account the money hit).
+     */
+    public function journalEntry()
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
+    }
+    /**
+     * Parent leg (e.g. the main cash-box movement a client/قاسة allocation
+     * was split off from). Used to resolve the money account when this row
+     * itself carries no journal_entry_id.
+     */
+    public function parent()
+    {
+        return $this->belongsTo(Transactions::class, 'parent_id');
+    }
 }
