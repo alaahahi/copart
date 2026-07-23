@@ -27,6 +27,28 @@ class CarService
     }
 
     /**
+     * Car payment color flag used in tables:
+     * 0 = unpaid (default), 1 = partial (red), 2 = fully paid (green).
+     *
+     * remaining = total_s - paid - discount
+     * When remaining <= 0 and something was paid/discounted → green (2).
+     */
+    public function resolveResultsStatus(float $totalS, float $paid, float $discount): int
+    {
+        $remaining = $totalS - $paid - $discount;
+
+        if ($paid + $discount <= 0) {
+            return 0;
+        }
+
+        if ($remaining > 0) {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    /**
      * Soft-delete a car row and renumber the remaining (non-deleted) cars'
      * display sequence ("no"). The car row and its full history (payments,
      * transactions, expenses, images) are preserved — this NEVER

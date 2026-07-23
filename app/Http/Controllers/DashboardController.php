@@ -401,15 +401,14 @@ class DashboardController extends Controller
                 $this->accountingController->increaseWallet(($car->total-$total), $descClient,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
 
             }
-            if($car->paid){
-                if($total > $car->paid +$car->discount){
-                    $dataToUpdate['results'] = 1  ;
-                }elseif($total == $car->paid+$car->discount){
-                    $dataToUpdate['results'] = 2  ;
-                }else{
-                    $dataToUpdate['results'] = 0  ;
-                }
-            }
+            // Payment color uses sales remaining (total_s), not purchase total.
+            $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
+            $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
+            $dataToUpdate['results'] = $carService->resolveResultsStatus(
+                (float) ($dataToUpdate['total_s'] ?? $car->total_s ?? 0),
+                $paid,
+                $discount
+            );
 
             //$this->accountingController->increaseWallet(($total-$car->total), $descClient,$car->client_id,$car->id,'App\Models\User');
             $car->update($dataToUpdate);
@@ -464,16 +463,10 @@ class DashboardController extends Controller
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
 
-            if($car->paid){
-                if($total_s >($car->paid+$car->discount)){
-                    $dataToUpdate['results'] = 1  ;
-                }elseif($total_s==$car->paid+$car->discount){
-                    $dataToUpdate['results'] = 2  ;
-                }else{
-                    $dataToUpdate['results'] = 0  ;
-                }
-            }
-
+            // Never trust frontend results — recompute from remaining (total_s − paid − discount).
+            $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
+            $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
+            $dataToUpdate['results'] = $carService->resolveResultsStatus((float) $total_s, $paid, $discount);
 
             // Update the car model
             $car->update($dataToUpdate);
