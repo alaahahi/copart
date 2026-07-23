@@ -62,372 +62,524 @@ function removeMedia(removedImage){
 </script>
   <template>
   <Transition name="modal">
-    <div v-if="show" class="modal-mask">
-      <div class="modal-wrapper  max-h-[80vh]">
-        <div class="modal-container dark:bg-gray-900 overflow-auto  max-h-[80vh]">
-          <div class="modal-header">
-            <slot name="header">
-              <h2 class="text-center dark:text-gray-200">
-                {{ $t("edit_car") }}
-              </h2>
-            </slot>
-          </div>
-          <div class="modal-body">
-            <div
-              class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-1 lg:gap-2"
-            >
-              <div class="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="color_id">{{
-                  $t("car_owner")
-                }}</label>
-                <div class="relative">
-                  <select
-                    v-if="!showClient"
-                    v-model="formData.client_id"
-                    id="color_id"
-                    class="pr-8 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-                    disabled>
-                    <option selected disabled>
-                      {{ $t("selectCustomer") }}
-                    </option>
-                    <option
-                      v-for="(card, index) in client"
-                      :key="index"
-                      :value="card.id"
-                      >
-                      {{ card.name }}
-                    </option>
-                  </select>
-                
-                </div>
-         
+    <div v-if="show" class="car-modal-overlay" @click.self="$emit('close')">
+      <div class="car-modal-panel">
+        <!-- Header -->
+        <div class="car-modal-header">
+          <slot name="header">
+            <h2 class="car-modal-title">
+              <span class="car-modal-title-badge">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13m-18 0v5a1 1 0 001 1h1a1 1 0 001-1v-1h12v1a1 1 0 001 1h1a1 1 0 001-1v-5m-18 0h18" />
+                  <circle cx="7" cy="16" r="0.5" fill="currentColor" />
+                  <circle cx="17" cy="16" r="0.5" fill="currentColor" />
+                </svg>
+              </span>
+              {{ $t("edit_car") }}
+            </h2>
+          </slot>
+          <button type="button" class="car-modal-close" @click="$emit('close')" aria-label="close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="car-modal-body">
+          <!-- Section: التاجر -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-emerald-400"></span>
+              {{ $t("car_owner") }}
+            </h3>
+
+            <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div class="flex-1 min-w-0 car-select-wrap">
+                <label class="car-label" for="color_id">{{ $t("car_owner") }}</label>
+                <select
+                  v-if="!showClient"
+                  v-model="formData.client_id"
+                  id="color_id"
+                  class="car-input"
+                  disabled>
+                  <option selected disabled>
+                    {{ $t("selectCustomer") }}
+                  </option>
+                  <option
+                    v-for="(card, index) in client"
+                    :key="index"
+                    :value="card.id"
+                    >
+                    {{ card.name }}
+                  </option>
+                </select>
               </div>
-    
             </div>
-            <div
-              class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1 lg:gap-2"
-            >
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="pin">
-                  {{ $t("car_type") }}</label
-                >
+          </section>
+
+          <!-- Section: بيانات السيارة -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-sky-400"></span>
+              بيانات السيارة
+            </h3>
+            <div class="car-grid car-grid-5">
+              <div>
+                <label class="car-label" for="car_type">{{ $t("car_type") }}</label>
                 <input
                   id="car_type"
                   type="text"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.car_type"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="pin">
-                  {{ $t("year") }}</label
-                >
+              <div>
+                <label class="car-label" for="year">{{ $t("year") }}</label>
                 <input
                   id="year"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.year"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="pin">
-                  {{ $t("color") }}</label
-                >
+              <div>
+                <label class="car-label" for="car_color">{{ $t("color") }}</label>
                 <input
                   id="car_color"
                   type="text"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.car_color"
                 />
               </div>
-
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="pin">
-                  {{ $t("vin") }}</label
-                >
+              <div>
+                <label class="car-label" for="vin">{{ $t("vin") }}</label>
                 <input
                   id="vin"
                   type="text"
                   @change="check_vin(formData.vin)"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.vin"
                 />
-                <div class="text-red-700" v-if="showErrorVin">
-                  رقم الشاصي مستخدم
-                </div>
+                <p class="car-error" v-if="showErrorVin">رقم الشاصي مستخدم</p>
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="car_number">
-                  {{ $t("car_number") }} copart</label
-                >
+              <div>
+                <label class="car-label" for="car_number">{{ $t("car_number") }} COPART</label>
                 <input
                   id="car_number"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.car_number"
                 />
               </div>
-  
-      
-    
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="shipping_dolar_s">
-                  سعر السيارة امريكا	</label
-                >
+            </div>
+          </section>
+
+          <!-- Section: تكاليف أمريكا -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-amber-400"></span>
+              تكاليف أمريكا
+            </h3>
+            <div class="car-grid car-grid-4">
+              <div>
+                <label class="car-label" for="shipping_dolar">سعر السيارة امريكا</label>
                 <input
                   id="shipping_dolar"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.shipping_dolar_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="shipping_dolar">
-                  نقل امريكا	
-                  </label
-                >
+              <div>
+                <label class="car-label" for="dinar">نقل امريكا</label>
                 <input
                   id="dinar"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.dinar_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="coc_dolar_s">
-                 ريكفري</label
-                >
+              <div>
+                <label class="car-label" for="coc_dolar_s">ريكفري</label>
                 <input
                   id="coc_dolar_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.coc_dolar_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="checkout_s">
-                  مصاريف تصليح</label
-                >
+              <div>
+                <label class="car-label" for="checkout_s">مصاريف تصليح</label>
                 <input
                   id="checkout_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.checkout_s"
                 />
               </div>
-              <div class="col-span-2 md:col-span-3 lg:col-span-3 mx-1 mb-2">
-                <p class="dark:text-gray-200 font-semibold text-center border-b pb-2">نقل اربيل</p>
-              </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="expenses">
-                  شحن اربيل وتخليص </label
-                >
+            </div>
+          </section>
+
+          <!-- Section: نقل اربيل والجمرك -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-rose-400"></span>
+              نقل اربيل والجمرك
+            </h3>
+            <div class="car-grid car-grid-4">
+              <div>
+                <label class="car-label" for="expenses">شحن اربيل وتخليص</label>
                 <input
                   id="expenses"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.expenses_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="erbil_clearance_s">
-                  تخليص</label
-                >
+              <div>
+                <label class="car-label" for="erbil_clearance_s">تخليص</label>
                 <input
                   id="erbil_clearance_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.erbil_clearance_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="erbil_transfer_s">
-                  نقل</label
-                >
+              <div>
+                <label class="car-label" for="erbil_transfer_s">نقل</label>
                 <input
                   id="erbil_transfer_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.erbil_transfer_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="erbil_border_repair_s">
-                  تصليح حدود</label
-                >
+              <div>
+                <label class="car-label" for="erbil_border_repair_s">تصليح حدود</label>
                 <input
                   id="erbil_border_repair_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.erbil_border_repair_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="erbil_customs_s">
-                  جمرك</label
-                >
+              <div>
+                <label class="car-label" for="erbil_customs_s">جمرك</label>
                 <input
                   id="erbil_customs_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.erbil_customs_s"
                 />
               </div>
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="commission_s">
-                  مصاريف اربيل
-                </label>
+              <div>
+                <label class="car-label" for="commission_s">مصاريف اربيل</label>
                 <input
                   id="commission_s"
                   type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.commission_s"
                 />
               </div>
-              <!-- <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="paid">
-                  {{ $t("paid") }}</label
-                >
-                <input
-                  id="paid"
-                  type="number"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                  v-model="formData.paid"
-                />
-              </div> -->
-              <div className="mb-4 mx-1">
-                <label class="dark:text-gray-200" for="date">
-                  {{ $t("date") }}</label
-                >
+              <div>
+                <label class="car-label" for="date">{{ $t("date") }}</label>
                 <input
                   id="date"
                   type="date"
-                  class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
+                  class="car-input"
                   v-model="formData.date"
                 />
               </div>
             </div>
+          </section>
 
-            <div className="mb-4 mx-1">
-              <label class="dark:text-gray-200" for="note">
-                {{$t("note")}}
-              </label>
-              <input
-                id="note"
-                type="text"
-                class="mt-1 block w-full border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-900"
-                v-model="formData.note"
-              />
-            </div>
-          </div>
+          <!-- Section: الصور -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-indigo-400"></span>
+              الصور
+            </h3>
+            <Uploader
+                :server="'/api/carsAnnualUpload?img_type=contract&carId='+formData.id"
+                :is-invalid="errors?.media ? true : false"
+                @change="changeMedia"
+                @initMedia="media"
+                location="/public/uploadsResized"
+                :media="formData.car_images"
+                @add="addMedia"
+                @remove="removeMedia"
+            />
+            <p v-if="errors?.media" class="car-error">{{ errors?.media[0] }}</p>
+          </section>
 
-          <div class="modal-footer my-2">
-    
+          <!-- Section: ملاحظات -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-slate-400"></span>
+              {{ $t("note") }}
+            </h3>
+            <input
+              id="note"
+              type="text"
+              class="car-input"
+              v-model="formData.note"
+            />
+          </section>
+        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-1 lg:gap-2">
-              <div class="mb-4">
-                <label class="form-label">الصور</label>
-                <div class="mt-3">
-                    <Uploader 
-                        :server="'/api/carsAnnualUpload?img_type=contract&carId='+formData.id"
-                        :is-invalid="errors?.media ? true : false"
-                        @change="changeMedia"
-                        @initMedia="media"
-                        location="/public/uploadsResized"
-                        :media="formData.car_images"
-                        @add="addMedia"
-                        @remove="removeMedia"
-                    />
-                </div>
-                <p v-if="errors?.media" class="text-danger">{{ errors?.media[0] }}</p>
-            </div>
-             </div>
-
-             <div class="flex flex-row">
-              <div class="basis-1/2 px-4">
-                <button
-                  class="modal-default-button py-3 bg-gray-500 rounded"
-                  @click="$emit('close')"
-                >
-                  {{ $t("cancel") }}
-                </button>
-              </div>
-              <div class="basis-1/2 px-4">
-                <button
-                  class="modal-default-button py-3 bg-rose-500 rounded col-6"
-                  @click="
-                    formData.date = formData.date
-                      ? formData.date
-                      : getTodayDate();
-                    $emit('a', formData);
-                    formData = '';
-                  "
-                  :disabled="(!formData.client_id)&&(!formData.client_name)">
-                  {{ $t("yes") }}
-                </button>
-              </div>
-            </div>
-
-          </div>
+        <!-- Footer -->
+        <div class="car-modal-footer">
+          <button
+            class="car-btn car-btn-muted"
+            @click="$emit('close')"
+          >
+            {{ $t("cancel") }}
+          </button>
+          <button
+            class="car-btn car-btn-primary"
+            @click="
+              formData.date = formData.date
+                ? formData.date
+                : getTodayDate();
+              $emit('a', formData);
+              formData = '';
+            "
+            :disabled="(!formData.client_id)&&(!formData.client_name)">
+            {{ $t("yes") }}
+          </button>
         </div>
       </div>
     </div>
   </Transition>
 </template>
   
-  <style>
-.modal-mask {
+  <style scoped>
+/* ===== Car Add/Edit Modal — professional dark ERP theme ===== */
+.car-modal-overlay {
   position: fixed;
+  inset: 0;
   z-index: 9998;
-  top: 0;
-  left: 0;
+  background-color: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.car-modal-panel {
   width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: table;
-  transition: opacity 0.3s ease;
+  max-width: 90vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #101828 0%, #0b1220 100%);
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  border-radius: 1rem;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: car-modal-pop 0.2s ease-out;
 }
 
-.modal-wrapper {
-  display: table-cell;
-  vertical-align: middle;
+@media (max-width: 640px) {
+  .car-modal-panel {
+    max-width: 96vw;
+    max-height: 95vh;
+  }
 }
 
-.modal-container {
-  width: 50%;
-  min-width: 350px;
-  margin: 0px auto;
-  padding: 20px 30px;
-  padding-bottom: 60px;
-  background-color: #fff;
-  border-radius: 2px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.33);
-  transition: all 0.3s ease;
-  border-radius: 10px;
+.car-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
+  background: linear-gradient(90deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+  flex-shrink: 0;
 }
 
-.modal-header h3 {
-  margin-top: 0;
-  color: #42b983;
+.car-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
 }
 
-.modal-body {
-  margin: 20px 0;
+.car-modal-title-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.65rem;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  flex-shrink: 0;
 }
 
-.modal-default-button {
-  float: right;
+.car-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.6rem;
+  color: #94a3b8;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.car-modal-close:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #f1f5f9;
+}
+
+.car-modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.car-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+.car-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.car-modal-body::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.5);
+  border-radius: 999px;
+}
+
+.car-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  flex-shrink: 0;
+}
+
+.car-section {
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  border-radius: 0.85rem;
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.car-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0 0 0.85rem 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+.car-section-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.car-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+@media (min-width: 640px) {
+  .car-grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .car-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .car-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .car-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+.car-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+}
+
+.car-input,
+.car-input.ui.fluid.dropdown {
+  display: block;
   width: 100%;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  background-color: rgba(15, 23, 42, 0.7);
+  color: #f1f5f9;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.car-input::placeholder {
+  color: #64748b;
+}
+.car-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  background-color: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+.car-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.car-error {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #f87171;
+}
+
+.car-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: #fff;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.car-btn:hover { filter: brightness(1.08); }
+.car-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.car-btn-primary { background-color: #e11d48; }
+.car-btn-success { background-color: #10b981; }
+.car-btn-muted { background-color: #475569; }
+
+@keyframes car-modal-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /*
    * The following styles are auto-applied to elements with
    * transition="modal" when their visibility is toggled
    * by Vue.js.
-   *
-   * You can easily play with the modal transition by editing
-   * these styles.
    */
 
 .modal-enter-from {
@@ -438,9 +590,14 @@ function removeMedia(removedImage){
   opacity: 0;
 }
 
-.modal-enter-from .modal-container,
-.modal-leave-to .modal-container {
-  -webkit-transform: scale(1.1);
-  transform: scale(1.1);
+.modal-enter-from .car-modal-panel,
+.modal-leave-to .car-modal-panel {
+  -webkit-transform: scale(0.96);
+  transform: scale(0.96);
+}
+
+/* Uploader component width fix inside dark panel */
+:deep(.vue-media-upload) {
+  width: 100%;
 }
 </style>

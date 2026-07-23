@@ -21,6 +21,8 @@ use App\Models\Transactions;
 use App\Models\Expenses;
 use App\Helpers\UploadHelper;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\DeleteCarRequest;
+use App\Services\CarService;
 
 
 use Carbon\Carbon;
@@ -682,25 +684,32 @@ class DashboardController extends Controller
         return Response::json('ok', 200);    
     }
 
-    public function DelCar(Request $request){
+    public function DelCar(DeleteCarRequest $request, CarService $carService){
         $owner_id=Auth::user()->owner_id;
 
-        $car=Car::with('client')->find($request->id);
-        $desc=' مرتج حذف سيارة'.$car->total;
-        $wallet = Wallet::where('user_id',$car->client_id)->first();
-        $this->accountingController->increaseWallet($car->total, $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
-        if($car->results == 0 && $car->total_s!=0){
-            $trans = $this->accountingController->decreaseWallet($car->total_s , $desc,$car->client->id,$car->id,'App\Models\Car');
-        }
-        if($car->results == 1){
-            $trans = $this->accountingController->decreaseWallet($car->total_s-$car->paid , $desc,$car->client->id,$car->id,'App\Models\Car');
+        // Tenant-scoped lookup: never trust the frontend to only send IDs
+        // belonging to this owner. 404s instead of leaking other tenants' cars.
+        $car=Car::with('client')->where('owner_id', $owner_id)->findOrFail($request->id);
+
+        $this->authorize('delete', $car);
+
+        DB::transaction(function () use ($car, $owner_id, $carService) {
+            $desc=' مرتج حذف سيارة'.$car->total;
+            $wallet = Wallet::where('user_id',$car->client_id)->first();
+            $this->accountingController->increaseWallet($car->total, $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
+            if($car->results == 0 && $car->total_s!=0){
+                $trans = $this->accountingController->decreaseWallet($car->total_s , $desc,$car->client->id,$car->id,'App\Models\Car');
             }
-        $car->delete();
-        DB::statement('SET @row_number = 0');
-        DB::table('car')
-            ->whereNull('deleted_at') // Apply soft delete constraint
-            ->orderBy('id') // Assuming 'id' is the primary key column
-            ->update(['no' => DB::raw('(@row_number:=@row_number + 1)')]);
+            if($car->results == 1){
+                $trans = $this->accountingController->decreaseWallet($car->total_s-$car->paid , $desc,$car->client->id,$car->id,'App\Models\Car');
+                }
+
+            // Soft delete only (Car uses SoftDeletes) — row & history are kept,
+            // never force-deleted. Renumbering + audit log happen here too,
+            // inside the same transaction as the wallet reversal above.
+            $carService->softDelete($car, $owner_id);
+        });
+
         return Response::json('delete is done', 200);
     }
     

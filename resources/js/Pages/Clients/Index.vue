@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
+import ModalAddClient from "@/Components/ModalAddClient.vue";
 import ModalEditClient from "@/Components/ModalEditClient.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
@@ -113,8 +114,9 @@ function setTab(tab) {
   activeTab.value = tab;
 }
 
-function openModalAddClient(form = {}) {
-  formData.value = form;
+function openModalAddClient() {
+  // show_in_dashboard defaults to false for every newly added merchant.
+  formData.value = { name: '', phone: '', show_in_dashboard: false };
   showModalAddClient.value = true;
 }
 function openModalEditClient(form = {}) {
@@ -195,14 +197,12 @@ function unpaidCars(user) {
 <template>
   <Head title="التجار" />
   <AuthenticatedLayout>
-    <ModalEditClient
+    <ModalAddClient
       :show="showModalAddClient"
       :formData="formData"
       @a="confirmAddClient($event)"
       @close="showModalAddClient = false"
-    >
-      <template #header />
-    </ModalEditClient>
+    />
 
     <ModalDelClient
       :show="showModalDelClient ? true : false"
@@ -224,9 +224,7 @@ function unpaidCars(user) {
       :formData="formData"
       @a="confirmEditClient($event)"
       @close="showModalEditClient = false"
-    >
-      <template #header />
-    </ModalEditClient>
+    />
 
     <div class="clients-page py-6 sm:py-8">
       <div class="mx-auto sm:px-6 lg:px-8">

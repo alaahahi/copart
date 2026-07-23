@@ -15,6 +15,8 @@ use App\Models\UserType;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\StoreClientRequest;
+use App\Http\Requests\UpdateClientRequest;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use App\Models\Massage;
@@ -215,39 +217,49 @@ class UserController extends Controller
      
         return Inertia::render('Users/Index', ['url'=>$this->url]);
     }
-    public function clientsStore(Request $request)
+    public function clientsStore(StoreClientRequest $request)
     {
-        $year_date=Carbon::now()->format('Y');
+        $validated = $request->validated();
+        $year_date = Carbon::now()->format('Y');
 
-        $owner_id=Auth::user()->owner_id;
-        Validator::make($request->all(), [
-            'name' => 'required|string|max:255|unique:users',
-           ])->validate();
-           //$userChief_id =User::where('type_id',  $this->userChief)->first()->id ?? 0 ;
-                $user = User::create([
-                    'name' => $request->name,
-                    'type_id' => $this->userClient,
-                    'phone' => $request->phone,
-                    'year_date'=>$year_date,
-                    'owner_id'=>$owner_id,
-                    'created' =>Carbon::now()->format('Y-m-d'),
-                ]);
-  
-                Wallet::create(['user_id' => $user->id]);
-     
-                return Response::json($user, 200);
-    }
-    public function clientsEdit(Request $request)
-    {
-        Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-           ])->validate();
-                $user = User::find($request->id)->update([
-                    'name' => $request->name,
-                    'phone' => $request->phone,
-                ]);
-       
+        $owner_id = Auth::user()->owner_id;
+        //$userChief_id =User::where('type_id',  $this->userChief)->first()->id ?? 0 ;
+        $user = User::create([
+            'name' => $validated['name'],
+            'type_id' => $this->userClient,
+            'phone' => $validated['phone'] ?? null,
+            'year_date' => $year_date,
+            'owner_id' => $owner_id,
+            'created' => Carbon::now()->format('Y-m-d'),
+            // عرض بالمحاسبة (قاسة) — hidden from accounting by default until explicitly enabled.
+            'show_in_dashboard' => $request->boolean('show_in_dashboard'),
+        ]);
+
+        Wallet::create(['user_id' => $user->id]);
+
         return Response::json($user, 200);
+    }
+    public function clientsEdit(UpdateClientRequest $request)
+    {
+        $validated = $request->validated();
+        $owner_id = Auth::user()->owner_id;
+
+        $client = User::where('id', $validated['id'])
+            ->where('owner_id', $owner_id)
+            ->first();
+
+        if (!$client) {
+            return Response::json(['message' => 'التاجر غير موجود'], 404);
+        }
+
+        $client->update([
+            'name' => $validated['name'],
+            'phone' => $validated['phone'] ?? null,
+            // عرض بالمحاسبة (قاسة) — editable from the edit modal.
+            'show_in_dashboard' => $request->boolean('show_in_dashboard'),
+        ]);
+
+        return Response::json($client, 200);
     }
 
     public function toggleShowInDashboard(Request $request)

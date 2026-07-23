@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Car extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
     protected $table = 'car';
     protected $fillable = [
         'id',
@@ -89,6 +90,7 @@ class Car extends Model
         'contract_id' => 'integer',
         'year_date' => 'integer',
         'car_have_expenses' => 'integer',
+        'deleted_at' => 'datetime',
     ];
     public function user()
     {
