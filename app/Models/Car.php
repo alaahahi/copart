@@ -199,33 +199,83 @@ class Car extends Model
     }
 
     /**
-     * Per-client remaining on cars: SUM(total_s - paid - discount), soft-deleted excluded.
-     * Used by dashboard / clients list so trader debt matches the client statement page.
+     * Dashboard / traders list debt:
+     * SUM(cars.total_s - discount) − SUM(account payments on the client wallet).
+     *
+     * Uses wallet payment movements (type=out, is_pay=1), NOT car.paid — so an
+     * undistributed payment still reduces the shown debt correctly.
      */
     public static function clientRemainingBalanceSqlSubquery(): \Closure
     {
         return function ($subquery) {
-            $subquery->from('car')
-                ->selectRaw(
-                    'ROUND(COALESCE(SUM(COALESCE(car.total_s, 0) - COALESCE(car.paid, 0) - COALESCE(car.discount, 0)), 0), 2)'
-                )
-                ->whereColumn('car.client_id', 'users.id')
-                ->whereNull('car.deleted_at');
+            $subquery->selectRaw(
+                "ROUND(
+                    COALESCE(
+                        (
+                            SELECT SUM(COALESCE(c.total_s, 0) - COALESCE(c.discount, 0))
+                            FROM car AS c
+                            WHERE c.client_id = users.id
+                              AND c.deleted_at IS NULL
+                        ),
+                        0
+                    )
+                    -
+                    COALESCE(
+                        (
+                            SELECT -SUM(t.amount)
+                            FROM transactions AS t
+                            INNER JOIN wallets AS w ON w.id = t.wallet_id
+                            WHERE w.user_id = users.id
+                              AND t.type = 'out'
+                              AND t.is_pay = 1
+                              AND t.amount < 0
+                              AND t.currency = '$'
+                              AND t.deleted_at IS NULL
+                        ),
+                        0
+                    )
+                , 2)"
+            );
         };
     }
 
-    /** Sum of cars remaining across all clients of a tenant. */
+    /** Sum of (cars − account payments) across all clients of a tenant. */
     public static function sumClientsRemaining(int $ownerId, int $clientTypeId): float
     {
-        $row = \Illuminate\Support\Facades\DB::table('car')
-            ->join('users', 'users.id', '=', 'car.client_id')
-            ->where('users.owner_id', $ownerId)
-            ->where('users.type_id', $clientTypeId)
-            ->whereNull('car.deleted_at')
-            ->selectRaw(
-                'ROUND(COALESCE(SUM(COALESCE(car.total_s, 0) - COALESCE(car.paid, 0) - COALESCE(car.discount, 0)), 0), 2) AS total'
-            )
-            ->first();
+        $row = \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT ROUND(COALESCE(SUM(client_bal), 0), 2) AS total
+             FROM (
+                SELECT
+                    COALESCE(
+                        (
+                            SELECT SUM(COALESCE(c.total_s, 0) - COALESCE(c.discount, 0))
+                            FROM car AS c
+                            WHERE c.client_id = u.id
+                              AND c.deleted_at IS NULL
+                        ),
+                        0
+                    )
+                    -
+                    COALESCE(
+                        (
+                            SELECT -SUM(t.amount)
+                            FROM transactions AS t
+                            INNER JOIN wallets AS w ON w.id = t.wallet_id
+                            WHERE w.user_id = u.id
+                              AND t.type = 'out'
+                              AND t.is_pay = 1
+                              AND t.amount < 0
+                              AND t.currency = '$'
+                              AND t.deleted_at IS NULL
+                        ),
+                        0
+                    ) AS client_bal
+                FROM users AS u
+                WHERE u.owner_id = ?
+                  AND u.type_id = ?
+             ) AS x",
+            [$ownerId, $clientTypeId]
+        );
 
         return (float) ($row->total ?? 0);
     }
