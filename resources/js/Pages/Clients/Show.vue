@@ -90,19 +90,26 @@ function calculateTotalFilteredAmount() {
   return { totalAmount: 0 };
 }
 
-/** Remaining = cars total − paid on cars − discounts (backend cars_need_paid when available). */
+/**
+ * Client balance (الرصيد) — same as traders list / Car::clientRemainingBalanceSqlSubquery:
+ * Σ(total_s − discount) − Σ(wallet payment txs). Independent of car.paid / توزيع.
+ */
 const clientBalanceUsd = computed(() => {
-  if (laravelData.value?.cars_need_paid !== undefined && laravelData.value?.cars_need_paid !== null) {
-    return asNumber(laravelData.value.cars_need_paid);
+  if (laravelData.value?.client_balance !== undefined && laravelData.value?.client_balance !== null) {
+    return asNumber(laravelData.value.client_balance);
   }
+  const paymentsReceived =
+    laravelData.value?.payments_sum_dollar !== undefined && laravelData.value?.payments_sum_dollar !== null
+      ? Math.abs(asNumber(laravelData.value.payments_sum_dollar))
+      : asNumber(calculateTotalFilteredAmount().totalAmount) * -1;
   return (
     asNumber(laravelData.value?.cars_sum) -
-    asNumber(laravelData.value?.cars_paid) -
-    asNumber(laravelData.value?.cars_discount)
+    asNumber(laravelData.value?.cars_discount) -
+    paymentsReceived
   );
 });
 
-/** Payments received on wallet but not allocated to cars yet. */
+/** Payments received on wallet but not allocated to cars yet (changes with توزيع). */
 const undistributedBalanceUsd = computed(() => {
   const paymentsReceived = asNumber(calculateTotalFilteredAmount().totalAmount) * -1;
   return paymentsReceived - asNumber(laravelData.value?.cars_paid);
@@ -443,8 +450,8 @@ function getDownloadUrl(name) {
 
 function checkClientBalance(_v) {
   // Disabled: auto-correction compared a wrong frontend formula to ledger AR
-  // and rewrote wallets on every visit (balance-correct toast loop). This page
-  // shows cars remaining (cars_need_paid), not wallet/ledger AR.
+  // and rewrote wallets on every visit (balance-correct toast loop).
+  // KPI «الرصيد» uses client_balance (cars − wallet payments), not ledger AR.
   return;
 }
 
@@ -654,7 +661,7 @@ function checkClientBalance(_v) {
             </div>
           </div>
 
-          <!-- KPI summary chips — use car.paid / need_paid, not wallet-derived math -->
+          <!-- KPI summary chips — الرصيد = cars − wallet payments (stable across توزيع) -->
           <div class="border-b border-slate-200 p-4 dark:border-slate-700">
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
@@ -682,7 +689,7 @@ function checkClientBalance(_v) {
                 </div>
               </div>
               <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">المتبقي على السيارات ($)</div>
+                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">الرصيد</div>
                 <div
                   class="mt-1 font-mono text-lg font-bold"
                   :class="clientBalanceUsd > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-indigo-700 dark:text-indigo-200'"

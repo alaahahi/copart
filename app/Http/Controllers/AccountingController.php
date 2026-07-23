@@ -644,6 +644,11 @@ class AccountingController extends Controller
             ->sum('amount');
         $activeTotalAmount = (clone $transactions)->whereNull('deleted_at')->sum('amount');
 
+        // Same as Car::clientRemainingBalanceSqlSubquery — uses wallet payments, NOT car.paid,
+        // so توزيع السيارة (AddPayFromBalanceCar) does not change this figure.
+        // payments_sum_dollar is a negative sum of out/is_pay amounts.
+        $client_balance = round((float) $cars_sum - (float) $cars_discount + (float) $payments_sum_dollar, 2);
+
         //$data = $transactions->paginate(10);
  
 
@@ -665,6 +670,8 @@ class AccountingController extends Controller
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
                     'cars_need_paid'=>$cars_need_paid,
+                    'payments_sum_dollar'=>$payments_sum_dollar,
+                    'client_balance'=>$client_balance,
                     'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                     'date'=> Carbon::now()->format('Y-m-d')
                 ];
@@ -685,6 +692,8 @@ class AccountingController extends Controller
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
                     'cars_need_paid'=>$cars_need_paid,
+                    'payments_sum_dollar'=>$payments_sum_dollar,
+                    'client_balance'=>$client_balance,
                     'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                     'date'=> Carbon::now()->format('Y-m-d')
                 ];
@@ -744,6 +753,7 @@ class AccountingController extends Controller
             'cars_discount'=>$cars_discount,
             'cars_need_paid'=>$cars_need_paid,
             'payments_sum_dollar'=>$payments_sum_dollar,
+            'client_balance'=>$client_balance,
             'transactions'=>$this->attachMoneyAccounts($transactions->get()),
             'date'=> Carbon::now()->format('Y-m-d')
         ];
