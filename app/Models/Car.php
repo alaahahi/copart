@@ -197,4 +197,37 @@ class Car extends Model
         return self::erbilTransferSubtotal($data, $sales)
             + (int) ($data["commission{$suffix}"] ?? 0);
     }
-  }
+
+    /**
+     * Per-client remaining on cars: SUM(total_s - paid - discount), soft-deleted excluded.
+     * Used by dashboard / clients list so trader debt matches the client statement page.
+     */
+    public static function clientRemainingBalanceSqlSubquery(): \Closure
+    {
+        return function ($subquery) {
+            $subquery->from('car')
+                ->selectRaw(
+                    'ROUND(COALESCE(SUM(COALESCE(car.total_s, 0) - COALESCE(car.paid, 0) - COALESCE(car.discount, 0)), 0), 2)'
+                )
+                ->whereColumn('car.client_id', 'users.id')
+                ->whereNull('car.deleted_at');
+        };
+    }
+
+    /** Sum of cars remaining across all clients of a tenant. */
+    public static function sumClientsRemaining(int $ownerId, int $clientTypeId): float
+    {
+        $row = \Illuminate\Support\Facades\DB::table('car')
+            ->join('users', 'users.id', '=', 'car.client_id')
+            ->where('users.owner_id', $ownerId)
+            ->where('users.type_id', $clientTypeId)
+            ->whereNull('car.deleted_at')
+            ->selectRaw(
+                'ROUND(COALESCE(SUM(COALESCE(car.total_s, 0) - COALESCE(car.paid, 0) - COALESCE(car.discount, 0)), 0), 2) AS total'
+            )
+            ->first();
+
+        return (float) ($row->total ?? 0);
+    }
+
+}

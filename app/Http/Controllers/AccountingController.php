@@ -218,6 +218,17 @@ class AccountingController extends Controller
      $transactions_id = $_GET['transactions_id'] ?? 0;
      $owner_id = $owner_id ?? Auth::user()->owner_id;
      $user = User::with('wallet')->where('id',$user_id)->first();
+
+     // رصيد الحسابات في المحاسبة = من الحركات (الدفتر)، مش من كاش قديم في wallets.
+     if ($user && $user->wallet) {
+         try {
+             app(LedgerService::class)->syncWalletFromLedger((int) $owner_id, (int) $user->id);
+             $user->load('wallet');
+         } catch (\Throwable $e) {
+             // keep existing wallet cache if ledger accounts are missing
+         }
+     }
+
      if($from && $to ){
          $transactions = Transactions ::with('TransactionsImages')->with('morphed')->where('wallet_id', $user->wallet->id)->orderBy('id','desc')->whereBetween('created', [$from, $to]);
      }else{

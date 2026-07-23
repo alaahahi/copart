@@ -100,18 +100,25 @@ class DashboardController extends Controller
         ->whereIn('type', ['out', 'debt'])
         ->sum('amount');
 
-        $car = Car::all()->where('owner_id',$owner_id);
+        $car = Car::query()->where('owner_id', $owner_id)->get();
         $exitCar = 0;
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
-        $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->pluck('id');
-        $sumDebit = app(LedgerService::class)->sumClientsReceivableWithFallback(
-            (int) $owner_id,
-            (int) $this->userClient,
-            '$'
-        );
+        $sumDebit = Car::sumClientsRemaining((int) $owner_id, (int) $this->userClient);
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
         $sumProfit = $car->where('results',2)->sum('profit');
+
+        $ledger = app(LedgerService::class);
+        $mainBoxDollar = 0.0;
+        $mainBoxDinar = 0.0;
+        try {
+            $mainBoxDollar = $ledger->cashAccount((int) $owner_id, '$')->balance('$');
+            $mainBoxDinar = $ledger->cashAccount((int) $owner_id, 'IQD')->balance('IQD');
+        } catch (\Throwable $e) {
+            $mainBoxDollar = (float) ($this->mainBox->where('owner_id', $owner_id)->first()->wallet->balance ?? 0);
+            $mainBoxDinar = (float) ($this->mainBox->where('owner_id', $owner_id)->first()->wallet->balance_dinar ?? 0);
+        }
+
         $data = [
         'exitCar'=>$exitCar,
         'mainAccount'=>$sumTotal -$sumPaid ,
@@ -123,8 +130,8 @@ class DashboardController extends Controller
         'purchasesCost'=>$sumTotalS??0,
         'clientPaid'=>$sumPaid??0,
         'clientDebit'=>$sumDebit ?? 0,
-        'mainBoxDollar'=>$this->mainBox->where('owner_id',$owner_id)->first()->wallet->balance??0,
-        'mainBoxDinar'=>$this->mainBox->where('owner_id',$owner_id)->first()->wallet->balance_dinar??0,
+        'mainBoxDollar'=>$mainBoxDollar,
+        'mainBoxDinar'=>$mainBoxDinar,
         'mainBoxDollarNew'=>$transactionIn+$transactionOut
         ];
         return response()->json(['data'=>$data]); 

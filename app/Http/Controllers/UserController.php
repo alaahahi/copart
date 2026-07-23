@@ -88,21 +88,30 @@ class UserController extends Controller
             ->selectSub(function ($subquery) use ($userClient) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
-                    ->whereColumn('car.client_id', 'users.id'); // Add condition here
+                    ->whereColumn('car.client_id', 'users.id')
+                    ->whereNull('car.deleted_at');
             }, 'car_count')
             ->selectSub(function ($subquery) use ($userClient) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
                     ->whereColumn('car.client_id', 'users.id')
-                    ->where('car.results', 2); // Add condition here
+                    ->where('car.results', 2)
+                    ->whereNull('car.deleted_at');
             }, 'car_count_completed')
             ->selectSub(function ($subquery) use ($userClient) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
                     ->whereColumn('car.client_id', 'users.id')
-                    ->where('car.total_s', 0); // Add condition here
+                    ->where('car.total_s', 0)
+                    ->whereNull('car.deleted_at');
             }, 'car_total_un_pay')
-            ->selectSub(LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$'), 'balance')
+            // قاسة / عرض بالمحاسبة → رصيد الدفتر؛ باقي الشاشات (الرئيسية، قائمة التجار) → متبقي السيارات
+            ->selectSub(
+                $q === 'show_in_dashboard'
+                    ? LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$')
+                    : Car::clientRemainingBalanceSqlSubquery(),
+                'balance'
+            )
             ->where('users.owner_id', $owner_id)
             ->where('users.type_id', $userClient)
 
