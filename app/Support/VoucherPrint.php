@@ -18,6 +18,26 @@ class VoucherPrint
         return self::usesMklTemplate($config) ? 'receiptVoucherMkl' : $defaultView;
     }
 
+    /**
+     * حدد إن كانت الحركة المالية دفعة مرتبطة بسيارة محددة (دفعة على السيارة)
+     * أو دفعة عامة للزبون غير مرتبطة بسيارة (اضافة دفعة). يُستخدم لإظهار/إخفاء
+     * حقلي "رقم اللوت" و"المتبقي" في وصل القبض.
+     */
+    public static function isCarPayment(?Transactions $transaction): bool
+    {
+        if (!$transaction) {
+            return false;
+        }
+
+        if ($transaction->morphed_type === \App\Models\Car::class) {
+            return true;
+        }
+
+        $details = is_array($transaction->details) ? $transaction->details : [];
+
+        return !empty($details['car_id']);
+    }
+
     public static function dataFromTransaction(
         ?Transactions $transaction,
         ?User $client,
@@ -41,6 +61,8 @@ class VoucherPrint
             }
         }
 
+        $isCarPayment = self::isCarPayment($transaction);
+
         return [
             'voucherType' => $voucherType,
             'clientName' => $client->name ?? '',
@@ -48,10 +70,12 @@ class VoucherPrint
             'currency' => $currency,
             'created' => $transaction->created_at ?? now(),
             'description' => $transaction->description ?? '',
-            'vin' => $details['vin'] ?? ($details['VIN'] ?? ''),
-            'lot' => $details['lot'] ?? ($details['LOT'] ?? ''),
-            'paidUp' => $details['paid_up'] ?? ($details['paidUp'] ?? ''),
-            'rest' => $details['rest'] ?? ($details['remaining'] ?? ''),
+            // اللوت والمتبقي يُعرضان فقط لدفعة سيارة محددة، وليس لدفعة عامة للزبون (اضافة دفعة)
+            'isCarPayment' => $isCarPayment,
+            'vin' => $isCarPayment ? ($details['vin'] ?? ($details['VIN'] ?? '')) : '',
+            'lot' => $isCarPayment ? ($details['lot'] ?? ($details['LOT'] ?? '')) : '',
+            'paidUp' => $isCarPayment ? ($details['paid_up'] ?? ($details['paidUp'] ?? '')) : '',
+            'rest' => $isCarPayment ? ($details['rest'] ?? ($details['remaining'] ?? '')) : '',
             'transactions_id' => $transaction->id ?? null,
         ];
     }

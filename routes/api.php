@@ -24,6 +24,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\AccountTransferController;
 use App\Http\Controllers\TraderProfitController;
+use App\Http\Controllers\AuctionController;
 
 
 use App\Models\SystemConfig;
@@ -168,6 +169,9 @@ Route::post('assignTransactionToWallet',[AccountingController::class, 'assignTra
 Route::get('paymentTags',[AccountingController::class, 'getPaymentTags'])->name('getPaymentTags');
 Route::post('paymentTags',[AccountingController::class, 'storePaymentTag'])->name('storePaymentTag');
 Route::post('deletePaymentTag',[AccountingController::class, 'deletePaymentTag'])->name('deletePaymentTag');
+Route::get('auctions',[AuctionController::class, 'index'])->name('auctions.index');
+Route::post('auctions',[AuctionController::class, 'store'])->name('auctions.store');
+Route::post('deleteAuction',[AuctionController::class, 'destroy'])->name('auctions.destroy');
 Route::post('createDriverLoan',[AccountingController::class, 'createDriverLoan'])->name('createDriverLoan');
 Route::post('createDriverLoanRepayment',[AccountingController::class, 'createDriverLoanRepayment'])->name('createDriverLoanRepayment');
 Route::post('toggleShowInDashboard',[UserController::class, 'toggleShowInDashboard'])->name('toggleShowInDashboard');

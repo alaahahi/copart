@@ -58,7 +58,8 @@ class UserController extends Controller
         $q = request()->query('q');
         $clients = User::with('wallet')->where('owner_id',$owner_id)->where('type_id', $this->userClient)->get();
         $client= user::find($id);
-        return Inertia::render('Clients/Show', ['url'=>$this->url,'client'=>$client,'clients'=>$clients,'client_id'=>$id,'q'=>$q]);
+        $auctions = \App\Models\Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+        return Inertia::render('Clients/Show', ['url'=>$this->url,'client'=>$client,'clients'=>$clients,'client_id'=>$id,'q'=>$q,'auctions'=>$auctions]);
     }
     public function show ()
     {

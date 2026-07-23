@@ -35,7 +35,7 @@ import debounce from 'lodash/debounce';
 const {t} = useI18n();
 
 
-const props = defineProps({client:Array});
+const props = defineProps({client:Array, auctions:{ type: Array, default: () => [] }});
 
 
 let data = ref({});
@@ -404,6 +404,7 @@ const currentWork = ref(true);
             :formData="formData"
             :show="showModalCar ? true : false"
             :client="client"
+            :auctions="auctions"
             @a="confirmCar($event)"
             @close="showModalCar = false"
             >
@@ -414,6 +415,7 @@ const currentWork = ref(true);
             :formData="formData"
             :show="showModalEditCars ? true : false"
             :client="client"
+            :auctions="auctions"
             @a="confirmUpdateCar($event)"
             @close="showModalEditCars = false"
             >
@@ -866,7 +868,7 @@ const currentWork = ref(true);
                                           {{ $t('vin') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('car_number') }} copart
+                                          {{ $t('car_number') }}
                                         </th>
                                         <th scope="col" class="px-1 py-3 text-base">
                                           سعر السيارة امريكا         

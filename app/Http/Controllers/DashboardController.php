@@ -22,6 +22,7 @@ use App\Models\Expenses;
 use App\Helpers\UploadHelper;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\DeleteCarRequest;
+use App\Models\Auction;
 use App\Services\CarService;
 
 
@@ -71,8 +72,9 @@ class DashboardController extends Controller
         $car = Car::all()->where('owner_id',$owner_id);
         $allCars = $car->count();
         $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->get();
-        
-        return Inertia::render('purchases', ['client'=>$client ]);   
+        $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+
+        return Inertia::render('purchases', ['client'=>$client, 'auctions'=>$auctions]);   
     }
     public function sales(Request $request)
     {
@@ -80,7 +82,8 @@ class DashboardController extends Controller
         $car = Car::all()->where('owner_id',$owner_id);
         $allCars = $car->count();
         $client = User::where('owner_id',$owner_id)->where('type_id', $this->userClient)->get();
-        return Inertia::render('Sales', ['client'=>$client ]);   
+        $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+        return Inertia::render('Sales', ['client'=>$client, 'auctions'=>$auctions]);   
     }
     public function totalInfo(Request $request)
     {
@@ -237,7 +240,7 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function addCars(Request $request)
+    public function addCars(Request $request, CarService $carService)
     {
         $owner_id=Auth::user()->owner_id;
         $year_date=Carbon::now()->format('Y');
@@ -288,6 +291,7 @@ class DashboardController extends Controller
             'car_type'=> $request->car_type,
             'vin'=> $request->vin,
             'car_number'=> $request->car_number,
+            'auction_id'=> $carService->resolveAuctionId((int) $owner_id, $request->auction_id),
             'dinar'=> $request->dinar,
             'dolar_price'=> $request->dolar_price,
             'shipping_dolar'=> $request->shipping_dolar,
@@ -319,7 +323,7 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function updateCarsP(Request $request)
+    public function updateCarsP(Request $request, CarService $carService)
     {
         $owner_id=Auth::user()->owner_id;
 
@@ -380,6 +384,8 @@ class DashboardController extends Controller
 
             // If 'purchase_price' and 'paid_amount' are calculated separately, add them to $dataToUpdate
             $dataToUpdate['total']=$total;
+            // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
+            $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
             if($total >$car->total){
                 $descClient = trans('text.addExpenses').' '.($total-$car->total).' '.trans('text.for_car').$car->car_type.' '.$car->vin;
                 $this->accountingController->decreaseWallet(($total-$car->total), $descClient,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
@@ -404,7 +410,7 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function updateCarsS(Request $request)
+    public function updateCarsS(Request $request, CarService $carService)
     {
         $owner_id=Auth::user()->owner_id;
 
@@ -448,6 +454,8 @@ class DashboardController extends Controller
             // If 'purchase_price' and 'paid_amount' are calculated separately, add them to $dataToUpdate
             $dataToUpdate['total_s']=$total_s;
             $dataToUpdate['profit']=$profit;
+            // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
+            $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
 
             if($car->paid){
                 if($total_s >($car->paid+$car->discount)){

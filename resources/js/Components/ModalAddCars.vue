@@ -8,6 +8,7 @@ const props = defineProps({
   show: Boolean,
   formData: Object,
   client: Array,
+  auctions: { type: Array, default: () => [] },
 });
     
 function getTodayDate() {
@@ -207,13 +208,22 @@ function onSelect (items, lastSelectItem) {
                 />
               </div>
               <div>
-                <label class="car-label" for="car_number">{{ $t("car_number") }} COPART</label>
+                <label class="car-label" for="car_number">{{ $t("car_number") }}</label>
                 <input
                   id="car_number"
                   type="number"
                   class="car-input"
                   v-model="formData.car_number"
                 />
+              </div>
+              <div>
+                <label class="car-label" for="auction_id">{{ $t("auction") }}</label>
+                <select id="auction_id" class="car-input" v-model="formData.auction_id">
+                  <option :value="null">{{ $t("select_auction") }}</option>
+                  <option v-for="a in auctions" :key="a.id" :value="a.id">
+                    {{ a.name }}
+                  </option>
+                </select>
               </div>
             </div>
           </section>

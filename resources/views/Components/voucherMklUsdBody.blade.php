@@ -113,6 +113,8 @@
         <span class="mkl-field-en">Amount:</span>
     </div>
 
+    {{-- رقم اللوت (اللوط) والمتبقي يظهران فقط عند دفعة على سيارة محددة، لا عند دفعة عامة للزبون (اضافة دفعة) --}}
+    @if($isCarPayment ?? false)
     <div class="mkl-field-row mkl-split-row">
         <span class="mkl-field-en">VIN:</span>
         <span class="mkl-field-value" dir="ltr">{{ $vin ?? '' }}</span>
@@ -138,6 +140,7 @@
             <span class="mkl-field-en">Rest:</span>
         </div>
     </div>
+    @endif
 
     @if(!empty($description))
     <div class="mkl-field-row">

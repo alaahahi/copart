@@ -785,15 +785,27 @@ class AccountingController extends Controller
         $discount = $_GET['discount']??0;
         $note = $_GET['note'] ?? '';
         $car = Car::find($car_id);
-        $details = [[
+
+        // مجموع المدفوع والخصم بعد هذه الدفعة، لعرض "المتبقي" في وصل القبض
+        // الحساب المحاسبي (increment على $car) يبقى كما هو أدناه، هذه فقط قيم للعرض في الوصل.
+        $paidUpTotal = (float) $car->paid + (float) $amount;
+        $discountTotal = (float) $car->discount + (float) $discount;
+        $restTotal = round((float) $car->total_s - $paidUpTotal - $discountTotal, 2);
+
+        // رقم اللوت (نفس عمود car_number الحالي في جدول السيارات) مرتبط بوصل الدفعة
+        // ليتم عرضه في الوصل فقط عندما تكون الدفعة على سيارة محددة (وليس دفعة عامة للزبون).
+        $details = [
             'car_id' => $car->id,
-            'car_number' => (string)$car->car_number,
+            'car_number' => (string) $car->car_number,
             'vin' => $car->vin,
             'total_amount' => $car->total_s,
-            'paid' => (int)$amount,
-            'discount' => (int)$discount
-        ]];
- 
+            'paid' => (int) $amount,
+            'discount' => (int) $discount,
+            'lot' => (string) $car->car_number,
+            'paid_up' => $paidUpTotal,
+            'rest' => $restTotal,
+        ];
+
         $wallet = Wallet::where('user_id',$car->client_id)->first();
         $desc=trans('text.addPayment').' '.$amount.' '.$car->car_type.' رقم الشانص'.' '.$car->vin.' '.$note;
         $tran=$this->increaseWallet($amount,$desc,$this->accounting->mainBox()->id,$car->client_id,'App\Models\User',0,0,'$',0,0,'in',$details);

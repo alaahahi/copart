@@ -25,6 +25,7 @@ class Car extends Model
         'car_type',
         'vin',
         'car_number',
+        'auction_id',
         'dinar',
         'dolar_price',
         'dolar_custom',
@@ -111,6 +112,11 @@ class Car extends Model
     public function color()
     {
         return $this->belongsTo(Color::class);
+    }
+    /** المزاد (auction house) this car was purchased from, e.g. Copart/IAAI/Manheim. */
+    public function auction()
+    {
+        return $this->belongsTo(Auction::class, 'auction_id');
     }
     public function Client()
     {

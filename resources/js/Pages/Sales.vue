@@ -4,11 +4,9 @@ import { Head } from '@inertiajs/inertia-vue3';
 
 import { Link } from '@inertiajs/inertia-vue3';
 import show from "@/Components/icon/show.vue";
-import pay from "@/Components/icon/pay.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 
-import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
 import ModalEditCars from "@/Components/ModalEditCar_S.vue";
 import InfiniteLoading from "v3-infinite-loading";
@@ -22,6 +20,7 @@ import { erbilTransferSubtotal, syncSalesErbilFromPurchase, ensureErbilFormField
 const {t} = useI18n();
 const props = defineProps({
   client:Array,
+  auctions:{ type: Array, default: () => [] },
 });
 
 const toast = useToast();
@@ -36,7 +35,6 @@ const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
 let showModal = ref(false);
 let showModalCar =  ref(false);
 let showModalCarSale =  ref(false);
-let showModalAddCarPayment =  ref(false);
 let showModalEditCars=ref(false);
 let showModalDelCar =  ref(false);
 let mainAccount= ref(0)
@@ -64,12 +62,6 @@ function openModalDelCar(form={}) {
   showModalDelCar.value = true;
 }
 
-
-function openAddCarPayment(form={}) {
-    formData.value=form
-    formData.value.notePayment=' بيد '
-    showModalAddCarPayment.value = true;
-}
 const formData = ref({});
 const car = ref([]);
 
@@ -189,36 +181,6 @@ function confirmDelCar(V) {
 }
 
 
-function confirmAddPayment(V) {
-  axios.get(`/api/addPaymentCar?car_id=${V.id}&discount=${V.discountPayment??0}&amount=${V.amountPayment??0}&note=${V.notePayment??''}`)
-  .then(response => {
-    refresh();
-
-    showModalAddCarPayment.value = false;
-    toast.success( " تم دفع مبلغ دولار "+V.amountPayment+" بنجاح ", {
-        timeout: 3000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-      let transaction=response.data
-      window.open(`/api/getIndexAccountsSelas?user_id=${V.client.id}&print=2&transactions_id=${transaction.id}`, '_blank');
-
-
-  })
-  .catch(error => {
-    showModal.value = false;
-
-    toast.error("لم التعديل بنجاح", {
-        timeout: 2000,
-        position: "bottom-right",
-        rtl: true
-
-      });
-
-  })
-}
-
 const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce delay (in milliseconds) as needed
 function getImageUrl(name) {
       // Provide the base URL for your images
@@ -237,6 +199,7 @@ function getDownloadUrl(name) {
             :formData="formData"
             :show="showModalEditCars ? true : false"
             :client="client"
+            :auctions="auctions"
             @a="confirmUpdateCar($event)"
             @close="showModalEditCars = false"
             >
@@ -246,16 +209,6 @@ function getDownloadUrl(name) {
 
 
 
-
-    <ModalAddCarPayment
-            :formData="formData"
-            :show="showModalAddCarPayment ? true : false"
-            @a="confirmAddPayment($event)"
-            @close="showModalAddCarPayment = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddCarPayment>
 
     <ModalDelCar
             :show="showModalDelCar ? true : false"
@@ -392,7 +345,7 @@ function getDownloadUrl(name) {
                                         {{ $t('vin') }}
                                       </th>
                                       <th scope="col" class="px-1 py-3 text-base">
-                                        {{ $t('car_number') }} copart
+                                        {{ $t('car_number') }}
                                       </th>
                                      
                         
@@ -475,14 +428,6 @@ function getDownloadUrl(name) {
                                       @click="openModalDelCar(car)"
                                     >
                                       <trash />
-                                    </button>
-                                    <button
-                                      v-if="car.total_s != (car.paid+ car.discount)"
-                                      tabIndex="1"
-                                      class="px-1 py-1  text-white mx-1 bg-green-500 rounded"
-                                      @click="openAddCarPayment(car)"
-                                    >
-                                     <pay />
                                     </button>
                                     <Link
                                       style="display:inline-flex;"

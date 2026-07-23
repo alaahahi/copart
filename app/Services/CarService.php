@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Auction;
 use App\Models\Car;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,22 @@ use Illuminate\Support\Facades\Log;
 
 class CarService
 {
+    /**
+     * Validate that a frontend-supplied auction id actually belongs to this
+     * tenant before it is persisted on a car — the المزاد select must never
+     * be trusted blindly (security rule: never trust frontend). Returns null
+     * when the id is empty or doesn't belong to the tenant, so the field
+     * stays optional and never breaks the car save.
+     */
+    public function resolveAuctionId(int $ownerId, $auctionId): ?int
+    {
+        if (!$auctionId) {
+            return null;
+        }
+
+        return Auction::where('id', $auctionId)->where('owner_id', $ownerId)->value('id');
+    }
+
     /**
      * Soft-delete a car row and renumber the remaining (non-deleted) cars'
      * display sequence ("no"). The car row and its full history (payments,

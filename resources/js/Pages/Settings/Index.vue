@@ -1,15 +1,58 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
+import TagChipList from "@/Components/TagChipList.vue";
 import { Head } from "@inertiajs/inertia-vue3";
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
+import { useToast } from "vue-toastification";
 
 const { t } = useI18n();
+const toast = useToast();
 
 const props = defineProps({
   config: Object,
 });
+
+// المزادات (Auction houses e.g. Copart / IAAI / Manheim) — managed here as a
+// reusable chip list; the same list populates the المزاد select on the car
+// add/edit forms (purchases/Sales/Clients pages).
+const auctions = ref([]);
+const auctionsLoading = ref(false);
+
+async function loadAuctions() {
+  auctionsLoading.value = true;
+  try {
+    const { data } = await axios.get("/api/auctions");
+    auctions.value = data || [];
+  } catch (e) {
+    toast.error(t("settingsFailed"));
+  } finally {
+    auctionsLoading.value = false;
+  }
+}
+
+async function addAuction(name) {
+  try {
+    const { data } = await axios.post("/api/auctions", { name });
+    auctions.value = [...auctions.value, data].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  } catch (e) {
+    toast.error(e.response?.data?.message || e.response?.data?.errors?.name?.[0] || t("settingsFailed"));
+  }
+}
+
+async function removeAuction(item) {
+  try {
+    await axios.post("/api/deleteAuction", { id: item.id });
+    auctions.value = auctions.value.filter((a) => a.id !== item.id);
+  } catch (e) {
+    toast.error(e.response?.data?.message || t("settingsFailed"));
+  }
+}
+
+onMounted(loadAuctions);
 
 const logoFields = [
   { key: "receipt_logo_left_1", labelKey: "logoLeft1" },
@@ -268,6 +311,25 @@ function preview(type) {
           >
             {{ saving ? $t("saving") : $t("saveSettings") }}
           </button>
+        </section>
+
+        <section class="bg-slate-900 shadow rounded-xl p-6 border border-slate-700/60">
+          <h3 class="text-lg font-bold mb-1 text-slate-100">
+            {{ $t("auctions") }}
+          </h3>
+          <p class="text-sm text-slate-400 mb-4">
+            {{ $t("auction") }} — Copart / IAAI / Manheim ...
+          </p>
+
+          <TagChipList
+            :items="auctions"
+            :loading="auctionsLoading"
+            :placeholder="$t('auction_name_placeholder')"
+            :add-label="$t('add_auction')"
+            :empty-label="$t('no_auctions')"
+            @add="addAuction"
+            @remove="removeAuction"
+          />
         </section>
       </div>
     </div>

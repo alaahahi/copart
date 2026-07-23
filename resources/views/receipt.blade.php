@@ -13,6 +13,12 @@ $Help = new MyHelp();
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 </head>
+@php
+    // اللوت والمتبقي يُعرضان فقط عندما تكون هذه دفعة على سيارة محددة (وليس دفعة عامة للزبون "اضافة دفعة")
+    $isCarPayment = false;
+    $lotNumber = '';
+    $restAmount = '';
+@endphp
 @if($transactions_id)
 @foreach($clientData['transactions'] as $transaction)
     @if($transaction->id == $transactions_id)
@@ -22,6 +28,10 @@ $Help = new MyHelp();
         $description =$transaction->description;
         $amount= ($transaction->amount * -1)-$transaction->discount;
         $created =$transaction->created_at ;
+        $isCarPayment = \App\Support\VoucherPrint::isCarPayment($transaction);
+        $carReceiptDetails = is_array($transaction->details) ? $transaction->details : [];
+        $lotNumber = $carReceiptDetails['lot'] ?? ($carReceiptDetails['car_number'] ?? '');
+        $restAmount = $carReceiptDetails['rest'] ?? '';
        ?>
     @endif
 @endforeach
@@ -92,6 +102,16 @@ $Help = new MyHelp();
           الملاحظات:
           {{$description??''}}
          </div>
+        @if($isCarPayment)
+        <div class="col-12  p-2  pe-5">
+          رقم اللوت:
+          {{ $lotNumber }}
+        </div>
+        <div class="col-12  p-2  pe-5">
+          المتبقي:
+          {{ $restAmount }} {{ $currency }}
+        </div>
+        @endif
         
         
       
@@ -244,6 +264,16 @@ $Help = new MyHelp();
             الملاحظات:
             {{$description??''}}
            </div>
+          @if($isCarPayment)
+          <div class="col-12  p-2  pe-5">
+            رقم اللوت:
+            {{ $lotNumber }}
+          </div>
+          <div class="col-12  p-2  pe-5">
+            المتبقي:
+            {{ $restAmount }} {{ $currency }}
+          </div>
+          @endif
           
           
         

@@ -116,7 +116,8 @@ const props = defineProps({
   clients: Array,
   client_id: String,
   client: Object,
-  q:String
+  q:String,
+  auctions: { type: Array, default: () => [] }
 });
 
 const form = useForm();
@@ -415,6 +416,7 @@ function checkClientBalance(v){
       :formData="formData"
       :show="showModalEditCars ? true : false"
       :client="clients"
+      :auctions="auctions"
       @a="confirmUpdateCar($event)"
       @close="showModalEditCars = false"
     >
@@ -797,7 +799,7 @@ function checkClientBalance(v){
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("year") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("color") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("vin") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_number") }} copart</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_number") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden">{{ $t("note") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">سعر السيارة امريكا</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">نقل امريكا</th>
