@@ -41,7 +41,7 @@ let mainAccount= ref(0)
 let allCars= ref(0)
 
 function openModalEditCars(form={}){
-  formData.value=form
+  formData.value = JSON.parse(JSON.stringify(form || {}));
   if(formData.value.shipping_dolar_s==0){
     formData.value.shipping_dolar_s=formData.value.shipping_dolar
   }

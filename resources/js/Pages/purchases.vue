@@ -94,7 +94,7 @@ let sumProfit= ref(0)
 let sumDebit= ref(0)
 
 function openModalEditCars(form={}){
-  formData.value=form
+  formData.value = JSON.parse(JSON.stringify(form || {}));
   ensureErbilFormFields(formData.value, false);
   showModalEditCars.value = true;
 }

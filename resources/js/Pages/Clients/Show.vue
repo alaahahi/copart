@@ -120,6 +120,29 @@ const props = defineProps({
   auctions: { type: Array, default: () => [] }
 });
 
+/** Opaque status backgrounds so text stays readable in light and dark mode. */
+const carRowClass = (car) => {
+  const qVal = (props.q || '').toString();
+  const matchesSearch =
+    qVal !== '' &&
+    (String(car.vin || '').startsWith(qVal) ||
+      String(car.car_number || '').startsWith(qVal));
+
+  const base =
+    'hover:brightness-95 dark:hover:brightness-110 transition-colors';
+
+  if (matchesSearch) {
+    return `${base} bg-amber-200 dark:bg-amber-800`;
+  }
+  if (car.results == 0 || car.results == 1) {
+    return `${base} bg-rose-200 dark:bg-rose-900`;
+  }
+  if (car.results == 2) {
+    return `${base} bg-emerald-200 dark:bg-emerald-900`;
+  }
+  return `${base} bg-white dark:bg-slate-900`;
+};
+
 const form = useForm();
 
 let showModal = ref(false);
@@ -143,7 +166,8 @@ function openModalDelPayFromBalanceCar(form = {}) {
   showModalDelPayFromBalanceCar.value = true;
 }
 function openModalEditCars(form={}){
-  formData.value=form
+  // Clone so edits don't mutate the table row, and refreshes don't remount/close the modal mid-edit.
+  formData.value = JSON.parse(JSON.stringify(form || {}));
   if(formData.value.shipping_dolar_s==0){
     formData.value.shipping_dolar_s=formData.value.shipping_dolar
   }
@@ -405,13 +429,6 @@ function checkClientBalance(v){
 <template>
   <Head title="Dashboard" />
   <AuthenticatedLayout>
-    <template #header>
-      <h2
-        class="font-semibold text-xl dark:text-gray-400 text-gray-800 leading-tight"
-      >
-        {{ $page.props.appName }}
-      </h2>
-    </template>
     <ModalEditCars
       :formData="formData"
       :show="showModalEditCars ? true : false"
@@ -822,44 +839,35 @@ function checkClientBalance(v){
                     </th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                   <tr
                     v-for="(car, i) in laravelData.data"
                     v-show="(car.results == 2 && showComplatedCars) || car.results != 2"
                     :key="car.id"
-                    :class="{
-                      'bg-white dark:bg-slate-900': !(car.results == 0 || car.results == 1 || car.results == 2) &&
-                        !(car.vin.startsWith(q) || (car.car_number ? car.car_number.toString().startsWith(q) : '')),
-                      'bg-red-50 dark:bg-red-950/40': car.results == 0 || car.results == 1,
-                      'bg-emerald-50 dark:bg-emerald-950/30': car.results == 2,
-                      'bg-amber-50 dark:bg-amber-950/30':
-                        car.vin.startsWith(q) ||
-                        (car.car_number ? car.car_number.toString().startsWith(q) : ''),
-                    }"
-                    class="text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60"
+                    :class="carRowClass(car)"
                   >
-                    <td class="px-2 py-1.5">{{ i + 1 }}</td>
-                    <td class="px-2 py-1.5">{{ car.car_type }}</td>
-                    <td class="px-2 py-1.5">{{ car.year }}</td>
-                    <td class="px-2 py-1.5">{{ car.car_color }}</td>
-                    <td class="px-2 py-1.5 font-mono text-xs">{{ car.vin }}</td>
-                    <td class="px-2 py-1.5">{{ car.car_number }}</td>
-                    <td class="px-2 py-1.5 print:hidden">{{ car.note }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.shipping_dolar_s }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.dinar_s }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.coc_dolar_s }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.checkout_s }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ erbilTransferSubtotal(car, true) }}</td>
-                    <td class="px-2 py-1.5 font-mono">{{ car.commission_s ?? 0 }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ i + 1 }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_type }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.year }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_color }}</td>
+                    <td class="px-2 py-1.5 font-mono text-xs text-slate-900 dark:text-slate-100">{{ car.vin }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_number }}</td>
+                    <td class="px-2 py-1.5 print:hidden text-slate-900 dark:text-slate-100">{{ car.note }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.shipping_dolar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.dinar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.coc_dolar_s }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.checkout_s }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ erbilTransferSubtotal(car, true) }}</td>
+                    <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.commission_s ?? 0 }}</td>
                     <td class="px-2 py-1.5 font-mono font-semibold text-slate-900 dark:text-white">{{ fixed(car.total_s, 0) }}</td>
-                    <td class="px-2 py-1.5 font-mono font-semibold text-emerald-700 dark:text-emerald-400">{{ car.paid }}</td>
+                    <td class="px-2 py-1.5 font-mono font-semibold text-emerald-800 dark:text-emerald-300">{{ car.paid }}</td>
                     <td
                       class="px-2 py-1.5 font-mono font-semibold"
-                      :class="(asNumber(car.total_s) - asNumber(car.paid)) > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'"
+                      :class="(asNumber(car.total_s) - asNumber(car.paid)) > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'"
                     >
                       {{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}
                     </td>
-                    <td class="px-2 py-1.5 whitespace-nowrap">{{ car.date }}</td>
+                    <td class="px-2 py-1.5 whitespace-nowrap text-slate-900 dark:text-slate-100">{{ car.date }}</td>
                     <td class="px-2 py-1.5 text-start print:hidden">
                       <button
                         tabindex="1"

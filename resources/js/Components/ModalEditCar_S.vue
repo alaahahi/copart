@@ -63,7 +63,8 @@ function removeMedia(removedImage){
 </script>
   <template>
   <Transition name="modal">
-    <div v-if="show" class="car-modal-overlay" @click.self="$emit('close')">
+    <!-- No @click.self close: date/select/uploader interactions were closing the modal accidentally. -->
+    <div v-if="show" class="car-modal-overlay">
       <div class="car-modal-panel">
         <!-- Header -->
         <div class="car-modal-header">
