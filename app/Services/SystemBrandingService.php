@@ -146,11 +146,11 @@ class SystemBrandingService
         $path = str_replace('\\', '/', $path);
         $out = [];
 
-        if (preg_match('#(?:^|/)(?:public/)?(img/branding/[^/?#]+)$#', $path, $m)) {
+        if (preg_match('#(?:^|/)(?:public/)?(img/branding/[^/?]+)$#', $path, $m)) {
             $out[] = public_path($m[1]);
         }
 
-        if (preg_match('#(?:^|/)(?:public/)?storage/(branding/[^/?#]+)$#', $path, $m)) {
+        if (preg_match('#(?:^|/)(?:public/)?storage/(branding/[^/?]+)$#', $path, $m)) {
             $out[] = storage_path('app/public/'.$m[1]);
             $out[] = public_path('storage/'.$m[1]);
             $out[] = public_path(self::REL_DIR.'/'.basename($m[1]));
