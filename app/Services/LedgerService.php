@@ -14,34 +14,73 @@ use RuntimeException;
 
 class LedgerService
 {
+    /**
+     * System chart codes — single source of truth (used by seeder + posting).
+     */
     public const CODE_CASH_USD = '1100';
     public const CODE_CASH_IQD = '1110';
     public const CODE_TREASURY_USD = '1120';
     public const CODE_TREASURY_IQD = '1130';
     public const CODE_CLIENT_AR_PREFIX = '1200';
+    /** Per-client قاصة USD custody: 1210-{clientId} */
+    public const CODE_CLIENT_QASA_USD_PREFIX = '1210';
+    /** Per-client قاصة IQD custody: 1220-{clientId} */
+    public const CODE_CLIENT_QASA_IQD_PREFIX = '1220';
     public const CODE_REVENUE = '4100';
     public const CODE_EXPENSE = '5100';
     public const CODE_OPENING = '3900';
     public const CODE_TRADER_PROFITS = '3200';
 
     /**
-     * Ensure default chart of accounts exists for an owner.
+     * users column that means «هذا التاجر لديه قاصة» (عرض بالمحاسبة).
+     * When true: provision قاصة USD + قاصة IQD ledger accounts in addition to AR.
+     * When turned off later: accounts are kept (no delete) — only stop creating/using them in UI lists.
      */
-    public function ensureSystemAccounts(int $ownerId): void
+    public const CLIENT_HAS_QASA_FLAG = 'show_in_dashboard';
+
+    /**
+     * Default system chart rows (idempotent seed / ensure).
+     *
+     * @return list<array{code:string,name:string,name_ar:string,type:string,currency:?string}>
+     */
+    public static function systemAccountDefaults(): array
     {
-        $defaults = [
-            ['code' => self::CODE_CASH_USD, 'name' => 'Cash USD', 'name_ar' => 'صندوق دولار', 'type' => 'asset', 'currency' => '$'],
-            ['code' => self::CODE_CASH_IQD, 'name' => 'Cash IQD', 'name_ar' => 'صندوق دينار', 'type' => 'asset', 'currency' => 'IQD'],
+        return [
+            ['code' => self::CODE_CASH_USD, 'name' => 'Cash USD', 'name_ar' => 'الصندوق (دولار)', 'type' => 'asset', 'currency' => '$'],
+            ['code' => self::CODE_CASH_IQD, 'name' => 'Cash IQD', 'name_ar' => 'الصندوق (دينار)', 'type' => 'asset', 'currency' => 'IQD'],
             ['code' => self::CODE_TREASURY_USD, 'name' => 'Company Treasury USD', 'name_ar' => 'قاصة الشركة دولار', 'type' => 'asset', 'currency' => '$'],
             ['code' => self::CODE_TREASURY_IQD, 'name' => 'Company Treasury IQD', 'name_ar' => 'قاصة الشركة دينار', 'type' => 'asset', 'currency' => 'IQD'],
             ['code' => self::CODE_REVENUE, 'name' => 'Shipping Revenue', 'name_ar' => 'إيرادات الشحن', 'type' => 'income', 'currency' => null],
             ['code' => self::CODE_EXPENSE, 'name' => 'General Expenses', 'name_ar' => 'مصاريف عامة', 'type' => 'expense', 'currency' => null],
-            ['code' => self::CODE_OPENING, 'name' => 'Opening Balances Equity', 'name_ar' => 'أرصدة افتتاحية', 'type' => 'equity', 'currency' => null],
+            ['code' => self::CODE_OPENING, 'name' => 'Opening Capital', 'name_ar' => 'رأس المال الافتتاحي', 'type' => 'equity', 'currency' => null],
             ['code' => self::CODE_TRADER_PROFITS, 'name' => 'Trader Profits Reserve', 'name_ar' => 'حساب أرباح التجار', 'type' => 'equity', 'currency' => null],
         ];
+    }
 
-        foreach ($defaults as $row) {
+    /**
+     * Ensure default chart of accounts exists for an owner (runtime safe — does not overwrite renames).
+     */
+    public function ensureSystemAccounts(int $ownerId): void
+    {
+        foreach (self::systemAccountDefaults() as $row) {
             LedgerAccount::firstOrCreate(
+                ['owner_id' => $ownerId, 'code' => $row['code']],
+                array_merge($row, [
+                    'owner_id' => $ownerId,
+                    'is_system' => true,
+                    'is_active' => true,
+                ])
+            );
+        }
+    }
+
+    /**
+     * Seed/sync system accounts for an owner (updateOrCreate — used by ChartOfAccountsSeeder).
+     */
+    public function seedSystemAccounts(int $ownerId): void
+    {
+        foreach (self::systemAccountDefaults() as $row) {
+            LedgerAccount::updateOrCreate(
                 ['owner_id' => $ownerId, 'code' => $row['code']],
                 array_merge($row, [
                     'owner_id' => $ownerId,
@@ -68,17 +107,22 @@ class LedgerService
         return LedgerAccount::where('owner_id', $ownerId)->where('code', $code)->firstOrFail();
     }
 
+    /**
+     * Client receivable / car payments control account: 1200-{clientId}.
+     * Used by postClientPayment (Cash ↔ AR) and wallet sync.
+     */
     public function clientReceivableAccount(int $ownerId, int $clientId): LedgerAccount
     {
         $this->ensureSystemAccounts($ownerId);
         $client = User::find($clientId);
+        $label = $client?->name ?? (string) $clientId;
         $code = self::CODE_CLIENT_AR_PREFIX . '-' . $clientId;
 
         return LedgerAccount::firstOrCreate(
             ['owner_id' => $ownerId, 'code' => $code],
             [
-                'name' => 'AR Client #' . $clientId,
-                'name_ar' => 'ذمم تاجر: ' . ($client?->name ?? $clientId),
+                'name' => 'AR / Car payments #' . $clientId,
+                'name_ar' => 'ذمم الزبون / دفعات السيارات: ' . $label,
                 'type' => 'asset',
                 'currency' => null,
                 'party_type' => User::class,
@@ -89,6 +133,68 @@ class LedgerService
         );
     }
 
+    /**
+     * Per-client قاصة custody account (USD or IQD): 1210-{id} / 1220-{id}.
+     */
+    public function clientQasaAccount(int $ownerId, int $clientId, string $currency): LedgerAccount
+    {
+        $this->ensureSystemAccounts($ownerId);
+        $client = User::find($clientId);
+        $label = $client?->name ?? (string) $clientId;
+        $isIqd = $currency === 'IQD';
+        $code = ($isIqd ? self::CODE_CLIENT_QASA_IQD_PREFIX : self::CODE_CLIENT_QASA_USD_PREFIX) . '-' . $clientId;
+
+        return LedgerAccount::firstOrCreate(
+            ['owner_id' => $ownerId, 'code' => $code],
+            [
+                'name' => ($isIqd ? 'Client Qasa IQD #' : 'Client Qasa USD #') . $clientId,
+                'name_ar' => ($isIqd ? 'قاصة دينار: ' : 'قاصة دولار: ') . $label,
+                'type' => 'asset',
+                'currency' => $isIqd ? 'IQD' : '$',
+                'party_type' => User::class,
+                'party_id' => $clientId,
+                'is_system' => false,
+                'is_active' => true,
+            ]
+        );
+    }
+
+    /**
+     * Provision ledger accounts for a client.
+     * Always: AR (ذمم / دفعات السيارات).
+     * If $withQasa (or client.show_in_dashboard): also قاصة دولار + قاصة دينار.
+     * Never deletes accounts when قاصة is turned off.
+     *
+     * @return array{ar:LedgerAccount,qasa_usd:?LedgerAccount,qasa_iqd:?LedgerAccount}
+     */
+    public function ensureClientLedgerAccounts(int $ownerId, int $clientId, ?bool $withQasa = null): array
+    {
+        $client = User::find($clientId);
+        if ($withQasa === null) {
+            $withQasa = $client ? (bool) $client->{self::CLIENT_HAS_QASA_FLAG} : false;
+        }
+
+        $ar = $this->clientReceivableAccount($ownerId, $clientId);
+        $qasaUsd = null;
+        $qasaIqd = null;
+
+        if ($withQasa) {
+            $qasaUsd = $this->clientQasaAccount($ownerId, $clientId, '$');
+            $qasaIqd = $this->clientQasaAccount($ownerId, $clientId, 'IQD');
+        }
+
+        return [
+            'ar' => $ar,
+            'qasa_usd' => $qasaUsd,
+            'qasa_iqd' => $qasaIqd,
+        ];
+    }
+
+    public static function clientHasQasa(User $client): bool
+    {
+        return (bool) ($client->{self::CLIENT_HAS_QASA_FLAG} ?? false);
+    }
+
     public function systemAccount(int $ownerId, string $code): LedgerAccount
     {
         $this->ensureSystemAccounts($ownerId);
@@ -97,33 +203,67 @@ class LedgerService
     }
 
     /**
-     * Rename display names for an owner-scoped ledger account.
-     * System accounts may be renamed; codes/types stay unchanged.
+     * Create a custom (non-system) chart account for an owner.
+     *
+     * @param  array{
+     *   code:string,
+     *   name_ar:string,
+     *   name?:?string,
+     *   type:string,
+     *   currency?:?string,
+     *   parent_id?:?int,
+     *   is_active?:bool
+     * }  $data
      */
-    public function renameAccount(int $ownerId, int $accountId, string $nameAr, ?string $name = null): LedgerAccount
+    public function createAccount(int $ownerId, array $data): LedgerAccount
     {
-        $account = LedgerAccount::query()
-            ->where('owner_id', $ownerId)
-            ->findOrFail($accountId);
+        $this->ensureSystemAccounts($ownerId);
 
-        $nameAr = trim($nameAr);
+        $code = $this->normalizeAccountCode((string) ($data['code'] ?? ''));
+        $nameAr = trim((string) ($data['name_ar'] ?? ''));
+        $type = (string) ($data['type'] ?? '');
+        $currency = $this->normalizeAccountCurrency($data['currency'] ?? null);
+        $parentId = isset($data['parent_id']) && $data['parent_id'] !== '' && $data['parent_id'] !== null
+            ? (int) $data['parent_id']
+            : null;
+        $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
+        $english = trim((string) ($data['name'] ?? ''));
+        if ($english === '') {
+            $english = $nameAr;
+        }
+
         if ($nameAr === '') {
             throw new InvalidArgumentException('اسم الحساب مطلوب.');
         }
 
-        $english = ($name !== null && trim($name) !== '') ? trim($name) : $nameAr;
+        if (! in_array($type, ['asset', 'liability', 'equity', 'income', 'expense'], true)) {
+            throw new InvalidArgumentException('نوع الحساب غير صالح.');
+        }
 
-        $account->forceFill([
-            'name_ar' => $nameAr,
+        if (LedgerAccount::query()->where('owner_id', $ownerId)->where('code', $code)->exists()) {
+            throw new InvalidArgumentException('رمز الحساب مستخدم مسبقاً.');
+        }
+
+        $parent = $this->resolveParentAccount($ownerId, $parentId, $type);
+
+        $account = LedgerAccount::create([
+            'owner_id' => $ownerId,
+            'code' => $code,
             'name' => $english,
-        ])->save();
+            'name_ar' => $nameAr,
+            'type' => $type,
+            'currency' => $currency,
+            'parent_id' => $parent?->id,
+            'is_system' => false,
+            'is_active' => $isActive,
+        ]);
 
-        Log::info('Ledger account renamed', [
+        Log::info('Ledger account created', [
             'account_id' => $account->id,
             'code' => $account->code,
+            'type' => $account->type,
+            'parent_id' => $account->parent_id,
             'owner_id' => $ownerId,
-            'name_ar' => $nameAr,
-            'name' => $english,
             'by' => Auth::id(),
         ]);
 
@@ -131,8 +271,125 @@ class LedgerService
     }
 
     /**
+     * Update chart account fields.
+     * Code/type/currency change only when the account has no journal lines.
+     * System accounts: name (and parent) only — never code/type/currency.
+     *
+     * @param  array{
+     *   name_ar:string,
+     *   name?:?string,
+     *   code?:?string,
+     *   type?:?string,
+     *   currency?:?string,
+     *   parent_id?:?int|string|null,
+     *   is_active?:bool
+     * }  $data
+     */
+    public function updateAccount(int $ownerId, int $accountId, array $data): LedgerAccount
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail($accountId);
+
+        $nameAr = trim((string) ($data['name_ar'] ?? ''));
+        if ($nameAr === '') {
+            throw new InvalidArgumentException('اسم الحساب مطلوب.');
+        }
+
+        $english = trim((string) ($data['name'] ?? ''));
+        if ($english === '') {
+            $english = $nameAr;
+        }
+
+        $hasMovements = $account->hasMovements();
+        $updates = [
+            'name_ar' => $nameAr,
+            'name' => $english,
+        ];
+
+        if (array_key_exists('parent_id', $data)) {
+            $parentId = $data['parent_id'] === '' || $data['parent_id'] === null
+                ? null
+                : (int) $data['parent_id'];
+            if ($parentId === (int) $account->id) {
+                throw new InvalidArgumentException('لا يمكن أن يكون الحساب أباً لنفسه.');
+            }
+            $typeForParent = array_key_exists('type', $data) && ! $account->is_system && ! $hasMovements
+                ? (string) $data['type']
+                : (string) $account->type;
+            $parent = $this->resolveParentAccount($ownerId, $parentId, $typeForParent, $account->id);
+            $updates['parent_id'] = $parent?->id;
+        }
+
+        if (! $account->is_system && ! $hasMovements) {
+            if (array_key_exists('code', $data) && $data['code'] !== null && trim((string) $data['code']) !== '') {
+                $code = $this->normalizeAccountCode((string) $data['code']);
+                $taken = LedgerAccount::query()
+                    ->where('owner_id', $ownerId)
+                    ->where('code', $code)
+                    ->where('id', '!=', $account->id)
+                    ->exists();
+                if ($taken) {
+                    throw new InvalidArgumentException('رمز الحساب مستخدم مسبقاً.');
+                }
+                $updates['code'] = $code;
+            }
+
+            if (array_key_exists('type', $data) && $data['type'] !== null && $data['type'] !== '') {
+                $type = (string) $data['type'];
+                if (! in_array($type, ['asset', 'liability', 'equity', 'income', 'expense'], true)) {
+                    throw new InvalidArgumentException('نوع الحساب غير صالح.');
+                }
+                $updates['type'] = $type;
+            }
+
+            if (array_key_exists('currency', $data)) {
+                $updates['currency'] = $this->normalizeAccountCurrency($data['currency']);
+            }
+        } elseif (
+            $hasMovements
+            && (
+                (array_key_exists('code', $data) && $data['code'] !== null && trim((string) $data['code']) !== '' && $this->normalizeAccountCode((string) $data['code']) !== $account->code)
+                || (array_key_exists('type', $data) && $data['type'] !== null && $data['type'] !== '' && (string) $data['type'] !== $account->type)
+                || (array_key_exists('currency', $data) && $this->normalizeAccountCurrency($data['currency']) !== $account->currency)
+            )
+        ) {
+            throw new RuntimeException('لا يمكن تعديل الرمز أو النوع أو العملة لحساب عليه قيود.');
+        }
+
+        if (array_key_exists('is_active', $data) && ! $account->is_system) {
+            $updates['is_active'] = (bool) $data['is_active'];
+        }
+
+        $account->forceFill($updates)->save();
+
+        Log::info('Ledger account updated', [
+            'account_id' => $account->id,
+            'code' => $account->code,
+            'owner_id' => $ownerId,
+            'has_movements' => $hasMovements,
+            'by' => Auth::id(),
+        ]);
+
+        return $account->fresh();
+    }
+
+    /**
+     * Rename display names for an owner-scoped ledger account.
+     * System accounts may be renamed; codes/types stay unchanged.
+     */
+    public function renameAccount(int $ownerId, int $accountId, string $nameAr, ?string $name = null): LedgerAccount
+    {
+        return $this->updateAccount($ownerId, $accountId, [
+            'name_ar' => $nameAr,
+            'name' => $name,
+        ]);
+    }
+
+    /**
      * Soft-deactivate a non-system account (never hard-delete).
      * Keeps journal history intact; account disappears from active chart.
+     * Accounts with movements are deactivated (not deleted) — history preserved.
      */
     public function deactivateAccount(int $ownerId, int $accountId): LedgerAccount
     {
@@ -144,7 +401,7 @@ class LedgerService
             throw new RuntimeException('لا يمكن حذف أو إيقاف الحسابات النظامية.');
         }
 
-        if (!$account->is_active) {
+        if (! $account->is_active) {
             throw new RuntimeException('الحساب موقوف مسبقاً.');
         }
 
@@ -161,6 +418,68 @@ class LedgerService
         ]);
 
         return $account->fresh();
+    }
+
+    protected function normalizeAccountCode(string $code): string
+    {
+        $code = strtoupper(trim($code));
+        if ($code === '' || ! preg_match('/^[A-Z0-9][A-Z0-9\-_\/.]{0,30}$/', $code)) {
+            throw new InvalidArgumentException('رمز الحساب غير صالح (أحرف/أرقام و - _ / . فقط).');
+        }
+
+        return $code;
+    }
+
+    protected function normalizeAccountCurrency(mixed $currency): ?string
+    {
+        if ($currency === null || $currency === '' || $currency === 'multi') {
+            return null;
+        }
+
+        $currency = (string) $currency;
+        if (! in_array($currency, ['$', 'IQD'], true)) {
+            throw new InvalidArgumentException('العملة غير صالحة (USD أو IQD أو متعدد).');
+        }
+
+        return $currency;
+    }
+
+    /**
+     * Parent must belong to same owner, same type, and not create a cycle.
+     */
+    protected function resolveParentAccount(int $ownerId, ?int $parentId, string $type, ?int $excludeId = null): ?LedgerAccount
+    {
+        if ($parentId === null) {
+            return null;
+        }
+
+        $parent = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->find($parentId);
+
+        if (! $parent) {
+            throw new InvalidArgumentException('الحساب الأب غير موجود.');
+        }
+
+        if ($parent->type !== $type) {
+            throw new InvalidArgumentException('الحساب الأب يجب أن يكون من نفس النوع.');
+        }
+
+        if ($excludeId !== null) {
+            $cursor = $parent;
+            $guard = 0;
+            while ($cursor && $guard++ < 50) {
+                if ((int) $cursor->id === (int) $excludeId) {
+                    throw new InvalidArgumentException('لا يمكن اختيار حساب فرعي كأب (حلقة في الشجرة).');
+                }
+                $cursor = $cursor->parent_id
+                    ? LedgerAccount::query()->where('owner_id', $ownerId)->find($cursor->parent_id)
+                    : null;
+            }
+        }
+
+        return $parent;
     }
 
     /**

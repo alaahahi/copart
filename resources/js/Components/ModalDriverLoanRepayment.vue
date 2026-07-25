@@ -48,30 +48,62 @@ async function save() {
 
 <template>
   <Transition name="modal">
-    <div v-if="show && loanTransaction" class="modal-mask">
+    <div v-if="show && loanTransaction" class="modal-mask" role="dialog" aria-modal="true">
       <div class="modal-wrapper">
-        <div class="modal-container bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-          <div class="modal-header text-center py-4 dark:text-gray-300">دفعة إرجاع قرض - {{ loanTransaction.details?.driver_name || 'سائق' }}</div>
-          <div class="modal-body px-5 pb-4 space-y-3">
-            <p v-if="error" class="text-red-600 dark:text-red-400 text-sm">{{ error }}</p>
+        <!-- Forced dark-safe panel (teleported / outside main CSS scope) -->
+        <div class="modal-container border border-slate-600 bg-slate-900 text-slate-100">
+          <div class="modal-header py-4 text-center text-white">
+            دفعة إرجاع قرض - {{ loanTransaction.details?.driver_name || 'سائق' }}
+          </div>
+          <div class="modal-body space-y-3 px-5 pb-4">
+            <p v-if="error" class="text-sm text-rose-400">{{ error }}</p>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-sm font-medium dark:text-gray-200">المبلغ بالدولار</label>
-                <input v-model="form.amountDollar" type="number" min="0" step="0.01" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-md shadow-sm" />
+                <label class="mb-1 block text-sm font-medium text-slate-200">المبلغ بالدولار</label>
+                <input
+                  v-model="form.amountDollar"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full rounded-md border border-slate-600 bg-slate-950 text-white placeholder-slate-400 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/30"
+                />
               </div>
               <div>
-                <label class="block text-sm font-medium dark:text-gray-200">المبلغ بالدينار</label>
-                <input v-model="form.amountDinar" type="number" min="0" step="0.01" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-md shadow-sm" />
+                <label class="mb-1 block text-sm font-medium text-slate-200">المبلغ بالدينار</label>
+                <input
+                  v-model="form.amountDinar"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full rounded-md border border-slate-600 bg-slate-950 text-white placeholder-slate-400 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/30"
+                />
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium dark:text-gray-200">التاريخ</label>
-              <input v-model="form.date" type="date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-md shadow-sm" />
+              <label class="mb-1 block text-sm font-medium text-slate-200">التاريخ</label>
+              <input
+                v-model="form.date"
+                type="date"
+                class="mt-1 block w-full rounded-md border border-slate-600 bg-slate-950 text-white shadow-sm focus:border-emerald-500 focus:ring-emerald-500/30"
+              />
             </div>
           </div>
-          <div class="modal-footer flex gap-2 justify-center py-4 border-t dark:border-gray-700">
-            <button type="button" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600" @click="$emit('close')">إلغاء</button>
-            <button type="button" class="px-4 py-2 bg-rose-500 text-white rounded hover:bg-rose-600 disabled:opacity-50" :disabled="saving" @click="save">{{ saving ? 'جاري الحفظ...' : 'تسجيل الدفعة' }}</button>
+          <div class="modal-footer grid w-full grid-cols-2 gap-2 border-t border-slate-700 py-4">
+            <button
+              type="button"
+              class="w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 font-semibold text-slate-200 hover:bg-slate-700"
+              @click="$emit('close')"
+            >
+              إلغاء
+            </button>
+            <button
+              type="button"
+              class="w-full rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              :disabled="saving"
+              @click="save"
+            >
+              {{ saving ? 'جاري الحفظ...' : 'تسجيل الدفعة' }}
+            </button>
           </div>
         </div>
       </div>
@@ -80,7 +112,7 @@ async function save() {
 </template>
 
 <style scoped>
-.modal-mask { position: fixed; z-index: 9998; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: table; transition: opacity 0.3s ease; }
+.modal-mask { position: fixed; z-index: 9998; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(2, 6, 23, 0.7); display: table; transition: opacity 0.3s ease; }
 .modal-wrapper { display: table-cell; vertical-align: middle; }
 .modal-container { width: 90%; max-width: 380px; margin: 0 auto; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.33); }
 .modal-header { font-weight: 700; }

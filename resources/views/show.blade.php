@@ -21,10 +21,10 @@
 <div class="row">
     <div class="col-4 text-center py-3">
         <h5>
-       {{$config['first_title_ar']}}
+       {{ $config['first_title_ar'] ?? '' }}
         </h5>
         <h5>
-        {{$config['second_title_ar']}}
+        {{ $config['second_title_ar'] ?? '' }}
         </h5>
     </div>
     <div class="col-4 text-center py-3">
@@ -63,11 +63,11 @@
     </div>
     <div class="col-3">
     مبلغ مدفوع:
-    {{$clientData['cars_sum']-$clientData['client']->wallet->balance}}
+    {{ $clientData['cars_paid'] ?? (($clientData['cars_sum'] ?? 0) - optional(optional($clientData['client'])->wallet)->balance) }}
     </div>
     <div class="col-3">
      مبلغ الباقي:
-     {{$clientData['client']->wallet->balance}}
+     {{ $clientData['cars_need_paid'] ?? optional(optional($clientData['client'])->wallet)->balance }}
     </div>
     <div class="col-3">
       عدد السيارات:

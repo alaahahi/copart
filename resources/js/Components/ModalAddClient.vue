@@ -94,8 +94,8 @@ const close = () => emit('close');
 
           <div class="erp-toggle-row">
             <div class="erp-toggle-text">
-              <span class="erp-toggle-title">عرض بالمحاسبة</span>
-              <span class="erp-toggle-hint">إظهار محفظة التاجر في صفحة المحاسبة (قاسة). يمكن تفعيلها لاحقاً من قائمة التجار.</span>
+              <span class="erp-toggle-title">عرض بالمحاسبة (قاصة)</span>
+              <span class="erp-toggle-hint">عند التفعيل يُنشأ حساب قاصة دولار + قاصة دينار بالإضافة لذمم الدفعات، وتظهر المحفظة في صفحة المحاسبة. يمكن تفعيلها لاحقاً من قائمة التجار.</span>
             </div>
             <label class="erp-switch" :title="form.show_in_dashboard ? 'معروض في المحاسبة' : 'مخفي عن المحاسبة'">
               <input type="checkbox" role="switch" v-model="form.show_in_dashboard" />
@@ -309,23 +309,18 @@ const close = () => emit('close');
 }
 
 .erp-modal-footer {
-  display: flex;
-  flex-direction: column-reverse;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+  width: 100%;
   padding: 1rem 1.25rem 1.25rem;
   border-top: 1px solid #1e293b;
   background: #020617;
 }
 
-@media (min-width: 480px) {
-  .erp-modal-footer {
-    flex-direction: row;
-    justify-content: flex-end;
-  }
-
-  .erp-btn {
-    min-width: 8.5rem;
-  }
+.erp-modal-footer .erp-btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .erp-btn {

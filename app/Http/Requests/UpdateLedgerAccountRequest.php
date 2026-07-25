@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class UpdateLedgerAccountRequest extends FormRequest
 {
@@ -14,10 +15,30 @@ class UpdateLedgerAccountRequest extends FormRequest
 
     public function rules(): array
     {
+        $ownerId = (int) Auth::user()->owner_id;
+        $accountId = (int) $this->input('id');
+
         return [
             'id' => ['required', 'integer', 'min:1'],
             'name_ar' => ['required', 'string', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
+            'code' => [
+                'nullable',
+                'string',
+                'max:32',
+                'regex:/^[A-Za-z0-9][A-Za-z0-9\-_\/.]{0,30}$/',
+                Rule::unique('ledger_accounts', 'code')
+                    ->where(fn ($q) => $q->where('owner_id', $ownerId))
+                    ->ignore($accountId),
+            ],
+            'type' => ['nullable', 'in:asset,liability,equity,income,expense'],
+            'currency' => ['nullable', 'in:$,IQD,multi'],
+            'parent_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('ledger_accounts', 'id')->where(fn ($q) => $q->where('owner_id', $ownerId)->where('is_active', true)),
+            ],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -28,6 +49,26 @@ class UpdateLedgerAccountRequest extends FormRequest
             'name_ar.required' => 'الاسم العربي للحساب مطلوب.',
             'name_ar.max' => 'الاسم العربي طويل جداً.',
             'name.max' => 'الاسم الإنجليزي طويل جداً.',
+            'code.unique' => 'رمز الحساب مستخدم مسبقاً.',
+            'code.regex' => 'رمز الحساب غير صالح.',
+            'type.in' => 'نوع الحساب غير صالح.',
+            'currency.in' => 'العملة غير صالحة.',
+            'parent_id.exists' => 'الحساب الأب غير موجود.',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('code') && is_string($this->input('code'))) {
+            $this->merge(['code' => strtoupper(trim($this->input('code')))]);
+        }
+
+        if ($this->input('currency') === 'multi' || $this->input('currency') === '') {
+            $this->merge(['currency' => null]);
+        }
+
+        if ($this->input('parent_id') === '' || $this->input('parent_id') === '0') {
+            $this->merge(['parent_id' => null]);
+        }
     }
 }

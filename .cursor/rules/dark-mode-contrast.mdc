@@ -1,0 +1,33 @@
+---
+description: Dark mode contrast rules for Vue/CSS — never pale-on-pale in ERP dark UI
+globs: resources/js/**/*.{vue,css}
+alwaysApply: true
+---
+
+# Dark Mode Contrast / تباين الوضع الليلي
+
+Dark theme uses `html.dark` (`DarkToggle` + `darkMode: 'class'`). Many modals are **Teleported outside `main`**, so `dark:` alone or `html.dark main …` CSS may not cover them. Prefer **explicit dark-safe tokens**.
+
+## Never / لا تفعل
+
+- Pale/light text on pale/white surfaces in dark UI
+- White inputs + light-gray labels on navy dialogs
+- Pastel KPI cards (`bg-emerald-50`, `bg-rose-50`, `bg-white`) with light text inside dark modals
+- Red/rose for **confirm** actions
+
+## Do / افعل
+
+- Surfaces: `bg-slate-800` / `bg-slate-900`, borders `border-slate-600/700`
+- Text: `text-white` / `text-slate-100`; labels `text-slate-200`
+- Values: solid semantic accents (`text-emerald-300`, `text-rose-300`, `text-sky-300`) — not translucent pastels
+- Inputs: `bg-slate-900` or `bg-slate-950`, `border-slate-600`, `text-white`, `placeholder-slate-400`
+- Progress: track `bg-slate-700`, fill `bg-emerald-500`
+- Buttons: confirm **emerald**; delete/cancel-destructive **rose**
+
+## Teleported modals
+
+Force dark-safe classes on the panel itself (like `ModalAddSales` / `ModalAddCarPayment`). Do not rely only on `dark:` variants for critical contrast.
+
+## Test
+
+Check contrast on ERP navy (`#0b1220` / `slate-900`) before shipping UI.

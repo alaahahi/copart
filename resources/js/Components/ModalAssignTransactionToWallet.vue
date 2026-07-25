@@ -335,23 +335,18 @@ async function save() {
 }
 
 .erp-modal-footer {
-  display: flex;
-  flex-direction: column-reverse;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+  width: 100%;
   padding: 1rem 1.25rem 1.25rem;
   border-top: 1px solid #1e293b;
   background: #020617;
 }
 
-@media (min-width: 480px) {
-  .erp-modal-footer {
-    flex-direction: row;
-    justify-content: flex-end;
-  }
-
-  .erp-btn {
-    min-width: 8.5rem;
-  }
+.erp-modal-footer .erp-btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .erp-btn {

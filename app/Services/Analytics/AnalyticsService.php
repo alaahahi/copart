@@ -4,8 +4,6 @@ namespace App\Services\Analytics;
 
 use App\Models\Car;
 use App\Models\CarExpenses;
-use App\Models\Expenses;
-use App\Models\ExpensesType;
 use App\Models\User;
 use App\Models\UserType;
 use App\Services\LedgerService;
@@ -258,8 +256,7 @@ class AnalyticsService
             ];
         };
 
-        $top = $cars->sortByDesc('profit')->take(10)->values()->map($mapCar)->all();
-        $worst = $cars->sortBy('profit')->take(10)->values()->map($mapCar)->all();
+        [$top, $worst] = $this->splitTopAndWorstCars($cars, $mapCar, 10);
 
         return [
             'avg_sale' => round((float) $avgSale, 2),
@@ -272,34 +269,63 @@ class AnalyticsService
         ];
     }
 
+    /**
+     * Best / worst cars by profit without listing the same car in both.
+     *
+     * - 0 cars → both empty
+     * - 1 car → only «أعلى ربح» if profit >= 0, only «أقل ربح» if profit < 0
+     * - 2+ cars → up to $limit on each side, capped so the lists never overlap
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Car>  $cars
+     * @param  callable(\App\Models\Car): array  $mapCar
+     * @return array{0: list<array>, 1: list<array>}
+     */
+    protected function splitTopAndWorstCars($cars, callable $mapCar, int $limit = 10): array
+    {
+        $count = $cars->count();
+
+        if ($count === 0) {
+            return [[], []];
+        }
+
+        if ($count === 1) {
+            $car = $cars->first();
+            $mapped = [$mapCar($car)];
+
+            return ((float) $car->profit >= 0)
+                ? [$mapped, []]
+                : [[], $mapped];
+        }
+
+        // Cap each side so top and worst never share a car (e.g. 2 cars → 1 each).
+        $perSide = min($limit, intdiv($count, 2));
+
+        $top = $cars
+            ->sortByDesc(fn ($car) => [(float) $car->profit, $car->id])
+            ->take($perSide)
+            ->values()
+            ->map($mapCar)
+            ->all();
+
+        $worst = $cars
+            ->sortBy(fn ($car) => [(float) $car->profit, $car->id])
+            ->take($perSide)
+            ->values()
+            ->map($mapCar)
+            ->all();
+
+        return [$top, $worst];
+    }
+
     public function expensesBreakdown(
         int $ownerId,
         Carbon $from,
         Carbon $to,
         string $currency
     ): array {
-        $gen = $this->generalExpensesQuery($ownerId, $from, $to)->get();
-        $genTotal = (float) $gen->sum('amount');
-
-        $typeNames = ExpensesType::query()->pluck('name_ar', 'id');
-        $byTypeMap = [
-            1 => 'erbil',
-            2 => 'dubai',
-            3 => 'iran',
-            4 => 'border',
-            5 => 'coc',
-        ];
-
+        // General expenses table removed — only car_expenses remain.
+        $genTotal = 0.0;
         $byType = [];
-        foreach ($byTypeMap as $id => $key) {
-            $sum = (float) $gen->where('expenses_type_id', $id)->sum('amount');
-            $byType[] = [
-                'type_id' => $id,
-                'key' => $key,
-                'label' => $typeNames[$id] ?? $key,
-                'amount' => round($sum, 2),
-            ];
-        }
 
         $carExpQuery = CarExpenses::query()
             ->where('owner_id', $ownerId)
@@ -432,7 +458,7 @@ class AnalyticsService
                 $alerts[] = [
                     'level' => 'warning',
                     'code' => 'high_ar',
-                    'message' => 'ذمم التجار مرتفعة: ' . number_format($kpis['receivables'], 2),
+                    'message' => 'ذمم التجار مرتفعة: ' . \App\Helpers\Help::formatMoney($kpis['receivables'], '$'),
                     'value' => $kpis['receivables'],
                 ];
             }
@@ -573,10 +599,9 @@ class AnalyticsService
         Carbon $to,
         string $currency
     ): float {
-        $gen = (float) $this->generalExpensesQuery($ownerId, $from, $to)->sum('amount');
-
         $carCol = $currency === 'IQD' ? 'amount_dinar' : 'amount_dollar';
-        $car = (float) CarExpenses::query()
+
+        return (float) CarExpenses::query()
             ->where('owner_id', $ownerId)
             ->where(function ($q) use ($from, $to) {
                 $q->whereBetween('created', [$from->toDateString(), $to->toDateString()])
@@ -590,42 +615,12 @@ class AnalyticsService
                     });
             })
             ->sum($carCol);
-
-        // Gen expenses are USD; when viewing IQD, still include car dinar + skip gen USD mix
-        if ($currency === 'IQD') {
-            return $car;
-        }
-
-        return $gen + $car;
-    }
-
-    protected function generalExpensesQuery(int $ownerId, Carbon $from, Carbon $to)
-    {
-        // Expenses.user_id points at branch boxes which belong to owner
-        return Expenses::query()
-            ->whereNull('deleted_at')
-            ->whereIn('user_id', function ($q) use ($ownerId) {
-                $q->select('id')->from('users')->where('owner_id', $ownerId);
-            })
-            ->where(function ($q) use ($from, $to) {
-                $q->whereBetween('created_at', [
-                    $from->toDateTimeString(),
-                    $to->toDateTimeString(),
-                ])->orWhere(function ($inner) use ($from, $to) {
-                    // Some rows may only have year_date; include if created_at null and year matches
-                    $inner->whereNull('created_at')
-                        ->whereBetween('year_date', [(int) $from->format('Y'), (int) $to->format('Y')]);
-                });
-            });
     }
 
     protected function expensesMonthlyTrend(int $ownerId, Carbon $anchorTo, int $months = 12): array
     {
         $start = $anchorTo->copy()->startOfMonth()->subMonths($months - 1);
         $end = $anchorTo->copy()->endOfMonth();
-
-        $genRows = $this->generalExpensesQuery($ownerId, $start, $end)
-            ->get(['amount', 'created_at']);
 
         $carRows = CarExpenses::query()
             ->where('owner_id', $ownerId)
@@ -653,16 +648,6 @@ class AnalyticsService
                 'car' => 0.0,
                 'total' => 0.0,
             ];
-        }
-
-        foreach ($genRows as $row) {
-            if (!$row->created_at) {
-                continue;
-            }
-            $key = Carbon::parse($row->created_at)->format('Y-m');
-            if (isset($trend[$key])) {
-                $trend[$key]['general'] += (float) $row->amount;
-            }
         }
 
         foreach ($carRows as $row) {

@@ -83,15 +83,25 @@ class LaravelLogReader
         }
 
         $total = count($entries);
-        if ($total > $limit) {
-            $entries = array_slice($entries, -$limit);
-        }
+        $page = max(1, (int) ($options['page'] ?? 1));
+        $perPage = min(
+            max(1, (int) ($options['per_page'] ?? $limit)),
+            (int) config('monitor.laravel_log.max_limit', 500)
+        );
+
+        // Newest first for Hub pagination
+        $entries = array_reverse($entries);
+        $offset = ($page - 1) * $perPage;
+        $pageEntries = array_slice($entries, $offset, $perPage);
 
         return [
             'file' => basename($path),
-            'entries' => $entries,
+            'entries' => $pageEntries,
             'total' => $total,
-            'limit' => $limit,
+            'limit' => $perPage,
+            'page' => $page,
+            'per_page' => $perPage,
+            'last_page' => max(1, (int) ceil($total / $perPage)),
         ];
     }
 

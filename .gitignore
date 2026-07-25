@@ -14,6 +14,10 @@ yarn-error.log
 /.vscode
 /node_modules
 /vendor
+/tests/e2e/.auth
+/storage/app/qa
+/test-results
+/playwright-report
 data.ms/indexes/*
 public/hot
 .env

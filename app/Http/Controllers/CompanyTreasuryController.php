@@ -59,9 +59,7 @@ class CompanyTreasuryController extends Controller
             ->where('owner_id', $ownerId)
             ->where('currency', $currency);
 
-        if ($from && $to) {
-            $filteredQuery->whereBetween('entry_date', [$from, $to]);
-        }
+        $this->applyEntryDateRange($filteredQuery, $from, $to);
 
         if ($request->filled('tag')) {
             $filteredQuery->where('tag', $request->get('tag'));
@@ -134,10 +132,12 @@ class CompanyTreasuryController extends Controller
         $currency = $validated['currency'];
         $isDeposit = $validated['entry_type'] === 'deposit';
 
+        $entryDate = $this->normalizeEntryDate($validated['entry_date']);
+
         $entry = CompanyTreasuryEntry::create([
             'owner_id' => $ownerId,
             'user_id' => Auth::id(),
-            'entry_date' => $validated['entry_date'],
+            'entry_date' => $entryDate,
             'description' => $validated['description'] ?? ($isDeposit ? 'إيداع' : 'سحب'),
             'tag' => $validated['tag'] ?? null,
             'currency' => $currency,
@@ -149,12 +149,11 @@ class CompanyTreasuryController extends Controller
         $this->recalculateBalancesFrom(
             $ownerId,
             $currency,
-            $entry->entry_date->format('Y-m-d'),
+            $entryDate,
             (int) $entry->id
         );
 
         if ($this->getLastBalance($ownerId, $currency) < 0) {
-            $entryDate = $entry->entry_date->format('Y-m-d');
             $entryId = (int) $entry->id;
             $entry->forceDelete();
             $this->recalculateAfterDelete($ownerId, $currency, $entryDate, $entryId);
@@ -166,8 +165,8 @@ class CompanyTreasuryController extends Controller
             $ledger = app(LedgerService::class);
             $memo = (string) ($entry->description ?? ($isDeposit ? 'إيداع قاصة' : 'سحب قاصة'));
             $journal = $isDeposit
-                ? $ledger->postTreasuryDeposit($ownerId, $amount, $currency, $memo, $entry, $validated['entry_date'])
-                : $ledger->postTreasuryWithdraw($ownerId, $amount, $currency, $memo, $entry, $validated['entry_date']);
+                ? $ledger->postTreasuryDeposit($ownerId, $amount, $currency, $memo, $entry, $entryDate)
+                : $ledger->postTreasuryWithdraw($ownerId, $amount, $currency, $memo, $entry, $entryDate);
             $entry->forceFill(['journal_entry_id' => $journal->id])->save();
         } catch (\Throwable $e) {
             Log::warning('Ledger post failed on treasury store', ['error' => $e->getMessage()]);
@@ -280,9 +279,10 @@ class CompanyTreasuryController extends Controller
         $oldDate = $entry->entry_date->format('Y-m-d');
         $oldId = (int) $entry->id;
         $previous = $entry->only(['entry_date', 'description', 'debit', 'credit']);
+        $newDate = $this->normalizeEntryDate($validated['entry_date']);
 
         $entry->update([
-            'entry_date' => $validated['entry_date'],
+            'entry_date' => $newDate,
             'description' => $validated['description'] ?? ($isDeposit ? 'إيداع' : 'سحب'),
             'tag' => $validated['tag'] ?? null,
             'debit' => $isDeposit ? $amount : 0,
@@ -290,7 +290,6 @@ class CompanyTreasuryController extends Controller
         ]);
 
         $entry->refresh();
-        $newDate = $entry->entry_date->format('Y-m-d');
         $newId = (int) $entry->id;
 
         if ([$oldDate, $oldId] <= [$newDate, $newId]) {
@@ -331,7 +330,7 @@ class CompanyTreasuryController extends Controller
 
         $last = CompanyTreasuryEntry::where('owner_id', $ownerId)
             ->where('currency', $currency)
-            ->where('entry_date', '<=', $to)
+            ->whereDate('entry_date', '<=', $to)
             ->orderBy('entry_date', 'desc')
             ->orderBy('id', 'desc')
             ->first();
@@ -436,6 +435,26 @@ class CompanyTreasuryController extends Controller
         return $data;
     }
 
+    /**
+     * SQLite stores Laravel "date" casts as "Y-m-d 00:00:00".
+     * whereBetween(..., [$from, $to]) with $to = "Y-m-d" excludes that day
+     * because "Y-m-d 00:00:00" > "Y-m-d" lexicographically. Use whereDate.
+     */
+    protected function applyEntryDateRange($query, ?string $from, ?string $to): void
+    {
+        if ($from) {
+            $query->whereDate('entry_date', '>=', $from);
+        }
+        if ($to) {
+            $query->whereDate('entry_date', '<=', $to);
+        }
+    }
+
+    protected function normalizeEntryDate(string $date): string
+    {
+        return \Carbon\Carbon::parse($date)->toDateString();
+    }
+
     public function printReport(Request $request)
     {
         $this->authorizeTreasury();
@@ -454,9 +473,7 @@ class CompanyTreasuryController extends Controller
         if ($entryId) {
             $query->where('id', $entryId);
         } else {
-            if ($from && $to) {
-                $query->whereBetween('entry_date', [$from, $to]);
-            }
+            $this->applyEntryDateRange($query, $from, $to);
             if ($tag) {
                 $query->where('tag', $tag);
             }

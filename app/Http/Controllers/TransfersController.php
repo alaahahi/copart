@@ -15,10 +15,8 @@ use App\Models\CarModel;
 use App\Models\Color;
 use App\Models\Wallet;
 use App\Models\UserType;
-use App\Models\ExpensesType;
 use Illuminate\Support\Facades\DB;
 use App\Models\Transactions;
-use App\Models\Expenses;
 use Illuminate\Support\Facades\Auth;
 
 
@@ -37,23 +35,6 @@ class TransfersController extends Controller
     $this->userClient =  UserType::where('name', 'client')->first()->id;
     $this->userAccount =  UserType::where('name', 'account')->first()->id;
 
-    $this->mainAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','main@account.com');
-    $this->inAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','in@account.com');
-    $this->outAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','out@account.com');
-    $this->debtAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','debt@account.com');
-    $this->transfersAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','transfers@account.com');
-    $this->outSupplier= User::with('wallet')->where('type_id', $this->userAccount)->where('email','supplier-out');
-    $this->debtSupplier= User::with('wallet')->where('type_id', $this->userAccount)->where('email','supplier-debt');
-    $this->onlineContracts= User::with('wallet')->where('type_id', $this->userAccount)->where('email','online-contracts');
-    $this->onlineContractsDinar= User::with('wallet')->where('type_id', $this->userAccount)->where('email','online-contracts-dinar');
-    $this->debtOnlineContracts= User::with('wallet')->where('type_id', $this->userAccount)->where('email','online-contracts-debt');
-    $this->debtOnlineContractsDinar= User::with('wallet')->where('type_id', $this->userAccount)->where('email','online-contracts-debit-dinar');
-    $this->howler= User::with('wallet')->where('type_id', $this->userAccount)->where('email','howler');
-    $this->shippingCoc= User::with('wallet')->where('type_id', $this->userAccount)->where('email','shipping-coc');
-    $this->border= User::with('wallet')->where('type_id', $this->userAccount)->where('email','border');
-    $this->iran= User::with('wallet')->where('type_id', $this->userAccount)->where('email','iran');
-    $this->dubai= User::with('wallet')->where('type_id', $this->userAccount)->where('email','dubai');
-    $this->mainBox= User::with('wallet')->where('type_id', $this->userAccount)->where('email','mainBox@account.com');
     }
 
     public function index(Request $request)

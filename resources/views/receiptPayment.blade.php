@@ -101,7 +101,7 @@ $Help = new MyHelp();
      المبلغ:
     </div>
     <div class="col-1 alert-primary border p-2">
-    {{$amount}}
+    {{ $Help->formatMoney($amount ?? 0, $currency ?? '$') }}
     </div>
     <div class="col-1 alert-primary border p-2">
       {{$currency}}
@@ -240,7 +240,7 @@ $Help = new MyHelp();
        المبلغ:
       </div>
       <div class="col-1 alert-primary border p-2">
-      {{$amount}}
+      {{ $Help->formatMoney($amount ?? 0, $currency ?? '$') }}
       </div>
       <div class="col-1 alert-primary border p-2">
         {{$currency}}

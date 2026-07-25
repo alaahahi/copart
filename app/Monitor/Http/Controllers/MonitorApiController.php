@@ -3,6 +3,7 @@
 namespace App\Monitor\Http\Controllers;
 
 use App\Monitor\Http\Controllers\Concerns\RespondsWithMonitorApi;
+use App\Monitor\Services\ClearLogsService;
 use App\Monitor\Services\DbStatusService;
 use App\Monitor\Services\LaravelLogReader;
 use App\Monitor\Services\LogReader;
@@ -52,10 +53,20 @@ class MonitorApiController
     public function alerts(Request $request, LogReader $reader): JsonResponse
     {
         $limit = min((int) $request->query('limit', 100), 500);
-        $alerts = array_slice(array_reverse($reader->readAlerts()), 0, $limit);
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = min(max(1, (int) $request->query('per_page', $limit)), 200);
+
+        $all = array_reverse($reader->readAlerts());
+        $total = count($all);
+        $offset = ($page - 1) * $perPage;
+        $alerts = array_slice($all, $offset, $perPage);
 
         return $this->monitorJson([
-            'count' => count($alerts),
+            'count' => $total,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'last_page' => max(1, (int) ceil($total / max(1, $perPage))),
             'alerts' => $alerts,
         ]);
     }
@@ -160,8 +171,33 @@ class MonitorApiController
             'level' => $request->query('level'),
             'search' => $request->query('search'),
             'limit' => $request->query('limit'),
+            'page' => $request->query('page'),
+            'per_page' => $request->query('per_page', $request->query('limit')),
         ]);
 
         return $this->monitorJson($result);
+    }
+
+    public function clearLogs(Request $request, ClearLogsService $clearer): JsonResponse
+    {
+        $configured = (string) config('monitor.clear_token', '');
+        $provided = (string) ($request->header('X-Monitor-Token')
+            ?: $request->input('token', ''));
+
+        if ($configured === '' || ! hash_equals($configured, $provided)) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'Unauthorized — set MONITOR_CLEAR_TOKEN and send X-Monitor-Token',
+            ], 401);
+        }
+
+        $targets = $request->input('targets', ['laravel', 'monitor', 'alerts']);
+        if (is_string($targets)) {
+            $targets = array_filter(array_map('trim', explode(',', $targets)));
+        }
+
+        $result = $clearer->clear(is_array($targets) ? $targets : ['all']);
+
+        return $this->monitorJson(array_merge(['ok' => count($result['errors']) === 0], $result));
     }
 }

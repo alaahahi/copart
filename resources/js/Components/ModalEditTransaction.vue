@@ -111,9 +111,9 @@ async function save() {
               </div>
             </div>
           </div>
-          <div class="modal-footer flex gap-2 justify-center py-4 border-t dark:border-gray-700">
-            <button type="button" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600" @click="$emit('close')">إلغاء</button>
-            <button type="button" class="px-4 py-2 bg-rose-500 text-white rounded hover:bg-rose-600 disabled:opacity-50" :disabled="saving" @click="save">{{ saving ? 'جاري الحفظ...' : 'حفظ' }}</button>
+          <div class="modal-footer grid grid-cols-2 gap-2 w-full py-4 border-t dark:border-gray-700">
+            <button type="button" class="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600" @click="$emit('close')">إلغاء</button>
+            <button type="button" class="w-full px-4 py-2 bg-rose-500 text-white rounded hover:bg-rose-600 disabled:opacity-50" :disabled="saving" @click="save">{{ saving ? 'جاري الحفظ...' : 'حفظ' }}</button>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
+import { formatMoney } from "@/utils/formatMoney";
 
 const PAGE_SIZE = 100;
 
@@ -116,10 +117,7 @@ function deletedTimeOf(row) {
 }
 
 function fmt(n, cur = currency.value) {
-  const v = Number(n) || 0;
-  return cur === "$"
-    ? v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-    : v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return formatMoney(n, cur);
 }
 
 function fmtCell(n) {
@@ -243,7 +241,11 @@ async function loadEntriesPage($state) {
     const batch = res.data.entries ?? [];
     const lastPage = res.data.pagination?.last_page ?? 1;
 
-    entries.value.push(...batch);
+    if (requestPage === 1) {
+      entries.value = batch;
+    } else {
+      entries.value.push(...batch);
+    }
     totalDebit.value = res.data.total_debit ?? 0;
     totalCredit.value = res.data.total_credit ?? 0;
     periodBalance.value = res.data.period_balance ?? 0;
@@ -273,6 +275,13 @@ async function loadEntriesPage($state) {
 async function refreshAll() {
   await loadSummary();
   resetEntries();
+  // InfiniteLoading remounts via key; also pull page 1 so the list updates
+  // even if the sentinel is not yet in view after a deposit.
+  await loadEntriesPage({
+    complete() {},
+    loaded() {},
+    error() {},
+  });
 }
 
 async function submitEntry() {
@@ -443,6 +452,12 @@ watch([from, to, filterTag], () => resetEntries());
 
 onMounted(async () => {
   await Promise.all([loadSummary(), loadTags()]);
+  // Ensure first page loads even if InfiniteLoading sentinel is delayed.
+  await loadEntriesPage({
+    complete() {},
+    loaded() {},
+    error() {},
+  });
 });
 </script>
 

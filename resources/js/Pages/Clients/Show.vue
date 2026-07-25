@@ -2,7 +2,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { TailwindPagination } from "laravel-vue-pagination";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
@@ -14,18 +14,75 @@ import pay from "@/Components/icon/pay.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
+import { asNumber, formatNumber } from "@/utils/formatMoney";
+import { carRemaining, carPaymentStatusMeta } from "@/utils/carPaymentStatus";
+import CarsGridView from "@/Components/CarsGridView.vue";
 
 import { useToast } from "vue-toastification";
 let toast = useToast();
 
-// Backend sometimes returns numeric fields as strings; guard `.toFixed()` usages.
-const asNumber = (v) => {
-  if (v === null || v === undefined || v === "") return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = Number.parseFloat(String(v).replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
+const fixed = (v, digits = 0) => formatNumber(v, { maxDecimals: digits });
+
+const CARS_VIEW_KEY = "clients-show-cars-view";
+const carsViewMode = ref(
+  typeof localStorage !== "undefined" && localStorage.getItem(CARS_VIEW_KEY) === "list"
+    ? "list"
+    : "grid"
+);
+watch(carsViewMode, (mode) => {
+  try {
+    localStorage.setItem(CARS_VIEW_KEY, mode);
+  } catch (_) {
+    /* ignore quota / private mode */
+  }
+});
+const setCarsViewMode = (mode) => {
+  carsViewMode.value = mode === "grid" ? "grid" : "list";
 };
-const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
+
+const carPrintUrl = (car) => {
+  const uid = laravelData.value?.client?.id || client_Select.value || props.client_id;
+  return `/api/getIndexAccountsSelas?user_id=${uid}&from=${from.value}&to=${to.value}&print=6&car_id=${car.id}`;
+};
+
+const carVinSearch = ref("");
+
+const normalizeVinQuery = (q) => String(q || "").trim().toLowerCase();
+
+/** Partial VIN / chassis match (case-insensitive). */
+const carMatchesVinSearch = (car, q = carVinSearch.value) => {
+  const needle = normalizeVinQuery(q);
+  if (!needle) return false;
+  const vin = String(car?.vin || "").toLowerCase();
+  const chassis = String(car?.chassis || car?.car_number || "").toLowerCase();
+  return vin.includes(needle) || chassis.includes(needle);
+};
+
+const visibleCars = computed(() => {
+  const cars = Array.isArray(laravelData.value?.data) ? laravelData.value.data : [];
+  return cars.filter(
+    (car) => (Number(car.results) === 2 && showComplatedCars.value) || Number(car.results) !== 2
+  );
+});
+
+/** Client-side VIN filter for grid/list display; empty search shows all visible cars. */
+const displayedCars = computed(() => {
+  const cars = visibleCars.value;
+  const needle = normalizeVinQuery(carVinSearch.value);
+  if (!needle) return cars;
+  return cars.filter((car) => carMatchesVinSearch(car, needle));
+});
+
+const clearCarVinSearch = () => {
+  carVinSearch.value = "";
+};
+
+const hasUndistributedBalance = computed(
+  () =>
+    asNumber(calculateTotalFilteredAmount().totalAmount) * -1 -
+      asNumber(laravelData.value?.cars_paid) !==
+    0
+);
 
 // اسم الحساب المحاسبي الحقيقي (صندوق دولار/دينار أو حساب القاصة) الذي ذهب إليه المبلغ،
 // قادم من القيد المحاسبي (journal) المرتبط بالحركة أو بحركة الصندوق الأم لها.
@@ -144,22 +201,31 @@ const props = defineProps({
 /** Opaque status backgrounds so text stays readable in light and dark mode. */
 const carRowClass = (car) => {
   const qVal = (props.q || '').toString();
-  const matchesSearch =
+  const matchesPropSearch =
     qVal !== '' &&
     (String(car.vin || '').startsWith(qVal) ||
       String(car.car_number || '').startsWith(qVal));
+  const matchesVinSearch =
+    normalizeVinQuery(carVinSearch.value) !== '' && carMatchesVinSearch(car);
 
   const base =
     'hover:brightness-95 dark:hover:brightness-110 transition-colors';
 
-  if (matchesSearch) {
+  if (matchesVinSearch) {
+    return `${base} bg-amber-300/40 ring-2 ring-inset ring-amber-400 dark:bg-amber-400/25 dark:ring-amber-400`;
+  }
+  if (matchesPropSearch) {
     return `${base} bg-amber-200 dark:bg-amber-800`;
   }
-  if (car.results == 0 || car.results == 1) {
-    return `${base} bg-rose-200 dark:bg-rose-900`;
-  }
-  if (car.results == 2) {
+  const { status } = carPaymentStatusMeta(car);
+  if (status === 'paid') {
     return `${base} bg-emerald-200 dark:bg-emerald-900`;
+  }
+  if (status === 'partially_paid') {
+    return `${base} bg-amber-200 dark:bg-amber-900`;
+  }
+  if (status === 'unpaid' && asNumber(car?.total_s) > 0) {
+    return `${base} bg-rose-200 dark:bg-rose-900`;
   }
   return `${base} bg-white dark:bg-slate-900`;
 };
@@ -569,7 +635,7 @@ function checkClientBalance(_v) {
       class="py-6"
       v-if="$page.props.auth.user.type_id == 1 || $page.props.auth.user.type_id == 6"
     >
-      <div class="mx-auto max-w-8xl sm:px-4 lg:px-6">
+      <div class="mx-auto w-full max-w-none px-2 sm:px-3 lg:px-4">
         <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <!-- Filters toolbar -->
           <div class="border-b border-slate-200 p-4 dark:border-slate-700">
@@ -665,30 +731,30 @@ function checkClientBalance(_v) {
           <div class="border-b border-slate-200 p-4 dark:border-slate-700">
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("total_cars") }}</div>
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t("total_cars") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-slate-900 dark:text-white">
                   {{ laravelData.car_total ?? 0 }}
                 </div>
               </div>
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("Total_in_dollars") }}</div>
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t("Total_in_dollars") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-sky-700 dark:text-sky-300">
                   {{ laravelData?.cars_sum ?? 0 }}
                 </div>
               </div>
-              <div class="rounded-xl border border-emerald-400 bg-white px-4 py-3 shadow-sm dark:border-emerald-500/50 dark:bg-slate-800">
+              <div class="rounded-xl border border-emerald-400 bg-white px-4 py-3 shadow-sm dark:border-emerald-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">{{ $t("total_paid_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-emerald-700 dark:text-emerald-200">
                   {{ Math.abs(asNumber(laravelData?.cars_paid)) }}
                 </div>
               </div>
-              <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-500/50 dark:bg-slate-800">
+              <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">{{ $t("total_discounts_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-200">
                   {{ laravelData?.cars_discount ?? 0 }}
                 </div>
               </div>
-              <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
+              <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">{{ $t("balance") }}</div>
                 <div
                   class="mt-1 font-mono text-lg font-bold"
@@ -699,7 +765,7 @@ function checkClientBalance(_v) {
               </div>
               <div
                 v-if="undistributedBalanceUsd != 0"
-                class="rounded-xl border border-rose-400 bg-white px-4 py-3 shadow-sm dark:border-rose-500/50 dark:bg-slate-800"
+                class="rounded-xl border border-rose-400 bg-white px-4 py-3 shadow-sm dark:border-rose-600 dark:bg-slate-800"
               >
                 <div class="text-xs font-semibold text-rose-800 dark:text-rose-300">{{ $t("undistributed_balance_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-rose-700 dark:text-rose-200">
@@ -913,9 +979,146 @@ function checkClientBalance(_v) {
             </div>
           </div>
 
-          <!-- Cars table -->
-          <div class="p-4">
-            <div class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+          <!-- Cars: list / grid -->
+          <div class="p-3 sm:p-4">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-3 print:hidden">
+              <div class="flex min-w-0 flex-1 flex-wrap items-end gap-3">
+                <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {{ $t("cars") }}
+                  <span class="ms-1 font-mono text-slate-500 dark:text-slate-400">
+                    ({{ displayedCars.length }}<template v-if="normalizeVinQuery(carVinSearch)">/{{ visibleCars.length }}</template>)
+                  </span>
+                </div>
+                <div class="min-w-[200px] max-w-md flex-1">
+                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    {{ $t("search_vin") }}
+                  </label>
+                  <div class="flex gap-1.5">
+                    <TextInput
+                      id="car-vin-search"
+                      v-model="carVinSearch"
+                      type="search"
+                      class="mt-0 block w-full font-mono"
+                      dir="ltr"
+                      :placeholder="$t('search_vin_placeholder')"
+                      autocomplete="off"
+                    />
+                    <button
+                      v-if="normalizeVinQuery(carVinSearch)"
+                      type="button"
+                      class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      @click="clearCarVinSearch"
+                    >
+                      {{ $t("clear") }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-800"
+                role="group"
+                :aria-label="$t('view_mode')"
+              >
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+                  :class="
+                    carsViewMode === 'list'
+                      ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                  "
+                  :aria-pressed="carsViewMode === 'list'"
+                  @click="setCarsViewMode('list')"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M3 5h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2z" />
+                  </svg>
+                  {{ $t("view_list") }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+                  :class="
+                    carsViewMode === 'grid'
+                      ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                  "
+                  :aria-pressed="carsViewMode === 'grid'"
+                  @click="setCarsViewMode('grid')"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
+                  </svg>
+                  {{ $t("view_grid") }}
+                </button>
+              </div>
+            </div>
+
+            <CarsGridView
+              v-if="carsViewMode === 'grid'"
+              :cars="displayedCars"
+              variant="client"
+              :highlight-query="carVinSearch"
+              :empty-message="normalizeVinQuery(carVinSearch) ? $t('no_vin_matches') : $t('no_data')"
+            >
+              <template #actions="{ car }">
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-slate-500 px-1.5 py-0.5 text-white hover:bg-slate-600"
+                  :title="$t('edit')"
+                  @click="openModalEditCars(car)"
+                >
+                  <edit />
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-orange-500 px-1.5 py-0.5 text-white hover:bg-orange-600"
+                  :title="$t('trash')"
+                  @click="openModalDelCar(car)"
+                >
+                  <trash />
+                </button>
+                <button
+                  v-if="car.total_s != car.paid + car.discount"
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-emerald-600 px-1.5 py-0.5 text-white hover:bg-emerald-700"
+                  :title="$t('pay')"
+                  @click="openAddCarPayment(car)"
+                >
+                  <pay />
+                </button>
+                <a
+                  :href="carPrintUrl(car)"
+                  target="_blank"
+                  class="inline-flex items-center rounded-md bg-sky-600 px-1.5 py-0.5 text-white hover:bg-sky-700"
+                  :title="$t('print')"
+                >
+                  <print />
+                </a>
+                <button
+                  v-if="hasUndistributedBalance"
+                  type="button"
+                  class="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                  @click="openModalAddPayFromBalanceCar(car)"
+                >
+                  {{ $t("pay_from_balance") }}
+                </button>
+                <button
+                  v-if="
+                    (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) != 0 &&
+                    asNumber(car.paid)
+                  "
+                  type="button"
+                  class="rounded-md bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-rose-700"
+                  @click="openModalDelPayFromBalanceCar(car)"
+                >
+                  {{ $t("return_to_balance") }}
+                </button>
+              </template>
+            </CarsGridView>
+
+            <!-- List / table view -->
+            <div v-else class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
               <table class="w-full min-w-[1400px] text-center text-sm text-slate-700 dark:text-slate-200">
                 <thead>
                   <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
@@ -936,7 +1139,7 @@ function checkClientBalance(_v) {
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("paid") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("remaining") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("date") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 250px">
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 280px">
                       {{ $t("execute") }}
                     </th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden" style="width: 100px">
@@ -950,7 +1153,10 @@ function checkClientBalance(_v) {
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                   <tr
                     v-for="(car, i) in laravelData.data"
-                    v-show="(car.results == 2 && showComplatedCars) || car.results != 2"
+                    v-show="
+                      ((car.results == 2 && showComplatedCars) || car.results != 2) &&
+                      (!normalizeVinQuery(carVinSearch) || carMatchesVinSearch(car))
+                    "
                     :key="car.id"
                     :class="carRowClass(car)"
                   >
@@ -971,9 +1177,9 @@ function checkClientBalance(_v) {
                     <td class="px-2 py-1.5 font-mono font-semibold text-emerald-800 dark:text-emerald-300">{{ car.paid }}</td>
                     <td
                       class="px-2 py-1.5 font-mono font-semibold"
-                      :class="(asNumber(car.total_s) - asNumber(car.paid)) > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'"
+                      :class="carRemaining(car) > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'"
                     >
-                      {{ fixed(asNumber(car.total_s) - asNumber(car.paid), 0) }}
+                      {{ fixed(carRemaining(car), 0) }}
                     </td>
                     <td class="px-2 py-1.5 whitespace-nowrap text-slate-900 dark:text-slate-100">{{ car.date }}</td>
                     <td class="px-2 py-1.5 text-start print:hidden">
@@ -999,6 +1205,15 @@ function checkClientBalance(_v) {
                       >
                         <pay />
                       </button>
+                      <a
+                        :href="carPrintUrl(car)"
+                        target="_blank"
+                        tabindex="1"
+                        class="mx-0.5 inline-flex items-center rounded-lg bg-sky-600 px-1.5 py-1 text-white hover:bg-sky-700"
+                        :title="$t('print')"
+                      >
+                        <print />
+                      </a>
                     </td>
                     <td class="px-2 py-1.5 text-start print:hidden">
                       <a
@@ -1021,7 +1236,7 @@ function checkClientBalance(_v) {
                         tabindex="1"
                         style="min-width: 100px"
                         class="mx-0.5 rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-                        v-if="(asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_paid) != 0"
+                        v-if="hasUndistributedBalance"
                         @click="openModalAddPayFromBalanceCar(car)"
                       >
                         {{ $t("pay_from_balance") }}
@@ -1044,7 +1259,7 @@ function checkClientBalance(_v) {
               </table>
             </div>
 
-            <div class="mt-4 text-center" style="direction: ltr">
+            <div v-if="carsViewMode === 'list'" class="mt-4 text-center" style="direction: ltr">
               <TailwindPagination
                 :data="laravelData"
                 :limit="2"

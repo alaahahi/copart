@@ -15,16 +15,17 @@ use App\Models\CarModel;
 use App\Models\Color;
 use App\Models\Wallet;
 use App\Models\UserType;
-use App\Models\ExpensesType;
 use Illuminate\Support\Facades\DB;
 use App\Models\Transactions;
-use App\Models\Expenses;
 use App\Helpers\UploadHelper;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\DeleteCarRequest;
 use App\Models\Auction;
 use App\Services\CarService;
-
+use App\Services\DashboardActivityService;
+use App\Services\SystemWalletService;
+use App\Services\ExchangeRateService;
+use App\Services\WeatherService;
 
 use Carbon\Carbon;
 use App\Services\LedgerService;
@@ -48,12 +49,7 @@ class DashboardController extends Controller
     $this->transfersAccount= User::with('wallet')->where('type_id', $this->userAccount)->where('email','transfers@account.com');
     $this->outSupplier= User::with('wallet')->where('type_id', $this->userAccount)->where('email','supplier-out');
     $this->debtSupplier= User::with('wallet')->where('type_id', $this->userAccount)->where('email','supplier-debt');
-    
-    $this->howler= User::with('wallet')->where('type_id', $this->userAccount)->where('email','howler');
-    $this->shippingCoc= User::with('wallet')->where('type_id', $this->userAccount)->where('email','shipping-coc');
-    $this->border= User::with('wallet')->where('type_id', $this->userAccount)->where('email','border');
-    $this->iran= User::with('wallet')->where('type_id', $this->userAccount)->where('email','iran');
-    $this->dubai= User::with('wallet')->where('type_id', $this->userAccount)->where('email','dubai');
+
     $this->mainBox= User::with('wallet')->where('type_id', $this->userAccount)->where('email','mainBox@account.com');
 
     }
@@ -78,12 +74,16 @@ class DashboardController extends Controller
     }
     public function sales(Request $request)
     {
-        $owner_id=Auth::user()->owner_id;
-        $car = Car::all()->where('owner_id',$owner_id);
-        $allCars = $car->count();
-        $client = User::where('owner_id',$owner_id)->where('type_id', $this->userClient)->get();
+        $owner_id = Auth::user()->owner_id;
+        // Merchants only: client-type traders, excluding system vaults / قاصات النظام
+        $clientQuery = User::query()
+            ->where('owner_id', $owner_id)
+            ->where('type_id', $this->userClient);
+        SystemWalletService::scopeExcludeSystemVaults($clientQuery);
+        $client = $clientQuery->orderBy('name')->get(['id', 'name']);
         $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
-        return Inertia::render('Sales', ['client'=>$client, 'auctions'=>$auctions]);   
+
+        return Inertia::render('Sales', ['client' => $client, 'auctions' => $auctions]);
     }
     public function totalInfo(Request $request)
     {
@@ -130,9 +130,12 @@ class DashboardController extends Controller
         $exitCar = 0;
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
-        $sumDebit = Car::sumClientsRemaining((int) $owner_id, (int) $this->userClient);
+        // Same source of truth for KPI sum + merchant debt cards (no HAVING / no separate cache).
+        $merchantDebts = Car::clientsWithDebt((int) $owner_id, (int) $this->userClient);
+        $sumDebit = round((float) $merchantDebts->sum('balance'), 2);
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
-        $sumProfit = $car->where('results',2)->sum('profit');
+        // Same formula as purchases table row: total_s − total (all cars, not only results=2).
+        $sumProfit = $car->sum(fn ($c) => (float) ($c->total_s ?? 0) - (float) ($c->total ?? 0));
 
         $ledger = app(LedgerService::class);
         $mainBoxDollar = 0.0;
@@ -156,6 +159,7 @@ class DashboardController extends Controller
         'purchasesCost'=>$sumTotalS??0,
         'clientPaid'=>$sumPaid??0,
         'clientDebit'=>$sumDebit ?? 0,
+        'merchantDebts' => $merchantDebts->values(),
         'mainBoxDollar'=>$mainBoxDollar,
         'mainBoxDinar'=>$mainBoxDinar,
         'mainBoxDollarNew'=>$transactionIn+$transactionOut,
@@ -167,6 +171,40 @@ class DashboardController extends Controller
         return response()->json(['data'=>$data]); 
 
     }
+
+    /**
+     * Recent ledger journals for the dashboard activity feed.
+     */
+    public function recentActivity(Request $request, DashboardActivityService $activity)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $limit = (int) $request->get('limit', 12);
+
+        return response()->json([
+            'data' => $activity->recentOperations($ownerId, $limit),
+        ]);
+    }
+
+    /**
+     * Cached weather for the dashboard clock card (Open-Meteo, TTL 1h).
+     */
+    public function weather(WeatherService $weather)
+    {
+        return response()->json([
+            'data' => $weather->currentTemperature(),
+        ]);
+    }
+
+    /**
+     * Cached USD↔IQD and CAD↔USD exchange rates for the dashboard card (Qamar Al Fajr HTML scrape, TTL 1h).
+     */
+    public function exchangeRates(ExchangeRateService $rates)
+    {
+        return response()->json([
+            'data' => $rates->usdIqdRates(),
+        ]);
+    }
+
     public function client(Request $request)
     {
         $owner_id=Auth::user()->owner_id;
@@ -421,6 +459,8 @@ class DashboardController extends Controller
 
             // If 'purchase_price' and 'paid_amount' are calculated separately, add them to $dataToUpdate
             $dataToUpdate['total']=$total;
+            // Auto-compute profit (same as table): sales total − purchase total.
+            $dataToUpdate['profit'] = (float) ($dataToUpdate['total_s'] ?? $car->total_s ?? 0) - (float) $total;
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
             if($total >$car->total){
@@ -504,13 +544,6 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function getIndexExpenses () {
-
-        $expenses = Expenses::with('user')->paginate(10);
-        return Response::json($expenses, 200);    
-
-    }
-
     public function payCar(Request $request)
     {
         $authUser = auth()->user();
@@ -575,35 +608,12 @@ class DashboardController extends Controller
         if ($from && $to) {
             $data->whereBetween('date', [$from, $to]);
         }
-        
-        $resultsDinar = $data->sum('dinar');
-        $resultsDollar = $data->sum('total');
-        $resultsTotalS = $data->sum('total_s');
-        // حساب الربح فقط للسيارات المكتملة (results = 2) - إنشاء query منفصل
-        $profitQuery = Car::where('owner_id', $owner_id);
-        if ($from && $to) {
-            $profitQuery->whereBetween('date', [$from, $to]);
-        }
-        $resultsProfit = $profitQuery->where('results', 2)->sum('profit');
-        // حساب الربح المتوقع (للحمراء والخضراء حيث total != 0)
-        $expectedProfitQuery = Car::where('owner_id', $owner_id)
-            ->whereIn('results', [1, 2])
-            ->where('total', '!=', 0);
-        if ($from && $to) {
-            $expectedProfitQuery->whereBetween('date', [$from, $to]);
-        }
-        $expectedProfit = $expectedProfitQuery->get()->sum(function($car) {
-            return ($car->total_s ?? 0) - ($car->total ?? 0);
-        });
-        $resultsPaid = $data->sum('paid');
-        $totalCars = $data->count();
-        
+
         $type = $_GET['type'] ?? '';
-        
         if ($type) {
             $data->where('results', $type);
         }
-        if($q){
+        if ($q) {
             $data->where(function ($query) use ($q) {
                 $query->where('car_number', 'LIKE', '%' . $q . '%')
                     ->orWhere('vin', 'LIKE', '%' . $q . '%')
@@ -613,41 +623,31 @@ class DashboardController extends Controller
                     });
             });
         }
- 
-
-        if($user_id){
+        if ($user_id) {
             $data->where('client_id', $user_id);
-            $resultsDinar=$data->sum('dinar');
-            $resultsDollar=$data->sum('total'); 
-            $resultsTotalS=$data->sum('total_s'); 
-            // حساب الربح فقط للسيارات المكتملة (results = 2) - إنشاء query منفصل
-            $profitQuery = Car::where('owner_id', $owner_id)->where('client_id', $user_id);
-            if ($from && $to) {
-                $profitQuery->whereBetween('date', [$from, $to]);
-            }
-            $resultsProfit = $profitQuery->where('results', 2)->sum('profit');
-            // حساب الربح المتوقع (للحمراء والخضراء حيث total != 0)
-            $expectedProfitQuery = Car::where('owner_id', $owner_id)
-                ->where('client_id', $user_id)
-                ->whereIn('results', [1, 2])
-                ->where('total', '!=', 0);
-            if ($from && $to) {
-                $expectedProfitQuery->whereBetween('date', [$from, $to]);
-            }
-            $expectedProfit = $expectedProfitQuery->get()->sum(function($car) {
-                return ($car->total_s ?? 0) - ($car->total ?? 0);
-            });
-            $resultsPaid=$data->sum('paid'); 
-            $totalCars = $data->count();
         }
-        $data =$data->orderBy('no', 'DESC')->paginate($limit)->toArray();
+
+        // Aggregates after all filters — profit matches table row: Σ(total_s − total).
+        $resultsDinar = $data->sum('dinar');
+        $resultsDollar = $data->sum('total');
+        $resultsTotalS = $data->sum('total_s');
+        $resultsPaid = $data->sum('paid');
+        $totalCars = $data->count();
+        $resultsProfit = (float) (clone $data)->toBase()
+            ->reorder()
+            ->selectRaw('COALESCE(SUM(COALESCE(total_s, 0) - COALESCE(total, 0)), 0) as profit_sum')
+            ->value('profit_sum');
+        // Alias kept for older clients; same as resultsProfit (no separate paid-only formula).
+        $expectedProfit = $resultsProfit;
+
+        $data = $data->orderBy('no', 'DESC')->paginate($limit)->toArray();
         $data['resultsDinar'] = $resultsDinar;
         $data['resultsDollar'] = $resultsDollar;
-        $data['totalCars']  =$totalCars;
+        $data['totalCars'] = $totalCars;
         $data['resultsProfit'] = $resultsProfit;
-        $data['expectedProfit'] = $expectedProfit ?? 0;
-        $data['resultsPaid']  =$resultsPaid;
-        $data['resultsTotalS']  =$resultsTotalS;
+        $data['expectedProfit'] = $expectedProfit;
+        $data['resultsPaid'] = $resultsPaid;
+        $data['resultsTotalS'] = $resultsTotalS;
  
 
         return Response::json($data, 200);

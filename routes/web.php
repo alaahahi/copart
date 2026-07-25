@@ -17,6 +17,7 @@ use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\SystemConfigController;
+use App\Http\Controllers\QaE2eController;
 
 use App\Models\SystemConfig;
 
@@ -125,7 +126,6 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('getIndexCar',[DashboardController::class, 'getIndexCar'])->name('getIndexCar');
     Route::get('getIndexCarSearch',[DashboardController::class, 'getIndexCarSearch'])->name('getIndexCarSearch');
 
-    Route::get('addExpenses',[DashboardController::class, 'addExpenses'])->name('addExpenses');
     Route::get('addPaymentCar',[DashboardController::class, 'addPaymentCar'])->name('addPaymentCar');
 
     
@@ -175,7 +175,11 @@ Route::group(['middleware' => ['auth','verified']], function () {
 
     Route::get('wallet',[AccountingController::class, 'wallet'])->name("wallet");
 
-    
+    Route::middleware('admin')->prefix('qa')->group(function () {
+        Route::get('e2e', [QaE2eController::class, 'index'])->name('qa.e2e');
+        Route::get('e2e/last', [QaE2eController::class, 'last'])->name('qa.e2e.last');
+        Route::post('e2e/run', [QaE2eController::class, 'run'])->name('qa.e2e.run');
+    });
  });
 
 

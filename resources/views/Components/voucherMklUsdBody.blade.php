@@ -1,13 +1,12 @@
 @php
     $isReceipt = ($voucherType ?? 'receipt') === 'receipt';
     $clientName = $clientName ?? ($clientData['client']->name ?? '');
-    $decimals = ($currency ?? '$') === '$' ? 2 : 0;
-    $amountDisplay = isset($amount) ? number_format((float) $amount, $decimals) : '';
+    $amountDisplay = isset($amount) ? \App\Helpers\Help::formatMoney($amount, $currency ?? '$') : '';
     $amountWords = \App\Helpers\Help::numberToWords((float) ($amount ?? 0), $currency ?? '$');
     $paidUpNum = is_numeric($paidUp ?? null) ? (float) $paidUp : null;
     $restNum = is_numeric($rest ?? null) ? (float) $rest : null;
-    $paidUpDisplay = $paidUpNum !== null ? number_format($paidUpNum, $decimals) : ($paidUp ?? '');
-    $restDisplay = $restNum !== null ? number_format($restNum, $decimals) : ($rest ?? '');
+    $paidUpDisplay = $paidUpNum !== null ? \App\Helpers\Help::formatMoney($paidUpNum, $currency ?? '$') : ($paidUp ?? '');
+    $restDisplay = $restNum !== null ? \App\Helpers\Help::formatMoney($restNum, $currency ?? '$') : ($rest ?? '');
     $paidUpWords = $paidUpNum !== null ? \App\Helpers\Help::numberToWords($paidUpNum, $currency ?? '$') : '';
     $restWords = $restNum !== null ? \App\Helpers\Help::numberToWords($restNum, $currency ?? '$') : '';
     $dateParts = [];

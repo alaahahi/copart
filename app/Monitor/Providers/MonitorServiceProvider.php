@@ -90,6 +90,8 @@ class MonitorServiceProvider extends ServiceProvider
                     ->name('monitor.api.laravel-logs');
                 Route::get('/laravel-log-files', [\App\Monitor\Http\Controllers\MonitorApiController::class, 'laravelLogFiles'])
                     ->name('monitor.api.laravel-log-files');
+                Route::post('/clear-logs', [\App\Monitor\Http\Controllers\MonitorApiController::class, 'clearLogs'])
+                    ->name('monitor.api.clear-logs');
             });
 
         Route::middleware($statusMiddleware)

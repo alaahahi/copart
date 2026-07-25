@@ -239,45 +239,61 @@ class Car extends Model
         };
     }
 
+    /**
+     * Base per-client remaining query (same formula as clientRemainingBalanceSqlSubquery).
+     * Does not filter by balance — callers wrap / filter as needed.
+     */
+    public static function clientsRemainingBaseQuery(int $ownerId, int $clientTypeId): \Illuminate\Database\Query\Builder
+    {
+        return \Illuminate\Support\Facades\DB::table('users')
+            ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
+            ->selectSub(self::clientRemainingBalanceSqlSubquery(), 'balance')
+            ->where('users.owner_id', $ownerId)
+            ->where('users.type_id', $clientTypeId)
+            ->whereNull('users.deleted_at');
+    }
+
+    /**
+     * Filter a query that already selects a `balance` alias.
+     * Uses a subquery wrap — SQLite rejects HAVING on non-aggregate queries,
+     * and MySQL ONLY_FULL_GROUP_BY is equally fragile with HAVING alone.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  'gt'|'neq'  $mode  gt = balance > 0 (debts), neq = balance != 0
+     */
+    public static function filterClientsByBalance(
+        \Illuminate\Database\Query\Builder $query,
+        string $mode = 'gt'
+    ): \Illuminate\Database\Query\Builder {
+        $wrapped = \Illuminate\Support\Facades\DB::query()
+            ->fromSub($query->clone()->reorder(), 'client_rows');
+
+        if ($mode === 'neq') {
+            $wrapped->where('balance', '!=', 0);
+        } else {
+            $wrapped->where('balance', '>', 0);
+        }
+
+        return $wrapped->orderByDesc('balance');
+    }
+
+    /** Clients with remaining debt (balance > 0), same source as the KPI sum. */
+    public static function clientsWithDebt(int $ownerId, int $clientTypeId, bool $excludeZero = false)
+    {
+        return self::filterClientsByBalance(
+            self::clientsRemainingBaseQuery($ownerId, $clientTypeId),
+            $excludeZero ? 'neq' : 'gt'
+        )->get();
+    }
+
     /** Sum of (cars − account payments) across all clients of a tenant. */
     public static function sumClientsRemaining(int $ownerId, int $clientTypeId): float
     {
-        $row = \Illuminate\Support\Facades\DB::selectOne(
-            "SELECT ROUND(COALESCE(SUM(client_bal), 0), 2) AS total
-             FROM (
-                SELECT
-                    COALESCE(
-                        (
-                            SELECT SUM(COALESCE(c.total_s, 0) - COALESCE(c.discount, 0))
-                            FROM car AS c
-                            WHERE c.client_id = u.id
-                              AND c.deleted_at IS NULL
-                        ),
-                        0
-                    )
-                    -
-                    COALESCE(
-                        (
-                            SELECT -SUM(t.amount)
-                            FROM transactions AS t
-                            INNER JOIN wallets AS w ON w.id = t.wallet_id
-                            WHERE w.user_id = u.id
-                              AND t.type = 'out'
-                              AND t.is_pay = 1
-                              AND t.amount < 0
-                              AND t.currency = '$'
-                              AND t.deleted_at IS NULL
-                        ),
-                        0
-                    ) AS client_bal
-                FROM users AS u
-                WHERE u.owner_id = ?
-                  AND u.type_id = ?
-             ) AS x",
-            [$ownerId, $clientTypeId]
-        );
+        $total = \Illuminate\Support\Facades\DB::query()
+            ->fromSub(self::clientsRemainingBaseQuery($ownerId, $clientTypeId), 'x')
+            ->sum('balance');
 
-        return (float) ($row->total ?? 0);
+        return round((float) $total, 2);
     }
 
 }

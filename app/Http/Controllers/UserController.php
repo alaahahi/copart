@@ -24,11 +24,17 @@ use Carbon\Carbon;
 use App\Models\Transactions;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ClientAccountService;
 use App\Services\LedgerService;
+use App\Services\SystemWalletService;
+use App\Services\AccountingCacheService;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
-    public function __construct(){
+    public function __construct(
+        protected ClientAccountService $clientAccounts
+    ) {
          $this->url = env('FRONTEND_URL');
          $this->userAdmin =  UserType::where('name', 'admin')->first()->id;
          $this->selesKirkuk =  UserType::where('name', 'selesKirkuk')->first()->id ?? 0;
@@ -78,132 +84,199 @@ class UserController extends Controller
         $to = request()->input('to', 0);
         $owner_id = Auth::user()->owner_id;
         $userClient = $this->userClient ?? 0;
+        $userAccount = $this->userAccount ?? 0;
         $page = request()->input('page', '');
         $print = request()->input('print', 0);
         $excludeZero = request()->input('exclude_zero', 0);
 
+        // Tab filter keys (Clients Index)
+        // traders          → التجار (clients excluding system vaults)
+        // traders_qasa     → تجار لديهم قاصة (CLIENT_HAS_QASA_FLAG, not system vault)
+        // system_qasa      → قاصات النظام (account wallets + legacy client vaults)
+        // show_in_dashboard→ legacy alias for traders_qasa
+        $isTradersQasa = in_array($q, ['traders_qasa', 'show_in_dashboard'], true);
+        $isSystemQasa = $q === 'system_qasa';
+        $isTraders = $q === 'traders';
+        $useQasaBalance = $isTradersQasa || $isSystemQasa;
 
         $query = DB::table('users')
-            ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
-            ->selectSub(function ($subquery) use ($userClient) {
+            ->select(
+                'users.id',
+                'users.name',
+                'users.phone',
+                'users.email',
+                'users.type_id',
+                'users.created_at',
+                'users.show_in_dashboard'
+            )
+            ->selectSub(function ($subquery) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
                     ->whereColumn('car.client_id', 'users.id')
                     ->whereNull('car.deleted_at');
             }, 'car_count')
-            ->selectSub(function ($subquery) use ($userClient) {
+            ->selectSub(function ($subquery) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
                     ->whereColumn('car.client_id', 'users.id')
                     ->where('car.results', 2)
                     ->whereNull('car.deleted_at');
             }, 'car_count_completed')
-            ->selectSub(function ($subquery) use ($userClient) {
+            ->selectSub(function ($subquery) {
                 $subquery->selectRaw('COUNT(id)')
                     ->from('car')
                     ->whereColumn('car.client_id', 'users.id')
                     ->where('car.total_s', 0)
                     ->whereNull('car.deleted_at');
             }, 'car_total_un_pay')
-            // قاسة / عرض بالمحاسبة → رصيد الدفتر؛ باقي الشاشات (الرئيسية، قائمة التجار) → متبقي السيارات
+            // تجار بقاصة / قاصات النظام → رصيد الدفتر (أو المحفظة كاحتياطي)؛ الباقي → متبقي السيارات
             ->selectSub(
-                $q === 'show_in_dashboard'
+                $useQasaBalance
                     ? LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$')
                     : Car::clientRemainingBalanceSqlSubquery(),
                 'balance'
             )
             ->where('users.owner_id', $owner_id)
-            ->where('users.type_id', $userClient)
+            ->whereNull('users.deleted_at')
+            ->orderByDesc('balance');
 
-            ->orderBy('balance', 'desc');
-    
-            // Filter: clients flagged for accounting page (عرض بالمحاسبة / قاسة tab)
-            if ($q === 'show_in_dashboard') {
+        if ($isSystemQasa) {
+            // قاصات النظام: نوع account + قاصات عميل قديمة (مثل مصاريف الشركة)
+            SystemWalletService::scopeSystemVaults($query, (int) $userAccount, (int) $userClient);
+        } else {
+            $query->where('users.type_id', $userClient);
+
+            if ($isTraders || $isTradersQasa) {
+                SystemWalletService::scopeExcludeSystemVaults($query);
+            }
+
+            if ($isTradersQasa) {
+                // تجار لديهم قاصة فقط (ليس قاصة نظام)
                 $query->where('users.show_in_dashboard', true);
-            } elseif ($q && !in_array($q, ['debit', 'box_movement'], true)) {
-                $query->leftJoin('car', 'users.id', '=', 'car.client_id')
-                    ->where(function ($subQuery) use ($q) {
-                        $subQuery->where('users.name', 'like', '%' . $q . '%')
-                            ->orWhere('users.phone', 'like', '%' . $q . '%')
-                            ->orWhere(function ($carQuery) use ($q) {
-                                $carQuery->where('car.vin', 'like', '%' . $q . '%')
-                                    ->orWhere('car.car_number', 'like', '%' . $q . '%');
-                            });
-                    });
-                $query->groupBy('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard');
             }
+        }
 
-            if ($q === 'box_movement') {
-                $query->whereExists(function ($subQuery) use ($from, $to) {
-                    $subQuery->select(DB::raw(1))
-                        ->from('transactions')
-                        ->whereColumn('transactions.morphed_id', 'users.id')
-                        ->where('transactions.morphed_type', 'App\\Models\\User')
-                        ->whereIn('transactions.type', ['inUserBox', 'outUserBox'])
-                        ->whereNull('transactions.deleted_at');
-
-                    if ($from && $to) {
-                        $subQuery->whereBetween('transactions.created_at', [$from, $to]);
-                    }
+        // Free-text / category filters (not used by special tab keys)
+        if ($q && ! in_array($q, ['debit', 'box_movement', 'traders', 'traders_qasa', 'system_qasa', 'show_in_dashboard'], true)) {
+            $query->leftJoin('car', 'users.id', '=', 'car.client_id')
+                ->where(function ($subQuery) use ($q) {
+                    $subQuery->where('users.name', 'like', '%' . $q . '%')
+                        ->orWhere('users.phone', 'like', '%' . $q . '%')
+                        ->orWhere(function ($carQuery) use ($q) {
+                            $carQuery->where('car.vin', 'like', '%' . $q . '%')
+                                ->orWhere('car.car_number', 'like', '%' . $q . '%');
+                        });
                 });
-            }
-    
+            $query->groupBy(
+                'users.id',
+                'users.name',
+                'users.phone',
+                'users.email',
+                'users.type_id',
+                'users.created_at',
+                'users.show_in_dashboard'
+            );
+        }
+
+        if ($q === 'box_movement') {
+            $query->whereExists(function ($subQuery) use ($from, $to) {
+                $subQuery->select(DB::raw(1))
+                    ->from('transactions')
+                    ->whereColumn('transactions.morphed_id', 'users.id')
+                    ->where('transactions.morphed_type', 'App\\Models\\User')
+                    ->whereIn('transactions.type', ['inUserBox', 'outUserBox'])
+                    ->whereNull('transactions.deleted_at');
+
+                if ($from && $to) {
+                    $subQuery->whereBetween('transactions.created_at', [$from, $to]);
+                }
+            });
+        }
+
         if ($from && $to && $q !== 'box_movement') {
             $query->whereBetween('users.created_at', [$from, $to]);
         }
-        if($print==1)
-        {
-            $config=SystemConfig::first();
 
-            if($q=='debit'){
-                if ($excludeZero == 1) {
-                    // عرض المدين والدائن فقط (balance != 0)
-                    $data = $query->havingRaw('balance != 0')->get();
-                } else {
-                    // السلوك القديم: عرض المدين فقط (balance > 0)
-                    $data = $query->havingRaw('balance > 0')->get();
-                }
-            }else{
-                if ($excludeZero == 1) {
-                    // استبعاد الرصيد = 0
-                    $data = $query->havingRaw('balance != 0')->get();
-                } else {
-                    // السلوك القديم: عرض جميع العملاء
-                    $data = $query->get();
-                }
+        // SQLite rejects HAVING on non-aggregate queries — wrap + WHERE on balance.
+        $applyBalanceFilter = fn ($builder, bool $excludeZeroFlag) => Car::filterClientsByBalance(
+            $builder,
+            $excludeZeroFlag ? 'neq' : 'gt'
+        );
+
+        if ($print == 1) {
+            $config = SystemConfig::first();
+
+            if ($q == 'debit' || (int) $excludeZero === 1) {
+                $data = $applyBalanceFilter($query, (int) $excludeZero === 1)->get();
+            } else {
+                $data = $query->get();
             }
-            $data=$data->toArray();
-            return view('reportClients',compact('data','config','owner_id'));
+            $data = $data->toArray();
 
+            return view('reportClients', compact('data', 'config', 'owner_id'));
         }
-        if (in_array($q, ['debit', 'box_movement', 'show_in_dashboard'], true)) {
-            if ($page == 1) {
+
+        $fullListKeys = ['debit', 'box_movement', 'traders_qasa', 'system_qasa', 'show_in_dashboard'];
+        if (in_array($q, $fullListKeys, true)) {
+            // page>1 returns [] so infinite-scroll clients list can stop after first fetch
+            if ((int) $page === 1) {
                 if ($q == 'debit') {
-                    if ($excludeZero == 1) {
-                        $data = $query->havingRaw('balance != 0')->get();
-                    } else {
-                        $data = $query->havingRaw('balance > 0')->get();
-                    }
+                    $data = $applyBalanceFilter($query, (int) $excludeZero === 1)->get();
                 } else {
                     $data = $query->get();
                 }
+
+                $data = $this->attachClientDeleteFlags($data, (int) $userAccount);
+
                 return response()->json(['data' => $data], 200);
-            } else {
-                return response()->json(['data' => []], 200);
             }
-        } else {
-            $paginationLimit = 25;
-            if ($excludeZero == 1) {
-                // إذا كان exclude_zero=1، استبعاد الرصيد = 0
-                $data = $query->havingRaw('balance != 0')->paginate($paginationLimit);
-            } else {
-                // السلوك القديم: عرض جميع العملاء
-                $data = $query->paginate($paginationLimit);
-            }
-            return response()->json($data, 200);
+
+            return response()->json(['data' => []], 200);
         }
+
+        $paginationLimit = 25;
+        if ((int) $excludeZero === 1) {
+            $data = $applyBalanceFilter($query, true)->paginate($paginationLimit);
+        } else {
+            $data = $query->paginate($paginationLimit);
+        }
+
+        $data->setCollection(
+            $this->attachClientDeleteFlags($data->getCollection(), (int) $userAccount)
+        );
+
+        return response()->json($data, 200);
     }
-    
+
+    /**
+     * Attach has_movements / can_delete so the UI can hide trash on vaults with history.
+     * System vaults: deletable only with zero movements. Merchants: deletable only with zero cars.
+     *
+     * @param  \Illuminate\Support\Collection|array  $rows
+     * @return \Illuminate\Support\Collection
+     */
+    protected function attachClientDeleteFlags($rows, int $accountTypeId)
+    {
+        $collection = collect($rows);
+        $movementIds = array_fill_keys(
+            SystemWalletService::idsWithMovements($collection->pluck('id')->all()),
+            true
+        );
+
+        return $collection->map(function ($row) use ($movementIds, $accountTypeId) {
+            $row = is_array($row) ? (object) $row : $row;
+            $hasMovements = isset($movementIds[(int) $row->id]);
+            $isSystemVault = SystemWalletService::isSystemVaultUser($row, $accountTypeId);
+
+            $row->has_movements = $hasMovements;
+            $row->can_delete = $isSystemVault
+                ? ! $hasMovements
+                : ((int) ($row->car_count ?? 0) === 0);
+
+            return $row;
+        })->values();
+    }
+
     public function create()
     {
         $usersType = UserType::all();
@@ -241,11 +314,13 @@ class UserController extends Controller
             'year_date' => $year_date,
             'owner_id' => $owner_id,
             'created' => Carbon::now()->format('Y-m-d'),
-            // عرض بالمحاسبة (قاسة) — hidden from accounting by default until explicitly enabled.
+            // show_in_dashboard = قاصة (LedgerService::CLIENT_HAS_QASA_FLAG)
             'show_in_dashboard' => $request->boolean('show_in_dashboard'),
         ]);
 
         Wallet::create(['user_id' => $user->id]);
+        // Always AR 1200-{id}; if قاصة also 1210/1220 — linked via party_id.
+        $this->clientAccounts->provisionForClient($user);
 
         return Response::json($user, 200);
     }
@@ -265,9 +340,12 @@ class UserController extends Controller
         $client->update([
             'name' => $validated['name'],
             'phone' => $validated['phone'] ?? null,
-            // عرض بالمحاسبة (قاسة) — editable from the edit modal.
+            // show_in_dashboard = قاصة (LedgerService::CLIENT_HAS_QASA_FLAG)
             'show_in_dashboard' => $request->boolean('show_in_dashboard'),
         ]);
+
+        // If قاصة turned on: create missing قاصة accounts. Off: keep history (no delete).
+        $this->clientAccounts->syncQasaFlag($client->fresh());
 
         return Response::json($client, 200);
     }
@@ -286,7 +364,10 @@ class UserController extends Controller
         $client->show_in_dashboard = $validated['show_in_dashboard'];
         $client->save();
 
-        // show_in_dashboard controls visibility on Accounting page (عرض بالمحاسبة)
+        // قاصة on → ensure 1210/1220 exist; off → do not delete ledger history
+        $this->clientAccounts->syncQasaFlag($client);
+
+        // show_in_dashboard controls visibility on Accounting page (عرض بالمحاسبة / قاصة)
         return response()->json([
             'message' => 'تم تحديث عرض التاجر في صفحة المحاسبة',
             'show_in_dashboard' => (bool) $client->show_in_dashboard,
@@ -294,33 +375,60 @@ class UserController extends Controller
     }
     public function delClient(Request $request)
     {
-    // Find the client
-    $client = User::with('wallet')->where('id', $request->id)->first();
+        $ownerId = (int) Auth::user()->owner_id;
+        $client = User::with('wallet')
+            ->where('id', $request->id)
+            ->where('owner_id', $ownerId)
+            ->first();
 
-    if ($client) {
-        // Get related transactions
-        $transactions = Transactions::where('wallet_id', $client->wallet->id)->get();
+        if (! $client) {
+            return response()->json(['message' => 'Client not found'], 404);
+        }
 
-        // Get related cars
-        $cars = Car::where('client_id', $client->id)->get();
+        $isSystemVault = SystemWalletService::isSystemVaultUser($client, (int) $this->userAccount);
 
-        // Delete transactions
-        $transactions->each(function ($transaction) {
-            $transaction->delete();
+        // Defense in depth: never soft-delete a system vault that still has movements.
+        if ($isSystemVault && SystemWalletService::vaultHasMovements($client)) {
+            return response()->json([
+                'message' => 'لا يمكن حذف القاصة لأنها تحتوي على حركات مالية',
+            ], 422);
+        }
+
+        $snapshot = [
+            'id' => $client->id,
+            'name' => $client->name,
+            'email' => $client->email,
+            'type_id' => $client->type_id,
+            'owner_id' => $client->owner_id,
+            'is_system_vault' => $isSystemVault,
+        ];
+
+        DB::transaction(function () use ($client, $isSystemVault, $ownerId, $snapshot) {
+            // Merchants: soft-delete related cars/transactions. System vaults keep ledger history.
+            if (! $isSystemVault) {
+                if ($client->wallet) {
+                    Transactions::where('wallet_id', $client->wallet->id)->get()->each->delete();
+                }
+                Car::where('client_id', $client->id)->get()->each->delete();
+            }
+
+            $client->delete();
+
+            Log::info('User soft-deleted', array_merge($snapshot, [
+                'deleted_by' => Auth::id(),
+                'deleted_at' => now()->toDateTimeString(),
+            ]));
+
+            if ($isSystemVault) {
+                app(AccountingCacheService::class)->forgetOwnerAccounts($ownerId);
+            }
         });
 
-        // Delete cars
-        $cars->each(function ($car) {
-            $car->delete();
-        });
-
-        // Delete the client
-        $client->delete();
-
-        return response()->json(['message' => 'Client and related records deleted'], 200);
-    }
-
-    return response()->json(['message' => 'Client not found'], 404);
+        return response()->json([
+            'message' => $isSystemVault
+                ? 'تم حذف القاصة ولن تُعاد تلقائياً'
+                : 'Client and related records deleted',
+        ], 200);
     }
     public function getCoordinator(Request $request)
     {
@@ -408,12 +516,22 @@ class UserController extends Controller
      * @return Response
      */
     public function destroy($id)
-    {   
-     
-       // User::where('parent_id',$id)->update(['parent_id' =>null]);
-        User::find($id)->delete();
-     
-        return Inertia::render('Users/Index', ['url'=>$this->url]); 
+    {
+        $user = User::find($id);
+        if ($user) {
+            $snapshot = $user->only(['id', 'name', 'email', 'type_id', 'owner_id']);
+            $user->delete();
+            Log::info('User soft-deleted', array_merge($snapshot, [
+                'deleted_by' => Auth::id(),
+                'deleted_at' => now()->toDateTimeString(),
+                'via' => 'destroy',
+            ]));
+            if (SystemWalletService::isSystemVaultUser((object) $snapshot, (int) $this->userAccount)) {
+                app(AccountingCacheService::class)->forgetOwnerAccounts((int) ($snapshot['owner_id'] ?? 0));
+            }
+        }
+
+        return Inertia::render('Users/Index', ['url' => $this->url]);
     }
     public function ban($id)
     {

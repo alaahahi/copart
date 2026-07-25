@@ -88,8 +88,8 @@
             <tr>
                 <td>{{ $data->created }}</td>
                 <td>{{ $data->note }}</td>
-                <td>{{ $data->amount_dollar }}</td>
-                <td>{{ $data->amount_dinar  }}</td>
+                <td>{{ \App\Helpers\Help::formatMoney($data->amount_dollar, '$') }}</td>
+                <td>{{ \App\Helpers\Help::formatMoney($data->amount_dinar, 'IQD') }}</td>
             </tr>
             @endforeach
         </tbody>

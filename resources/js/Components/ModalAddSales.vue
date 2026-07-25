@@ -1,13 +1,18 @@
 <script setup>
 import { computed, ref } from 'vue';
 
-defineProps({
+const props = defineProps({
   show: Boolean,
   data: Array,
   accounts: Array,
-  tagOptions: Array,
-  showExtendedFields: Boolean,
-  showTagSelect: Boolean,
+  tagOptions: { type: Array, default: () => [] },
+  showTagSelect: { type: Boolean, default: false },
+  /** receipt = قبض/إيداع (أخضر)، payment = صرف/سحب (أحمر) */
+  variant: {
+    type: String,
+    default: 'receipt',
+    validator: (v) => ['receipt', 'payment'].includes(v),
+  },
   title: {
     type: String,
     default: 'وصل قبض',
@@ -15,6 +20,10 @@ defineProps({
   subtitle: {
     type: String,
     default: 'إضافة مبلغ إلى الصندوق بالدولار أو الدينار',
+  },
+  confirmLabel: {
+    type: String,
+    default: '',
   },
 });
 
@@ -32,6 +41,7 @@ const form = ref({
   amountDollar: '',
   amountDinar: '',
   amountNote: '',
+  note: '',
   date: getTodayDate(),
   tag: '',
 });
@@ -40,11 +50,17 @@ const canSubmit = computed(
   () => !!(form.value.amountDollar || form.value.amountDinar)
 );
 
+const resolvedConfirmLabel = computed(() => {
+  if (props.confirmLabel) return props.confirmLabel;
+  return props.variant === 'payment' ? 'تأكيد الصرف' : 'تأكيد القبض';
+});
+
 const resetForm = () => {
   form.value = {
     amountDollar: '',
     amountDinar: '',
     amountNote: '',
+    note: '',
     date: getTodayDate(),
     tag: '',
   };
@@ -52,7 +68,12 @@ const resetForm = () => {
 
 const submit = () => {
   if (!canSubmit.value) return;
-  emit('a', { ...form.value });
+  const noteText = String(form.value.note || form.value.amountNote || '').trim();
+  emit('a', {
+    ...form.value,
+    amountNote: noteText,
+    note: noteText,
+  });
   resetForm();
 };
 </script>
@@ -64,14 +85,17 @@ const submit = () => {
       class="erp-modal-mask"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="receipt-modal-title"
+      aria-labelledby="voucher-modal-title"
       @click.self="emit('close')"
     >
       <div class="erp-modal-panel">
-        <header class="erp-modal-header erp-modal-header--receipt">
+        <header
+          class="erp-modal-header"
+          :class="variant === 'payment' ? 'erp-modal-header--payment' : 'erp-modal-header--receipt'"
+        >
           <div class="erp-modal-header-text">
             <p class="erp-modal-eyebrow">المحاسبة</p>
-            <h2 id="receipt-modal-title" class="erp-modal-title">{{ title }}</h2>
+            <h2 id="voucher-modal-title" class="erp-modal-title">{{ title }}</h2>
             <p class="erp-modal-subtitle">{{ subtitle }}</p>
           </div>
           <button
@@ -91,11 +115,11 @@ const submit = () => {
             <h3 class="erp-section-label">المبالغ</h3>
             <div class="erp-grid-2">
               <div class="erp-field">
-                <label class="erp-label" for="receipt-usd">المبلغ بالدولار</label>
+                <label class="erp-label" for="voucher-usd">المبلغ بالدولار</label>
                 <div class="erp-input-wrap">
                   <span class="erp-input-prefix" aria-hidden="true">$</span>
                   <input
-                    id="receipt-usd"
+                    id="voucher-usd"
                     v-model="form.amountDollar"
                     type="number"
                     min="0"
@@ -107,11 +131,11 @@ const submit = () => {
                 </div>
               </div>
               <div class="erp-field">
-                <label class="erp-label" for="receipt-iqd">المبلغ بالدينار</label>
+                <label class="erp-label" for="voucher-iqd">المبلغ بالدينار</label>
                 <div class="erp-input-wrap">
                   <span class="erp-input-prefix" aria-hidden="true">د.ع</span>
                   <input
-                    id="receipt-iqd"
+                    id="voucher-iqd"
                     v-model="form.amountDinar"
                     type="number"
                     min="0"
@@ -128,22 +152,42 @@ const submit = () => {
           <section class="erp-field-group">
             <h3 class="erp-section-label">التفاصيل</h3>
             <div class="erp-grid-2">
-              <div class="erp-field erp-field--span">
-                <label class="erp-label" for="receipt-note">ملاحظة</label>
+              <div class="erp-field">
+                <label class="erp-label" for="voucher-date">التاريخ</label>
                 <input
-                  id="receipt-note"
-                  v-model="form.amountNote"
+                  id="voucher-date"
+                  v-model="form.date"
+                  type="date"
+                  class="erp-input"
+                />
+              </div>
+              <div v-if="showTagSelect" class="erp-field">
+                <label class="erp-label" for="voucher-tag">التاغ</label>
+                <input
+                  v-if="!tagOptions.length"
+                  id="voucher-tag"
+                  v-model="form.tag"
                   type="text"
                   placeholder="اختياري"
                   class="erp-input"
                 />
+                <select
+                  v-else
+                  id="voucher-tag"
+                  v-model="form.tag"
+                  class="erp-input"
+                >
+                  <option value="">— بدون تاغ —</option>
+                  <option v-for="t in tagOptions" :key="t.id" :value="t.name">{{ t.name }}</option>
+                </select>
               </div>
-              <div class="erp-field">
-                <label class="erp-label" for="receipt-date">التاريخ</label>
+              <div class="erp-field erp-field--span">
+                <label class="erp-label" for="voucher-note">الوصف / ملاحظة</label>
                 <input
-                  id="receipt-date"
-                  v-model="form.date"
-                  type="date"
+                  id="voucher-note"
+                  v-model="form.note"
+                  type="text"
+                  placeholder="اختياري"
                   class="erp-input"
                 />
               </div>
@@ -157,11 +201,12 @@ const submit = () => {
           </button>
           <button
             type="button"
-            class="erp-btn erp-btn--success"
+            class="erp-btn"
+            :class="variant === 'payment' ? 'erp-btn--danger' : 'erp-btn--success'"
             :disabled="!canSubmit"
             @click="submit"
           >
-            تأكيد القبض
+            {{ resolvedConfirmLabel }}
           </button>
         </footer>
       </div>
@@ -200,7 +245,14 @@ const submit = () => {
   gap: 1rem;
   padding: 1.25rem 1.25rem 1rem;
   border-bottom: 1px solid #1e293b;
+}
+
+.erp-modal-header--receipt {
   background: linear-gradient(180deg, #14532d 0%, #0f172a 100%);
+}
+
+.erp-modal-header--payment {
+  background: linear-gradient(180deg, #7f1d1d 0%, #0f172a 100%);
 }
 
 .erp-modal-header-text {
@@ -213,6 +265,10 @@ const submit = () => {
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #86efac;
+}
+
+.erp-modal-header--payment .erp-modal-eyebrow {
+  color: #fca5a5;
 }
 
 .erp-modal-title {
@@ -343,19 +399,18 @@ const submit = () => {
 }
 
 .erp-modal-footer {
-  display: flex;
-  flex-direction: column-reverse;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+  width: 100%;
   padding: 1rem 1.25rem 1.25rem;
   border-top: 1px solid #1e293b;
   background: #020617;
 }
 
-@media (min-width: 480px) {
-  .erp-modal-footer {
-    flex-direction: row;
-    justify-content: flex-end;
-  }
+.erp-modal-footer .erp-btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .erp-btn {
@@ -392,15 +447,20 @@ const submit = () => {
   background: #15803d;
 }
 
-.erp-btn--success:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.erp-btn--danger {
+  border: 1px solid #b91c1c;
+  background: #dc2626;
+  color: #ffffff;
 }
 
-@media (min-width: 480px) {
-  .erp-btn {
-    min-width: 8.5rem;
-  }
+.erp-btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.erp-btn--success:disabled,
+.erp-btn--danger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .erp-modal-enter-active,

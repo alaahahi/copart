@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\DeactivateLedgerAccountRequest;
+use App\Http\Requests\StoreLedgerAccountRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
@@ -45,6 +46,7 @@ class LedgerController extends Controller
         $accounts = LedgerAccount::query()
             ->where('owner_id', $ownerId)
             ->where('is_active', true)
+            ->withCount('lines')
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {
                     $inner->where('code', 'like', "%{$q}%")
@@ -55,6 +57,8 @@ class LedgerController extends Controller
             ->orderBy('code')
             ->get();
 
+        $depthById = $this->accountDepthMap($accounts);
+
         $typeOrder = ['asset', 'liability', 'equity', 'income', 'expense'];
         $typeLabels = [
             'asset' => 'الأصول',
@@ -64,16 +68,33 @@ class LedgerController extends Controller
             'expense' => 'المصاريف',
         ];
 
+        $parentOptions = $accounts->map(fn (LedgerAccount $a) => [
+            'id' => $a->id,
+            'code' => $a->code,
+            'name' => $a->name_ar ?: $a->name,
+            'type' => $a->type,
+        ])->values()->all();
+
         $groups = [];
         foreach ($typeOrder as $type) {
-            $items = $accounts->where('type', $type)->values()->map(function (LedgerAccount $account) use ($currency) {
+            $typed = $accounts->where('type', $type)->values();
+            $ordered = $this->orderAccountsByTree($typed);
+            $items = $ordered->map(function (LedgerAccount $account) use ($currency, $depthById) {
+                $hasMovements = ((int) ($account->lines_count ?? 0)) > 0;
+
                 return [
                     'id' => $account->id,
                     'code' => $account->code,
                     'name' => $account->name_ar ?: $account->name,
                     'name_ar' => $account->name_ar,
                     'name_en' => $account->name,
+                    'type' => $account->type,
+                    'currency' => $account->currency,
+                    'parent_id' => $account->parent_id,
+                    'depth' => $depthById[$account->id] ?? 0,
                     'is_system' => (bool) $account->is_system,
+                    'has_movements' => $hasMovements,
+                    'can_edit_code' => ! $account->is_system && ! $hasMovements,
                     'balance' => $account->balance($currency),
                 ];
             })->all();
@@ -92,8 +113,30 @@ class LedgerController extends Controller
 
         return Response::json([
             'groups' => $groups,
+            'parent_options' => $parentOptions,
             'currency' => $currency,
         ], 200);
+    }
+
+    public function storeAccount(StoreLedgerAccountRequest $request, LedgerService $ledger)
+    {
+        $this->authorizeLedger();
+
+        $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+
+        try {
+            $account = $ledger->createAccount($ownerId, $data);
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            return Response::json(['message' => 'تعذر إنشاء الحساب'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم إضافة الحساب بنجاح',
+            'account' => $this->accountPayload($account),
+        ], 201);
     }
 
     public function updateAccount(UpdateLedgerAccountRequest $request, LedgerService $ledger)
@@ -101,30 +144,21 @@ class LedgerController extends Controller
         $this->authorizeLedger();
 
         $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+        $accountId = (int) $data['id'];
+        unset($data['id']);
 
         try {
-            $account = $ledger->renameAccount(
-                $ownerId,
-                (int) $request->validated('id'),
-                (string) $request->validated('name_ar'),
-                $request->validated('name')
-            );
+            $account = $ledger->updateAccount($ownerId, $accountId, $data);
         } catch (InvalidArgumentException|RuntimeException $e) {
             return Response::json(['message' => $e->getMessage()], 422);
         } catch (Throwable $e) {
-            return Response::json(['message' => 'تعذر تحديث اسم الحساب'], 500);
+            return Response::json(['message' => 'تعذر تحديث الحساب'], 500);
         }
 
         return Response::json([
-            'message' => 'تم تحديث اسم الحساب بنجاح',
-            'account' => [
-                'id' => $account->id,
-                'code' => $account->code,
-                'name' => $account->name_ar ?: $account->name,
-                'name_ar' => $account->name_ar,
-                'name_en' => $account->name,
-                'is_system' => (bool) $account->is_system,
-            ],
+            'message' => 'تم تحديث الحساب بنجاح',
+            'account' => $this->accountPayload($account),
         ], 200);
     }
 
@@ -344,5 +378,88 @@ class LedgerController extends Controller
             });
 
         return Response::json(['entries' => $entries], 200);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function accountPayload(LedgerAccount $account): array
+    {
+        $hasMovements = $account->hasMovements();
+
+        return [
+            'id' => $account->id,
+            'code' => $account->code,
+            'name' => $account->name_ar ?: $account->name,
+            'name_ar' => $account->name_ar,
+            'name_en' => $account->name,
+            'type' => $account->type,
+            'currency' => $account->currency,
+            'parent_id' => $account->parent_id,
+            'is_system' => (bool) $account->is_system,
+            'is_active' => (bool) $account->is_active,
+            'has_movements' => $hasMovements,
+            'can_edit_code' => ! $account->is_system && ! $hasMovements,
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, LedgerAccount>  $accounts
+     * @return array<int, int>
+     */
+    protected function accountDepthMap($accounts): array
+    {
+        $byId = $accounts->keyBy('id');
+        $depths = [];
+
+        foreach ($accounts as $account) {
+            $depth = 0;
+            $cursor = $account;
+            $guard = 0;
+            while ($cursor?->parent_id && $guard++ < 40) {
+                if (! $byId->has($cursor->parent_id)) {
+                    break;
+                }
+                $depth++;
+                $cursor = $byId->get($cursor->parent_id);
+            }
+            $depths[$account->id] = $depth;
+        }
+
+        return $depths;
+    }
+
+    /**
+     * Depth-first order so children appear under their parent within a type group.
+     *
+     * @param  \Illuminate\Support\Collection<int, LedgerAccount>  $accounts
+     * @return \Illuminate\Support\Collection<int, LedgerAccount>
+     */
+    protected function orderAccountsByTree($accounts)
+    {
+        $byParent = $accounts->groupBy(fn (LedgerAccount $a) => $a->parent_id ?: 0);
+        $ordered = collect();
+
+        $walk = function ($parentKey) use (&$walk, $byParent, &$ordered): void {
+            $children = ($byParent->get($parentKey) ?? collect())->sortBy('code')->values();
+            foreach ($children as $child) {
+                $ordered->push($child);
+                $walk($child->id);
+            }
+        };
+
+        // Roots first (parent missing or outside this type filter), then orphans under missing parents.
+        $ids = $accounts->pluck('id')->all();
+        $roots = $accounts
+            ->filter(fn (LedgerAccount $a) => ! $a->parent_id || ! in_array((int) $a->parent_id, $ids, true))
+            ->sortBy('code')
+            ->values();
+
+        foreach ($roots as $root) {
+            $ordered->push($root);
+            $walk($root->id);
+        }
+
+        return $ordered->unique('id')->values();
     }
 }

@@ -98,7 +98,7 @@
                 <td>{{ $data->id }}</td>
                 <td>{{ $data->created }}</td>
                 <td>{{ $data->description }}</td>
-                <td>{{ $data->amount*-1  }}</td>
+                <td>{{ \App\Helpers\Help::formatMoney($data->amount * -1, $data->currency ?? '$') }}</td>
             </tr>
             @endif
             @endforeach

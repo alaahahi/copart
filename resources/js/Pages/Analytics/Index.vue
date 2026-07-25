@@ -4,6 +4,7 @@ import { Head } from "@inertiajs/inertia-vue3";
 import { ref, computed, onMounted, watch } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
+import { formatMoney as formatMoneyAmount } from "@/utils/formatMoney";
 
 const { t } = useI18n();
 
@@ -86,10 +87,7 @@ function setYear() {
 }
 
 function formatMoney(v) {
-  const n = Number(v || 0);
-  return currency.value === "$"
-    ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return formatMoneyAmount(v, currency.value);
 }
 
 function formatPct(v) {
@@ -105,9 +103,14 @@ function momClass(pct) {
 }
 
 function alertClass(level) {
-  if (level === "danger") return "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200";
-  if (level === "warning") return "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200";
-  return "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200";
+  // Theme-independent solid contrast (no pale-on-cream; works on dark ERP layout)
+  if (level === "danger") {
+    return "border-2 border-rose-400 bg-rose-900 text-white font-semibold";
+  }
+  if (level === "warning") {
+    return "border-2 border-amber-400 bg-amber-900 text-white font-semibold";
+  }
+  return "border-2 border-sky-400 bg-sky-900 text-white font-semibold";
 }
 
 function filterParams() {

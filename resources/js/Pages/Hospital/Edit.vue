@@ -119,15 +119,15 @@ const bookAppointment = (slot, type) => {
                 </div>
                 <div class=" px-4">
                   <form class="items-center max-w-5xl">
-                    <div class="relative w-full">
+                    <div class="erp-search relative w-full">
                       <div
                         class="
                           absolute
                           inset-y-0
-                          left-0
+                          start-0
                           flex
                           items-center
-                          pl-3
+                          ps-3
                           pointer-events-none
                         "
                       >
@@ -144,8 +144,8 @@ const bookAppointment = (slot, type) => {
                           focus:ring-blue-500 focus:border-blue-500
                           block
                           w-full
-                          pl-10
-                          p-2.5
+                          erp-search__input
+                          py-2.5 pe-3
                           dark:bg-gray-700
                           dark:border-gray-600
                           dark:placeholder-gray-400

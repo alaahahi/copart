@@ -4,10 +4,8 @@ import Modal from "@/Components/Modal.vue";
 import { Head, Link, useForm } from "@inertiajs/inertia-vue3";
 import { ref, watch, computed } from "vue";
 import ModalAddSales from "@/Components/ModalAddSales.vue";
- import ModalAddExpensesWallet from "@/Components/ModalAddExpensesWallet.vue";
-import InputLabel from "@/Components/InputLabel.vue";
+import ModalAddExpensesWallet from "@/Components/ModalAddExpensesWallet.vue";
 import TextInput from "@/Components/TextInput.vue";
-import ModalAddGenExpenses from "@/Components/ModalAddGenExpenses.vue";
 import ModalConvertDollarDinar from "@/Components/ModalConvertDollarDinar.vue";
 import ModalConvertDinarDollar from "@/Components/ModalConvertDinarDollar.vue";
 import ModalDel from "@/Components/ModalDel.vue";
@@ -29,6 +27,7 @@ import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
 import debounce from 'lodash/debounce';
 import { formatBaghdadTimestamp } from "@/utils/datetime";
+import { formatMoney, formatNumber } from "@/utils/formatMoney";
 
 
 const laravelData = ref({});
@@ -36,7 +35,6 @@ const searchTerm = ref('');
 let showModalAddSales = ref(false);
 let showModaldebtSales = ref(false);
 let showModalAddExpensesWallet = ref(false);
-let showModalAddGenExpenses = ref(false);
 let showModalConvertDollarDinar = ref(false);
 let showModalConvertDinarDollar = ref(false);
 let showModalDel = ref(false);
@@ -60,10 +58,8 @@ let showModalDriverLoanRepayment = ref(false);
 let loanForRepayment = ref(null);
 let loanTransactions = ref([]);
 let loanTransactionsLoaded = ref(false);
-let expenses_type_id = ref(0);
 let tranId =ref({});
 let formData = ref({});
-let GenExpenses = ref({});
 let isLoading=ref(false);
 let from = ref('');
 let to = ref('');
@@ -138,22 +134,6 @@ function prepareWalletModalData() {
   loadTagOptionsIfNeeded();
   loadDriversSummary();
 }
-
-const driverSuggestions = computed(() => {
-  const names = new Set();
-  driversSummary.value.forEach((row) => {
-    if (row.driver_name && row.driver_name !== '—') {
-      names.add(row.driver_name);
-    }
-  });
-  transactions.value.forEach((tran) => {
-    const name = tran.details?.driver_name;
-    if (name && String(name).trim()) {
-      names.add(String(name).trim());
-    }
-  });
-  return [...names].sort((a, b) => a.localeCompare(b, 'ar'));
-});
 
 function openAddSales() {
   prepareWalletModalData();
@@ -269,6 +249,7 @@ function confirm(V) {
   })
 }
 function confirmdebt(V) {
+  V.id = props.boxes.id;
   axios.post('/api/salesDebtUser',V)
   .then(response => {
     showModaldebtSales.value=false;
@@ -277,7 +258,7 @@ function confirmdebt(V) {
   })
   .catch(error => {
 
-    errors.value = error.response.data.errors
+    errors.value = error.response?.data?.errors || error.response?.data?.message
   })
 }
 function confirmAmanah(V) {
@@ -292,6 +273,7 @@ function confirmAmanah(V) {
   })
 }
 function confirmdebtAmanah(V) {
+  V.id = props.boxes.id;
   axios.post('/api/salesDebtUserAmanah',V)
   .then(response => {
     showModaldebtSalesAmanah.value=false;
@@ -299,7 +281,7 @@ function confirmdebtAmanah(V) {
   })
   .catch(error => {
 
-    errors.value = error.response.data.errors
+    errors.value = error.response?.data?.errors || error.response?.data?.message
   })
 }
 function confirmConvertDollarDinar(V) {
@@ -352,14 +334,7 @@ function delTransactions(id){
 }
 
 function updateResults(input) {
-  // Ensure the input is a number
-  if (typeof input !== 'number') {
-    // Try converting the input to a number
-    input = parseFloat(input) || 0;
-  }
-  
-  // Use toLocaleString to format the number with commas
-  return input.toLocaleString();
+  return formatNumber(input);
 }
 
 function getImageUrl(name) {
@@ -435,23 +410,6 @@ function calculateBalance(transaction, index) {
   }
   
   return balance;
-}
-
-function conGenfirmExpenses(V) {
-  axios.post(`/api/GenExpenses?amount=${V.amount??0}&expenses_type_id=${expenses_type_id.value}&factor=${V.factor??1}&note=${V.note??''}`)
-  .then(response => {
-    refresh();
-    showModalAddGenExpenses.value = false;
-    console.log(response.data);
-    window.open(`/api/getIndexAccountsSelas?user_id=${response.data.morphed_id}&print=3&transactions_id=${response.data.id}`, '_blank');
-    window.location.reload();
-  })
-  .catch(error => {
-
-    errors.value = error.response.data.errors
-  })
-
-
 }
 
 function printAmanah() {
@@ -557,6 +515,25 @@ const tagSummary = computed(() => {
   return { totalCars, balance };
 });
 
+const walletBalanceUsd = computed(
+  () => Number(laravelData.value?.sumInTransactionsUser ?? 0) - Number(laravelData.value?.sumOutTransactionsUser ?? 0)
+);
+const walletBalanceIqd = computed(
+  () => Number(laravelData.value?.sumInTransactionsDinarUser ?? 0) - Number(laravelData.value?.sumOutTransactionsDinarUser ?? 0)
+);
+const amanahBalanceUsd = computed(
+  () => Number(laravelData.value?.sumInTransactionsUserAmanah ?? 0) - Number(laravelData.value?.sumOutTransactionsUserAmanah ?? 0)
+);
+const amanahBalanceIqd = computed(
+  () => Number(laravelData.value?.sumInTransactionsDinarUserAmanah ?? 0) - Number(laravelData.value?.sumOutTransactionsDinarUserAmanah ?? 0)
+);
+
+function moneyClass(amount) {
+  if (amount > 0) return 'text-emerald-700 dark:text-emerald-300';
+  if (amount < 0) return 'text-rose-700 dark:text-rose-300';
+  return 'text-slate-900 dark:text-white';
+}
+
 function printTagDetails() {
   if (!selectedTagName.value || !props.boxes?.id) return;
   const query = new URLSearchParams({
@@ -575,615 +552,619 @@ function printTagDetails() {
 </script>
 
 <template>
-  <Head title="Dashboard" />
+  <Head :title="boxes?.name ? `قاصة — ${boxes.name}` : 'القاصة'" />
   <AuthenticatedLayout>
-    <template #header>
- 
-    </template>
-    <ModalDel
-            :show="showModalDel ? true : false"
-            :formData="tranId"
-            @a="delTransactions($event)"
-            @close="showModalDel = false"
-            >
-          <template #header>
-            <h2 class=" mb-5 dark:text-white text-center">
+    <template #header />
 
-          هل متأكد من الحذف 
-          ؟
-          </h2>
-          </template>
+    <ModalDel
+      :show="showModalDel ? true : false"
+      :formData="tranId"
+      @a="delTransactions($event)"
+      @close="showModalDel = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
+          هل متأكد من الحذف؟
+        </h2>
+      </template>
     </ModalDel>
 
     <ModalUploader
-            :show="showModalUploader ? true : false"
-            :formData="tranId"
-            @a="refresh()"
-            @close="showModalUploader = false"
-            >
-          <template #header>
-            <h2 class=" mb-5 dark:text-white text-center">
-              مرفقات الحركة
-          </h2>
-          </template>
+      :show="showModalUploader ? true : false"
+      :formData="tranId"
+      @a="refresh()"
+      @close="showModalUploader = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
+          مرفقات الحركة
+        </h2>
+      </template>
     </ModalUploader>
 
     <ModalEditTransaction
-            :show="showModalEditTransaction && !!tranIdForEdit"
-            :transaction="tranIdForEdit || {}"
-            :tagOptions="tagOptions"
-            @saved="() => {}"
-            @close="showModalEditTransaction = false"
+      :show="showModalEditTransaction && !!tranIdForEdit"
+      :transaction="tranIdForEdit || {}"
+      :tagOptions="tagOptions"
+      @saved="() => {}"
+      @close="showModalEditTransaction = false"
     />
 
     <ModalDriverLoan
-            :show="showModalDriverLoan"
-            :box-id="boxes?.id"
-            @saved="refresh(); loanTransactionsLoaded = false"
-            @close="showModalDriverLoan = false"
+      :show="showModalDriverLoan"
+      :box-id="boxes?.id"
+      @saved="refresh(); loanTransactionsLoaded = false"
+      @close="showModalDriverLoan = false"
     />
     <ModalDriverLoanRepayment
-            :show="showModalDriverLoanRepayment"
-            :loan-transaction="loanForRepayment"
-            @saved="refresh(); loanTransactionsLoaded = false"
-            @close="showModalDriverLoanRepayment = false; loanForRepayment = null"
+      :show="showModalDriverLoanRepayment"
+      :loan-transaction="loanForRepayment"
+      @saved="refresh(); loanTransactionsLoaded = false"
+      @close="showModalDriverLoanRepayment = false; loanForRepayment = null"
     />
 
     <ModalAddSales
-            :show="showModalAddSales ? true : false"
-            :tagOptions="tagOptions"
-            :showExtendedFields="false"
-            :showTagSelect="hasWalletTags"
-            @a="confirm($event)"
-            @close="showModalAddSales = false"
-            />
- 
-      <ModalAddExpensesWallet 
-            :show="showModalAddExpensesWallet ? true : false"
-            :boxes="boxes"
-            :tagOptions="tagOptions"
-            :driverSuggestions="driverSuggestions"
-            :showExtendedFields="true"
-            :showTagSelect="hasWalletTags"
-            :sum_transactions="laravelData.sum_transactions"
-            :sum_transactions_dinar="laravelData.sum_transactions_dinar"
-            @a="confirmdebt($event)"
-            @close="showModalAddExpensesWallet = false"
-            >
-          <template #header>
-            <h3 class="text-center"> سحب  من القاسه</h3>
-            
-           </template>
-      </ModalAddExpensesWallet>
-      <ModalAddSales
-            :show="showModalAddSalesAmanah ? true : false"
-            :tagOptions="tagOptions"
-            :showExtendedFields="false"
-            title="وصل قبض أمانة"
-            subtitle="تسجيل أمانة واردة بالدولار أو الدينار"
-            @a="confirmAmanah($event)"
-            @close="showModalAddSalesAmanah = false"
-            />
- 
-      <ModalAddExpensesWallet 
-            :show="showModaldebtSalesAmanah ? true : false"
-            :boxes="boxes"
-            :sum_transactions="laravelData.sum_transactions"
-            :sum_transactions_dinar="laravelData.sum_transactions_dinar"
-            @a="confirmdebtAmanah($event)"
-            @close="showModaldebtSalesAmanah = false"
-            >
-          <template #header>
-            <h3 class="text-center">أمانة - سحب</h3>
-            
-           </template>
-      </ModalAddExpensesWallet>
-      <ModalConvertDollarDinar 
-            :show="showModalConvertDollarDinar ? true : false"
-            :boxes="boxes"
-            @a="confirmConvertDollarDinar($event)"
-            @close="showModalConvertDollarDinar = false"
-            />
-      <ModalConvertDinarDollar 
-            :show="showModalConvertDinarDollar ? true : false"
-            :boxes="boxes"
-            @a="confirmConvertDinarDollar ($event)"
-            @close="showModalConvertDinarDollar = false"
-            />
-    <div v-if="$page.props.success">
-      <div
-        id="alert-2"
-        class="p-4 mb-4 bg-red-100 rounded-lg dark:bg-red-200 text-center"
-        role="alert"
-      >
-        <div class="ml-3 font-medium text-red-700 dark:text-red-800">
-          {{ $page.props.success }}
-        </div>
+      :show="showModalAddSales ? true : false"
+      :tagOptions="tagOptions"
+      :showTagSelect="hasWalletTags"
+      title="إيداع إلى القاصة"
+      subtitle="تسجيل إيداع بالدولار أو الدينار"
+      confirm-label="تأكيد الإيداع"
+      @a="confirm($event)"
+      @close="showModalAddSales = false"
+    />
+
+    <ModalAddExpensesWallet
+      :show="showModalAddExpensesWallet ? true : false"
+      :boxes="boxes"
+      :tagOptions="tagOptions"
+      :showTagSelect="hasWalletTags"
+      title="سحب من القاصة"
+      subtitle="تسجيل سحب بالدولار أو الدينار"
+      @a="confirmdebt($event)"
+      @close="showModalAddExpensesWallet = false"
+    />
+    <ModalAddSales
+      :show="showModalAddSalesAmanah ? true : false"
+      :tagOptions="tagOptions"
+      title="أمانة - إيداع"
+      subtitle="تسجيل أمانة واردة بالدولار أو الدينار"
+      confirm-label="تأكيد الإيداع"
+      @a="confirmAmanah($event)"
+      @close="showModalAddSalesAmanah = false"
+    />
+
+    <ModalAddExpensesWallet
+      :show="showModaldebtSalesAmanah ? true : false"
+      :boxes="boxes"
+      title="أمانة - سحب"
+      subtitle="تسجيل سحب أمانة بالدولار أو الدينار"
+      @a="confirmdebtAmanah($event)"
+      @close="showModaldebtSalesAmanah = false"
+    />
+    <ModalConvertDollarDinar
+      :show="showModalConvertDollarDinar ? true : false"
+      :boxes="boxes"
+      @a="confirmConvertDollarDinar($event)"
+      @close="showModalConvertDollarDinar = false"
+    />
+    <ModalConvertDinarDollar
+      :show="showModalConvertDinarDollar ? true : false"
+      :boxes="boxes"
+      @a="confirmConvertDinarDollar($event)"
+      @close="showModalConvertDinarDollar = false"
+    />
+
+    <div v-if="$page.props.success" class="mx-auto mb-4 max-w-9xl px-4 sm:px-6 lg:px-8">
+      <div class="rounded-lg bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" role="alert">
+        {{ $page.props.success }}
       </div>
     </div>
-    <div>
-      <div class="max-w-9xl mx-auto sm:px-6 lg:px-8">
-        <div class="overflow-hidden shadow-sm sm:rounded-lg">
-          <div class="border-b border-gray-200 dark:border-gray-700 mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex gap-2 print:hidden">
-              <template v-if="hasWalletTags">
-                <button
-                  type="button"
-                  class="px-4 py-2 rounded-t font-medium"
-                  :class="activeTab === 'payments' ? 'bg-white dark:bg-gray-800 border border-b-0 border-gray-200 dark:border-gray-700 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'"
-                  @click="setActiveTab('payments')"
-                >
-                  الدفعات
-                </button>
-                <button
-                  type="button"
-                  class="px-4 py-2 rounded-t font-medium"
-                  :class="activeTab === 'tags' ? 'bg-white dark:bg-gray-800 border border-b-0 border-gray-200 dark:border-gray-700 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'"
-                  @click="setActiveTab('tags')"
-                >
-                  إدارة التاغات
-                </button>
-              </template>
-            </div>
-            <div class="print:hidden" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5">
+
+    <div class="mx-auto max-w-9xl sm:px-6 lg:px-8">
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 dark:text-white">
+              قاصة — {{ boxes?.name }}
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">حركات الصندوق والأمانة</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 print:hidden">
+            <template v-if="hasWalletTags">
               <button
                 type="button"
-                class="px-3 py-1.5 rounded text-sm font-medium border transition"
-                :class="hasWalletTags ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:bg-gray-300 dark:hover:bg-gray-500'"
-                @click="toggleWalletTagsFlag"
+                class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                :class="activeTab === 'payments'
+                  ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
+                @click="setActiveTab('payments')"
               >
-                {{ hasWalletTags ? 'إدارة التاغات مفعّلة' : 'تفعيل إدارة التاغات لهذه القاسة' }}
+                الدفعات
+              </button>
+              <button
+                type="button"
+                class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                :class="activeTab === 'tags'
+                  ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
+                @click="setActiveTab('tags')"
+              >
+                إدارة التاغات
+              </button>
+            </template>
+            <button
+              v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5"
+              type="button"
+              class="rounded-lg border px-3 py-1.5 text-xs font-medium transition"
+              :class="hasWalletTags
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/40 dark:bg-indigo-950/40 dark:text-indigo-300'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
+              @click="toggleWalletTagsFlag"
+            >
+              {{ hasWalletTags ? 'التاغات مفعّلة' : 'تفعيل التاغات' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!hasWalletTags || activeTab === 'payments'">
+          <!-- KPI chips -->
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">رصيد الصندوق · $</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums" :class="moneyClass(walletBalanceUsd)">
+                  {{ formatMoney(walletBalanceUsd, '$') }} <span class="text-sm font-normal text-slate-400">$</span>
+                </div>
+              </div>
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">رصيد الصندوق · د.ع</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums" :class="moneyClass(walletBalanceIqd)">
+                  {{ formatMoney(walletBalanceIqd, 'IQD') }} <span class="text-sm font-normal text-slate-400">د.ع</span>
+                </div>
+              </div>
+              <div class="rounded-xl border border-sky-400 bg-white px-4 py-3 shadow-sm dark:border-sky-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-sky-800 dark:text-sky-300">أمانة · $</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-sky-700 dark:text-sky-200">
+                  {{ formatMoney(amanahBalanceUsd, '$') }} <span class="text-sm font-normal text-slate-400">$</span>
+                </div>
+              </div>
+              <div class="rounded-xl border border-sky-400 bg-white px-4 py-3 shadow-sm dark:border-sky-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-sky-800 dark:text-sky-300">أمانة · د.ع</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-sky-700 dark:text-sky-200">
+                  {{ formatMoney(amanahBalanceIqd, 'IQD') }} <span class="text-sm font-normal text-slate-400">د.ع</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compact action toolbar -->
+            <div
+              v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5"
+              class="mt-4 flex flex-wrap gap-2 print:hidden"
+            >
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg bg-emerald-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                @click="openAddSales()"
+              >
+                {{ $t('receipt_voucher_add') }}
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg bg-rose-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-rose-800"
+                @click="openAddExpenses()"
+              >
+                {{ $t('payment_voucher_withdraw') }}
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-emerald-500/60 bg-emerald-50 px-3.5 py-1.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60"
+                @click="openAddSalesAmanah()"
+              >
+                أمانة — إيداع
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-rose-500/60 bg-rose-50 px-3.5 py-1.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60"
+                @click="opendebtSalesAmanah()"
+              >
+                أمانة — سحب
+              </button>
+              <span class="mx-1 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                @click="printWallet()"
+              >
+                {{ $t('print') }} الصندوق
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                @click="printAmanah()"
+              >
+                {{ $t('print') }} الأمانة
+              </button>
+              <button
+                v-if="hasWalletTags"
+                type="button"
+                class="min-h-[38px] rounded-lg border border-violet-400/60 bg-violet-50 px-3.5 py-1.5 text-sm font-medium text-violet-800 transition hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-950/40 dark:text-violet-300"
+                @click="showModalDriverLoan = true"
+              >
+                قرض سائق
+              </button>
+            </div>
+            <div
+              v-else
+              class="mt-4 flex flex-wrap gap-2 print:hidden"
+            >
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                @click="printWallet()"
+              >
+                {{ $t('print') }} الصندوق
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                @click="printAmanah()"
+              >
+                {{ $t('print') }} الأمانة
               </button>
             </div>
           </div>
-          <div v-if="!hasWalletTags || activeTab === 'payments'" class=" border-b border-gray-200 dark:border-gray-700">
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 lg:gap-3 mb-4">
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5" 
-                        className="px-4 py-2 text-white bg-green-800 rounded-md focus:outline-none hover:bg-green-900 transition"
-                        @click="openAddSales()">
-                  {{ $t('receipt_voucher_add') }}
-                </button>
-              </div>
 
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5" 
-                        className="px-4 py-2 text-white bg-red-800 rounded-md focus:outline-none hover:bg-red-900 transition"
-                        @click="openAddExpenses()">
-                  {{ $t('payment_voucher_withdraw') }}
-                </button>
-              </div>
-
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5" 
-                        className="px-4 py-2 text-white bg-green-600 rounded-md focus:outline-none border-2 border-green-300 hover:bg-green-700 transition"
-                        @click="openAddSalesAmanah()">
-                  أمانة - إيداع
-                </button>
-              </div>
-
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5" 
-                        className="px-4 py-2 text-white bg-red-600 rounded-md focus:outline-none border-2 border-red-300 hover:bg-red-700 transition"
-                        @click="opendebtSalesAmanah()">
-                  أمانة - سحب
-                </button>
-              </div>
-
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" 
-                        className="px-4 py-2 text-white bg-blue-600 rounded-md focus:outline-none hover:bg-blue-700 transition font-semibold"
-                        @click="printAmanah()">
-                  طباعة الأمانة
-                </button>
-              </div>
-
-              <div class="pt-5 print:hidden">
-                <button style="width: 100%; margin-top: 4px;" 
-                        className="px-4 py-2 text-white bg-orange-600 rounded-md focus:outline-none hover:bg-orange-700 transition font-semibold"
-                        @click="printWallet()">
-                  طباعة الصندوق
-                </button>
-              </div>
-              <div class="pt-5 print:hidden" v-if="hasWalletTags && ($page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5)">
-                <button style="width: 100%; margin-top: 4px;" 
-                        class="px-4 py-2 text-white bg-purple-600 rounded-md focus:outline-none hover:bg-purple-700 transition font-semibold"
-                        @click="showModalDriverLoan = true">
-                  قرض سائق
-                </button>
-              </div>
-            </div>
-            <div class="grid grid-cols-4 md:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3" v-if="false">
-                        <div>
-                          <button
-                            type="button"
-                            @click="openConvertDollarDinar()"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 w-full py-2 font-bold text-white bg-teal-500 rounded">
-                             تحويل دولار دينار  
-                          </button>
-                        </div>
-                        <div>
-                          <button
-                            type="button"
-                            @click="openConvertDinarDollar()"
-                            style="min-width:150px;"
-                            className="px-6 mb-12 w-full py-2 font-bold text-white bg-yellow-500 rounded">
-                             تحويل دينار دولار  
-                          </button>
-                        </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-3 lg:gap-3">
-              <div class=" px-4">
-                            <div >
-                              <InputLabel for="to" :value="`حساب ${boxes.name} بالدولار`" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full"
-                                :value="Number(laravelData?.sumInTransactionsUser ?? 0) - Number(laravelData?.sumOutTransactionsUser ?? 0)"
-                              />
-                            </div>
-              </div>
-
-
-              <div class=" px-4">
-                            <div >
-                              <InputLabel for="to" :value="`حساب ${boxes.name} بالدينار العراقي`" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full"
-                                :value="Number(laravelData?.sumInTransactionsDinarUser ?? 0) - Number(laravelData?.sumOutTransactionsDinarUser ?? 0)"
-                              />
-                            </div>
-              </div>
-              <div class=" px-4">
-                            <div >
-                              <InputLabel for="to" :value="`أمانة ${boxes.name} بالدولار`" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full bg-blue-50"
-                                :value="Number(laravelData?.sumInTransactionsUserAmanah ?? 0) - Number(laravelData?.sumOutTransactionsUserAmanah ?? 0)"
-                              />
-                            </div>
-              </div>
-              <div class=" px-4">
-                            <div >
-                              <InputLabel for="to" :value="`أمانة ${boxes.name} بالدينار العراقي`" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full bg-blue-50"
-                                :value="Number(laravelData?.sumInTransactionsDinarUserAmanah ?? 0) - Number(laravelData?.sumOutTransactionsDinarUserAmanah ?? 0)"
-                              />
-                            </div>
-              </div>
-      
-            </div>
-          
-            <!-- مربع البحث والفلترة -->
-            <div class="mt-4 mb-4 px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Filters -->
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
               <div>
-                <InputLabel for="search" value="بحث في الدفعات والأمانات" />
+                <label for="search" class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">بحث في الدفعات والأمانات</label>
                 <TextInput
                   id="search"
-                  type="text"
-                  class="mt-1 block w-full"
                   v-model="q"
+                  type="text"
+                  class="mt-0 block w-full"
                   placeholder="رقم الوصل أو الوصف..."
                   @input="debouncedGetResultsCar"
                 />
               </div>
               <template v-if="hasWalletTags">
                 <div>
-                  <InputLabel for="q_driver" value="بحث باسم السائق" />
+                  <label for="q_driver" class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">بحث باسم السائق</label>
                   <TextInput
                     id="q_driver"
-                    type="text"
-                    class="mt-1 block w-full"
                     v-model="qDriver"
+                    type="text"
+                    class="mt-0 block w-full"
                     placeholder="اسم السائق..."
                     @input="debouncedGetResultsCar"
                   />
                 </div>
                 <div v-if="tagOptions.length">
-                  <InputLabel for="filter_tag" value="فلتر التاغ" />
-                  <select id="filter_tag" v-model="filterTag" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-md shadow-sm" @change="debouncedGetResultsCar()">
+                  <label for="filter_tag" class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">فلتر التاغ</label>
+                  <select
+                    id="filter_tag"
+                    v-model="filterTag"
+                    class="mt-0 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200"
+                    @change="debouncedGetResultsCar()"
+                  >
                     <option value="">— الكل —</option>
                     <option v-for="t in tagOptions" :key="t.id" :value="t.name">{{ t.name }}</option>
                   </select>
                 </div>
-                <div class="flex items-end">
-                  <button type="button" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700" @click="loadDriversSummary()">ملخص السائقين</button>
+                <div class="flex flex-wrap items-end gap-2">
+                  <button
+                    type="button"
+                    class="min-h-[42px] rounded-lg bg-slate-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    @click="loadDriversSummary()"
+                  >
+                    ملخص السائقين
+                  </button>
+                  <button
+                    type="button"
+                    class="min-h-[42px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                    @click="loadLoanTransactions()"
+                  >
+                    قروض السائقين
+                  </button>
                 </div>
               </template>
             </div>
-            <div v-if="hasWalletTags" class="mx-4 mb-4">
-              <button type="button" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 mb-2" @click="loadLoanTransactions()">عرض قروض السائقين</button>
-              <div v-if="loanTransactionsLoaded" class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-4 bg-white dark:bg-gray-800/60">
-                <h4 class="font-semibold text-gray-900 dark:text-gray-100 mb-2">قروض السائقين</h4>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm text-right text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100">
-                      <tr>
-                        <th class="px-2 py-2 font-medium">رقم</th>
-                        <th class="px-2 py-2 font-medium">السائق</th>
-                        <th class="px-2 py-2 font-medium">التاريخ</th>
-                        <th class="px-2 py-2 font-medium">المبلغ</th>
-                        <th class="px-2 py-2 font-medium">تنفيذ</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                      <tr v-for="tran in loanTransactions" :key="tran.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                        <td class="px-2 py-2 text-gray-800 dark:text-gray-200">{{ tran.id }}</td>
-                        <td class="px-2 py-2 text-gray-800 dark:text-gray-200">{{ tran.details?.driver_name || '—' }}</td>
-                        <td class="px-2 py-2 text-gray-800 dark:text-gray-200">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
-                        <td class="px-2 py-2 text-gray-800 dark:text-gray-200">{{ Math.abs(tran.amount) }} {{ tran.currency ?? '$' }}</td>
-                        <td class="px-2 py-2">
-                          <button type="button" class="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700" @click="openRepaymentModal(tran)">تسجيل دفعة إرجاع</button>
-                        </td>
-                      </tr>
-                      <tr v-if="loanTransactions.length === 0">
-                        <td colspan="5" class="px-2 py-4 text-center text-gray-500 dark:text-gray-400">لا توجد قروض مسجلة</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <div v-if="hasWalletTags && driversSummary.length" class="mx-4 mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/60">
-              <h4 class="font-semibold text-gray-900 dark:text-gray-100 mb-2">مجموع التوصيلات حسب السائق</h4>
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm text-right text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100">
-                    <tr>
-                      <th class="px-2 py-2 font-medium">السائق</th>
-                      <th class="px-2 py-2 font-medium">عدد الحركات</th>
-                      <th class="px-2 py-2 font-medium">إجمالي إيداع</th>
-                      <th class="px-2 py-2 font-medium">إجمالي سحب</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    <tr v-for="row in driversSummary" :key="row.driver_name" class="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                      <td class="px-2 py-2 text-gray-800 dark:text-gray-200 font-medium">{{ row.driver_name }}</td>
-                      <td class="px-2 py-2 text-gray-800 dark:text-gray-200">{{ row.count }}</td>
-                      <td class="px-2 py-2 text-green-700 dark:text-green-400">{{ row.total_in }}</td>
-                      <td class="px-2 py-2 text-red-700 dark:text-red-400">{{ row.total_out }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          </div>
 
-            <div class="overflow-x-auto shadow-md mt-5">
-              <table class="w-full text-right text-gray-500   dark:text-gray-400 text-center">
-                <thead
-                  class="text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center"
-                >
-                  <tr class="rounded-l-lg mb-2 sm:mb-0">
-                    <th className="px-2 py-2">رقم الوصل</th>
-                    <th className="px-2 py-2">{{ $t('accounting_account') }}</th>
-                    <th className="px-2 py-2">{{ $t('date') }}</th>
-                    <th className="px-2 py-2">{{ $t('description') }}</th>
-                    <th v-if="hasWalletTags" className="px-2 py-2">{{ $t('tag') }}</th>
-                    <th className="px-2 py-2">{{ $t('deposit_col') }}</th>
-                    <th className="px-2 py-2">{{ $t('withdraw_col') }}</th>
-                    <th className="px-2 py-2">{{ $t('balance') }}</th>
-                    <th className="px-2 py-2">المرفقات</th>
-                    <th className="px-2 py-2">{{ $t('execute') }}</th>
+          <!-- Driver loans panel -->
+          <div v-if="hasWalletTags && loanTransactionsLoaded" class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <h4 class="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">قروض السائقين</h4>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-right text-sm text-slate-800 dark:text-slate-200">
+                <thead class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                  <tr>
+                    <th class="px-2 py-2 font-medium">رقم</th>
+                    <th class="px-2 py-2 font-medium">السائق</th>
+                    <th class="px-2 py-2 font-medium">التاريخ</th>
+                    <th class="px-2 py-2 font-medium">المبلغ</th>
+                    <th class="px-2 py-2 font-medium">تنفيذ</th>
                   </tr>
                 </thead>
-                <tbody>
-         
-                  <tr v-for="(tran, index) in   transactions" :key="tran.id" 
-                      :class="[
-                        tran.type == 'inUserAmanah' ? 'bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500' :
-                        tran.type == 'outUserAmanah' ? 'bg-orange-100 dark:bg-orange-900 border-l-4 border-orange-500' :
-                        tran.type != 'inUser' ? 'bg-red-100 dark:bg-red-900' : 'bg-green-100 dark:bg-green-900'
-                      ]"  
-                      class="bg-white border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <tr v-for="tran in loanTransactions" :key="tran.id" class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td class="px-2 py-2">{{ tran.id }}</td>
+                    <td class="px-2 py-2">{{ tran.details?.driver_name || '—' }}</td>
+                    <td class="px-2 py-2">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
+                    <td class="px-2 py-2 font-mono">{{ formatMoney(Math.abs(tran.amount), tran.currency ?? '$') }} {{ tran.currency ?? '$' }}</td>
+                    <td class="px-2 py-2">
+                      <button type="button" class="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-700" @click="openRepaymentModal(tran)">تسجيل دفعة إرجاع</button>
+                    </td>
+                  </tr>
+                  <tr v-if="loanTransactions.length === 0">
+                    <td colspan="5" class="px-2 py-4 text-center text-slate-500 dark:text-slate-400">لا توجد قروض مسجلة</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    {{ tran.id }}
-                    <span v-if="tran.type == 'inUserAmanah' || tran.type == 'outUserAmanah'" class="text-xs text-blue-600 dark:text-blue-300 font-bold">(أمانة)</span>
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    <span :class="getMoneyAccountBadgeClass(tran)">
-                      {{ getMoneyAccountLabel(tran) ?? '—' }}
-                    </span>
-                  </td>
+          <!-- Drivers summary -->
+          <div v-if="hasWalletTags && driversSummary.length" class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <h4 class="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">مجموع التوصيلات حسب السائق</h4>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-right text-sm text-slate-800 dark:text-slate-200">
+                <thead class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                  <tr>
+                    <th class="px-2 py-2 font-medium">السائق</th>
+                    <th class="px-2 py-2 font-medium">عدد الحركات</th>
+                    <th class="px-2 py-2 font-medium">إجمالي إيداع</th>
+                    <th class="px-2 py-2 font-medium">إجمالي سحب</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <tr v-for="row in driversSummary" :key="row.driver_name" class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td class="px-2 py-2 font-medium">{{ row.driver_name }}</td>
+                    <td class="px-2 py-2">{{ row.count }}</td>
+                    <td class="px-2 py-2 font-mono font-bold text-emerald-700 dark:text-emerald-300">{{ formatMoney(row.total_in) }}</td>
+                    <td class="px-2 py-2 font-mono font-bold text-rose-700 dark:text-rose-300">{{ formatMoney(row.total_out) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
-                  <th className="border dark:border-gray-800 text-center px-2 py-1">{{ tran.description }}</th>
-                  <td v-if="hasWalletTags" className="border dark:border-gray-800 text-center px-2 py-1 text-sm">
-                    <span v-if="tran.tag" class="inline-block px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200">{{ tran.tag }}</span>
-                    <template v-if="tran.details && (tran.details.driver_name || tran.details.cmr || tran.details.entry_date || tran.details.cars_count)">
-                      <div class="mt-1 text-gray-600 dark:text-gray-400">
-                        <span v-if="tran.details.driver_name">{{ tran.details.driver_name }}</span>
-                        <span v-if="tran.details.cmr"> · CMR: {{ tran.details.cmr }}</span>
-                        <span v-if="tran.details.entry_date"> · {{ tran.details.entry_date }}</span>
-                        <span v-if="tran.details.cars_count != null && tran.details.cars_count !== ''"> · {{ tran.details.cars_count }} سيارة</span>
-                      </div>
-                    </template>
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    {{ (tran.type == 'inUser' || tran.type == 'inUserAmanah') ? tran.amount+' '+(tran.currency ?? '$') : '' }}
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    {{ (tran.type == 'outUser' || tran.type == 'outUserAmanah') ? tran.amount+' '+(tran.currency ?? '$') : '' }}
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    <span v-if="tran.type == 'inUser' || tran.type == 'outUser'">
-                      {{ updateResults(calculateBalance(tran, index)) }} {{ tran.currency ?? '$' }}
-                    </span>
-                    <span v-else class="text-gray-400">-</span>
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    <div class="flex flex-wrap justify-center gap-1">
-                      <a
-                        v-for="(image, index) in tran.transactions_images || []"
-                        :key="index"
-                        :href="getDownloadUrl(image.name)"
-                        style="cursor: pointer;"
-                        target="_blank"
-                        class="inline-block"
-                      >
-                        <img 
-                          :src="getImageUrl(image.name)" 
-                          alt="" 
-                          class="rounded" 
-                          style="max-width: 50px; max-height: 50px; display: inline;" 
-                        />
-                      </a>
-                      <span v-if="!tran.transactions_images || tran.transactions_images.length === 0" class="text-gray-400 text-xs">
-                        لا يوجد
+          <!-- Transactions table (primary focus) -->
+          <div class="p-4">
+            <div class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-center text-sm text-slate-800 dark:text-slate-100">
+                <thead>
+                  <tr class="bg-slate-800 text-white dark:bg-slate-950 dark:text-white">
+                    <th class="px-2 py-2.5 font-semibold">رقم الوصل</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('accounting_account') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('date') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('description') }}</th>
+                    <th v-if="hasWalletTags" class="px-2 py-2.5 font-semibold">{{ $t('tag') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('deposit_col') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('withdraw_col') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('balance') }}</th>
+                    <th class="px-2 py-2.5 font-semibold">المرفقات</th>
+                    <th class="px-2 py-2.5 font-semibold">{{ $t('execute') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <tr
+                    v-for="(tran, index) in transactions"
+                    :key="tran.id"
+                    :class="[
+                      tran.type == 'inUserAmanah' ? 'bg-sky-50 dark:bg-slate-800 border-r-4 border-sky-500' :
+                      tran.type == 'outUserAmanah' ? 'bg-amber-50 dark:bg-slate-800 border-r-4 border-amber-500' :
+                      tran.type != 'inUser' ? 'bg-rose-50 dark:bg-slate-800 border-r-4 border-rose-500/70' : 'bg-emerald-50 dark:bg-slate-800 border-r-4 border-emerald-500/70',
+                      'hover:bg-slate-100 dark:hover:bg-slate-700'
+                    ]"
+                  >
+                    <td class="px-2 py-1.5 text-slate-800 dark:text-slate-100">
+                      {{ tran.id }}
+                      <span v-if="tran.type == 'inUserAmanah' || tran.type == 'outUserAmanah'" class="text-xs font-bold text-sky-700 dark:text-sky-300">(أمانة)</span>
+                    </td>
+                    <td class="px-2 py-1.5">
+                      <span :class="getMoneyAccountBadgeClass(tran)">
+                        {{ getMoneyAccountLabel(tran) ?? '—' }}
                       </span>
-                    </div>
-                  </td>
-                  <td className="border dark:border-gray-800 text-center px-2 py-1">
-                    <div class="action-group">
-                      <button
-                        v-if="hasWalletTags"
-                        class="action-btn bg-amber-600 hover:bg-amber-700"
-                        @click="openModalEditTransaction(tran)"
-                        title="تعديل الحركة"
-                      >
-                        <edit />
-                      </button>
-                      <button 
-                        class="action-btn action-btn--upload"
-                        @click="openModalUploader(tran)" 
-                        title="مرفقات الحركة"
-                      >
-                        <imags />
-                      </button>
-                      <a
-                        v-if="tran.type == 'outUser'"
-                        :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=10&transactions_id=${tran.id}`"
-                        target="_blank"
-                        class="action-btn action-btn--print"
-                        title="طباعة سند الصرف"
-                      >
-                        <print />
-                      </a>
-                      <a
-                        v-if="tran.type == 'inUser'"
-                        :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=9&transactions_id=${tran.id}`"
-                        target="_blank"
-                        class="action-btn action-btn--print"
-                        title="طباعة سند القبض"
-                      >
-                        <print />
-                      </a>
-                      <a
-                        v-if="tran.type == 'outUserAmanah'"
-                        :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=12&transactions_id=${tran.id}`"
-                        target="_blank"
-                        class="action-btn action-btn--print"
-                        title="طباعة سند صرف أمانة"
-                      >
-                        <print />
-                      </a>
-                      <a
-                        v-if="tran.type == 'inUserAmanah'"
-                        :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=11&transactions_id=${tran.id}`"
-                        target="_blank"
-                        class="action-btn action-btn--print"
-                        title="طباعة سند قبض أمانة"
-                      >
-                        <print />
-                      </a>
-                      <button 
-                        class="action-btn action-btn--delete"
-                        @click="isAmanahTransaction(tran) ? deleteAmanahTransaction(tran) : openModalDel(tran)" 
-                        :title="isAmanahTransaction(tran) ? 'حذف الأمانة' : 'حذف الحركة'"
-                      >
-                        <trash />
-                      </button>
-                    </div>
-                  </td>
+                    </td>
+                    <td class="px-2 py-1.5 whitespace-nowrap text-slate-800 dark:text-slate-100">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
+                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ tran.description }}</td>
+                    <td v-if="hasWalletTags" class="px-2 py-1.5 text-sm">
+                      <span v-if="tran.tag" class="inline-block rounded bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800 dark:bg-slate-700 dark:text-white">{{ tran.tag }}</span>
+                      <template v-if="tran.details && (tran.details.driver_name || tran.details.cmr || tran.details.entry_date || tran.details.cars_count)">
+                        <div class="mt-1 text-xs text-slate-600 dark:text-slate-200">
+                          <span v-if="tran.details.driver_name">{{ tran.details.driver_name }}</span>
+                          <span v-if="tran.details.cmr"> · CMR: {{ tran.details.cmr }}</span>
+                          <span v-if="tran.details.entry_date"> · {{ tran.details.entry_date }}</span>
+                          <span v-if="tran.details.cars_count != null && tran.details.cars_count !== ''"> · {{ tran.details.cars_count }} سيارة</span>
+                        </div>
+                      </template>
+                    </td>
+                    <td class="px-2 py-1.5 font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                      <template v-if="tran.type == 'inUser' || tran.type == 'inUserAmanah'">
+                        {{ formatMoney(tran.amount, tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
+                      </template>
+                    </td>
+                    <td class="px-2 py-1.5 font-mono font-bold text-rose-700 dark:text-rose-300">
+                      <template v-if="tran.type == 'outUser' || tran.type == 'outUserAmanah'">
+                        {{ formatMoney(tran.amount, tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
+                      </template>
+                    </td>
+                    <td class="px-2 py-1.5 font-mono font-semibold text-slate-900 dark:text-white">
+                      <span v-if="tran.type == 'inUser' || tran.type == 'outUser'">
+                        {{ updateResults(calculateBalance(tran, index)) }} {{ tran.currency ?? '$' }}
+                      </span>
+                      <span v-else class="text-slate-500 dark:text-slate-300">—</span>
+                    </td>
+                    <td class="px-2 py-1.5">
+                      <div class="flex flex-wrap justify-center gap-1">
+                        <a
+                          v-for="(image, imgIdx) in tran.transactions_images || []"
+                          :key="imgIdx"
+                          :href="getDownloadUrl(image.name)"
+                          target="_blank"
+                          class="inline-block cursor-pointer rounded ring-1 ring-sky-500/60 dark:ring-sky-300"
+                        >
+                          <img
+                            :src="getImageUrl(image.name)"
+                            alt=""
+                            class="inline rounded"
+                            style="max-width: 50px; max-height: 50px;"
+                          />
+                        </a>
+                        <span v-if="!tran.transactions_images || tran.transactions_images.length === 0" class="text-xs font-semibold text-slate-600 underline decoration-slate-400 dark:text-sky-300 dark:decoration-sky-300">
+                          لا يوجد
+                        </span>
+                      </div>
+                    </td>
+                    <td class="px-2 py-1.5">
+                      <div class="action-group">
+                        <button
+                          v-if="hasWalletTags"
+                          class="action-btn bg-amber-600 hover:bg-amber-700"
+                          title="تعديل الحركة"
+                          @click="openModalEditTransaction(tran)"
+                        >
+                          <edit />
+                        </button>
+                        <button
+                          class="action-btn action-btn--upload"
+                          title="مرفقات الحركة"
+                          @click="openModalUploader(tran)"
+                        >
+                          <imags />
+                        </button>
+                        <a
+                          v-if="tran.type == 'outUser'"
+                          :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=10&transactions_id=${tran.id}`"
+                          target="_blank"
+                          class="action-btn action-btn--print"
+                          title="طباعة سند الصرف"
+                        >
+                          <print />
+                        </a>
+                        <a
+                          v-if="tran.type == 'inUser'"
+                          :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=9&transactions_id=${tran.id}`"
+                          target="_blank"
+                          class="action-btn action-btn--print"
+                          title="طباعة سند القبض"
+                        >
+                          <print />
+                        </a>
+                        <a
+                          v-if="tran.type == 'outUserAmanah'"
+                          :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=12&transactions_id=${tran.id}`"
+                          target="_blank"
+                          class="action-btn action-btn--print"
+                          title="طباعة سند صرف أمانة"
+                        >
+                          <print />
+                        </a>
+                        <a
+                          v-if="tran.type == 'inUserAmanah'"
+                          :href="`/getIndexAccounting?user_id=${props.boxes.id}&print=11&transactions_id=${tran.id}`"
+                          target="_blank"
+                          class="action-btn action-btn--print"
+                          title="طباعة سند قبض أمانة"
+                        >
+                          <print />
+                        </a>
+                        <button
+                          class="action-btn action-btn--delete"
+                          :title="isAmanahTransaction(tran) ? 'حذف الأمانة' : 'حذف الحركة'"
+                          @click="isAmanahTransaction(tran) ? deleteAmanahTransaction(tran) : openModalDel(tran)"
+                        >
+                          <trash />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div class="spaner">
-                          <InfiniteLoading :car="car" @infinite="getResults" :identifier="resetData" />
-                      </div>
-
-          </div>
-
-          <div v-if="hasWalletTags && activeTab === 'tags'" class="p-4">
-            <div class="mb-4 flex flex-wrap items-center gap-2">
-              <input v-model="newTagName" type="text" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 px-3 py-2" placeholder="اسم التاغ الجديد" @keyup.enter="addTag" />
-              <button type="button" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700" @click="addTag">إضافة تاغ</button>
+              <InfiniteLoading :car="car" @infinite="getResults" :identifier="resetData" />
             </div>
-            <div v-if="!tagsLoaded" class="text-gray-500 dark:text-gray-400 py-4">جاري التحميل...</div>
-            <div v-else class="space-y-4">
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="t in tagsList"
-                  :key="t.id"
-                  type="button"
-                  class="px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-2"
-                  :class="selectedTagName === t.name ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'"
-                  @click="selectTag(t.name)"
-                >
-                  {{ t.name }}
-                  <span class="text-xs opacity-80 hover:opacity-100" @click.stop="deleteTag(t)" title="حذف التاغ">×</span>
-                </button>
+          </div>
+        </div>
+
+        <!-- Tags tab -->
+        <div v-if="hasWalletTags && activeTab === 'tags'" class="p-4">
+          <div class="mb-4 flex flex-wrap items-center gap-2">
+            <input
+              v-model="newTagName"
+              type="text"
+              class="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200"
+              placeholder="اسم التاغ الجديد"
+              @keyup.enter="addTag"
+            />
+            <button type="button" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700" @click="addTag">إضافة تاغ</button>
+          </div>
+          <div v-if="!tagsLoaded" class="py-4 text-slate-500 dark:text-slate-400">جاري التحميل...</div>
+          <div v-else class="space-y-4">
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="t in tagsList"
+                :key="t.id"
+                type="button"
+                class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                :class="selectedTagName === t.name
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'"
+                @click="selectTag(t.name)"
+              >
+                {{ t.name }}
+                <span class="text-xs opacity-80 hover:opacity-100" title="حذف التاغ" @click.stop="deleteTag(t)">×</span>
+              </button>
+            </div>
+            <div v-if="selectedTagName" class="mt-4">
+              <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">دفعات تاغ: {{ selectedTagName }}</h3>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input v-model="tagFrom" type="date" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200" />
+                  <input v-model="tagTo" type="date" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200" />
+                  <button type="button" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700" @click="fetchTagTransactions">فلترة</button>
+                  <button type="button" class="rounded-lg bg-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-700" @click="printTagDetails">طباعة تفاصيل التاغ</button>
+                </div>
               </div>
-              <div v-if="selectedTagName" class="mt-4">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 class="text-lg font-semibold dark:text-white">دفعات تاغ: {{ selectedTagName }}</h3>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <input v-model="tagFrom" type="date" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 px-2 py-1.5 text-sm" />
-                    <input v-model="tagTo" type="date" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 px-2 py-1.5 text-sm" />
-                    <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700" @click="fetchTagTransactions">فلترة</button>
-                    <button type="button" class="px-3 py-1.5 bg-gray-600 text-white rounded text-sm hover:bg-gray-700" @click="printTagDetails">طباعة تفاصيل التاغ</button>
-                  </div>
-                </div>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-right text-sm text-gray-500 dark:text-gray-400 text-center border dark:border-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                      <tr>
-                        <th class="px-2 py-2">رقم</th>
-                        <th class="px-2 py-2">التاريخ</th>
-                        <th class="px-2 py-2">الوصف</th>
-                        <th class="px-2 py-2">عدد السيارات</th>
-                        <th class="px-2 py-2">المبلغ</th>
-                        <th class="px-2 py-2">تنفيذ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="tran in transactionsByTag" :key="tran.id" class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td class="px-2 py-1">{{ tran.id }}</td>
-                        <td class="px-2 py-1">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
-                        <td class="px-2 py-1">{{ tran.description }}</td>
-                        <td class="px-2 py-1">{{ tran.details?.cars_count ?? '—' }}</td>
-                        <td class="px-2 py-1">{{ tran.amount }} {{ tran.currency ?? '$' }}</td>
-                        <td class="px-2 py-1">
-                          <button type="button" class="px-2 py-1 bg-amber-600 text-white rounded text-xs" @click="openModalEditTransaction(tran)">تعديل</button>
-                          <button type="button" class="px-2 py-1 bg-red-600 text-white rounded text-xs mr-1" @click="openModalDel(tran); showModalEditTransaction = false">حذف</button>
-                        </td>
-                      </tr>
-                      <tr v-if="transactionsByTag.length === 0">
-                        <td colspan="6" class="px-2 py-4 text-gray-400">لا توجد دفعات لهذا التاغ</td>
-                      </tr>
-                      <tr v-else class="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-800 dark:text-gray-200">
-                        <td colspan="3" class="px-2 py-2 text-left">المجموع</td>
-                        <td class="px-2 py-2">{{ tagSummary.totalCars }}</td>
-                        <td class="px-2 py-2">الرصيد: {{ tagSummary.balance }} $</td>
-                        <td class="px-2 py-2">—</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+              <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                <table class="w-full text-center text-sm text-slate-700 dark:text-slate-200">
+                  <thead>
+                    <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                      <th class="px-2 py-2">رقم</th>
+                      <th class="px-2 py-2">التاريخ</th>
+                      <th class="px-2 py-2">الوصف</th>
+                      <th class="px-2 py-2">عدد السيارات</th>
+                      <th class="px-2 py-2">المبلغ</th>
+                      <th class="px-2 py-2">تنفيذ</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    <tr v-for="tran in transactionsByTag" :key="tran.id" class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <td class="px-2 py-1">{{ tran.id }}</td>
+                      <td class="px-2 py-1">{{ formatBaghdadTimestamp(tran?.created_at) }}</td>
+                      <td class="px-2 py-1">{{ tran.description }}</td>
+                      <td class="px-2 py-1">{{ tran.details?.cars_count ?? '—' }}</td>
+                      <td class="px-2 py-1 font-mono">{{ formatMoney(tran.amount, tran.currency ?? '$') }} {{ tran.currency ?? '$' }}</td>
+                      <td class="px-2 py-1">
+                        <button type="button" class="rounded bg-amber-600 px-2 py-1 text-xs text-white" @click="openModalEditTransaction(tran)">تعديل</button>
+                        <button type="button" class="mr-1 rounded bg-rose-600 px-2 py-1 text-xs text-white" @click="openModalDel(tran); showModalEditTransaction = false">حذف</button>
+                      </td>
+                    </tr>
+                    <tr v-if="transactionsByTag.length === 0">
+                      <td colspan="6" class="px-2 py-4 text-slate-400">لا توجد دفعات لهذا التاغ</td>
+                    </tr>
+                    <tr v-else class="bg-slate-100 font-semibold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                      <td colspan="3" class="px-2 py-2 text-left">المجموع</td>
+                      <td class="px-2 py-2">{{ tagSummary.totalCars }}</td>
+                      <td class="px-2 py-2 font-mono">الرصيد: {{ formatMoney(tagSummary.balance, '$') }} $</td>
+                      <td class="px-2 py-2">—</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1214,43 +1195,51 @@ function printTagDetails() {
 }
 
 .money-account-badge--cash {
-  background-color: rgba(16, 185, 129, 0.18);
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.35);
+  background-color: #0f766e;
+  color: #ffffff;
+  border-color: #0d9488;
 }
 
 .money-account-badge--treasury {
-  background-color: rgba(245, 158, 11, 0.18);
-  color: #b45309;
-  border-color: rgba(245, 158, 11, 0.35);
+  background-color: #334155;
+  color: #ffffff;
+  border-color: #475569;
 }
 
 .money-account-badge--other {
-  background-color: rgba(99, 102, 241, 0.18);
-  color: #4338ca;
-  border-color: rgba(99, 102, 241, 0.35);
+  background-color: #3730a3;
+  color: #ffffff;
+  border-color: #4f46e5;
 }
 
 .money-account-badge--none {
-  background-color: rgba(148, 163, 184, 0.12);
-  color: #64748b;
-  border-color: rgba(148, 163, 184, 0.25);
+  background-color: #475569;
+  color: #f1f5f9;
+  border-color: #64748b;
 }
 
 .dark .money-account-badge--cash {
-  color: #34d399;
+  background-color: #115e59;
+  color: #ffffff;
+  border-color: #0f766e;
 }
 
 .dark .money-account-badge--treasury {
-  color: #fbbf24;
+  background-color: #334155;
+  color: #ffffff;
+  border-color: #475569;
 }
 
 .dark .money-account-badge--other {
-  color: #a5b4fc;
+  background-color: #312e81;
+  color: #ffffff;
+  border-color: #4338ca;
 }
 
 .dark .money-account-badge--none {
-  color: #94a3b8;
+  background-color: #334155;
+  color: #f8fafc;
+  border-color: #475569;
 }
 
 .action-group {
@@ -1297,7 +1286,11 @@ function printTagDetails() {
 }
 
 .action-btn--upload {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+.action-btn--print {
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 
 .action-btn--delete {

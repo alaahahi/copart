@@ -28,6 +28,7 @@ return [
         'monitor.api.overview',
         'monitor.api.laravel-logs',
         'monitor.api.laravel-log-files',
+        'monitor.api.clear-logs',
     ],
 
     'ignore_path_prefixes' => [
@@ -49,6 +50,9 @@ return [
     ],
 
     'retention_days' => (int) env('MONITOR_RETENTION_DAYS', 30),
+
+    // Token required for destructive Hub actions (clear logs). Leave empty to disable clear API.
+    'clear_token' => env('MONITOR_CLEAR_TOKEN', ''),
 
     // Public API — no auth. Restrict via firewall/VPN or set MONITOR_CORS_ORIGIN in production.
     'cors_origin' => env('MONITOR_CORS_ORIGIN', '*'),

@@ -2,13 +2,21 @@
     "private": true,
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "test:e2e": "playwright test",
+        "test:e2e:accounting": "playwright test --grep \"@accounting|@setup\"",
+        "test:e2e:system": "playwright test --grep \"@system-core|@system-accounting|@system-admin|@system|@health|@setup\"",
+        "test:e2e:health": "playwright test --grep \"@system-core|@system-accounting|@system-admin|@system|@health|@setup\"",
+        "test:e2e:system:core": "playwright test --grep \"@system-core|@setup\"",
+        "test:e2e:system:accounting": "playwright test --grep \"@system-accounting|@setup\"",
+        "test:e2e:system:admin": "playwright test --grep \"@system-admin|@setup\""
     },
     "devDependencies": {
         "@babel/plugin-syntax-dynamic-import": "^7.8.3",
         "@inertiajs/inertia": "^0.11.0",
         "@inertiajs/inertia-vue3": "^0.6.0",
         "@inertiajs/progress": "^0.2.7",
+        "@playwright/test": "^1.61.1",
         "@tailwindcss/forms": "^0.5.2",
         "@vitejs/plugin-vue": "^3.0.0",
         "alpinejs": "^3.4.2",

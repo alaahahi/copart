@@ -90,7 +90,7 @@
             <tr>
                 <td>{{ $data->id }}</td>
                 <td>{{ $data->created_at }}</td>
-                <td>{{ $data->amount  }}</td>
+                <td>{{ \App\Helpers\Help::formatMoney($data->amount, $data->currency ?? '$') }}</td>
                 <td>{{ $data->description  }}</td>
             </tr>
             @endif

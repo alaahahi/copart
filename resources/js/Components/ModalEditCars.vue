@@ -459,14 +459,20 @@ function validateExchangeRate(v) {
 }
 
 .car-modal-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.75rem;
+  width: 100%;
   padding: 1rem 1.5rem;
   border-top: 1px solid rgba(100, 116, 139, 0.35);
   background: rgba(15, 23, 42, 0.6);
   flex-shrink: 0;
+}
+
+.car-modal-footer .car-btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .car-section {

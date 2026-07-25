@@ -23,8 +23,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use App\Models\Transfers;
 use App\Models\Car;
-use App\Models\ExpensesType;
-use App\Models\Expenses;
 use App\Models\TransactionsImages;
 use App\Models\PaymentTag;
 use App\Support\VoucherPrint;
@@ -37,6 +35,7 @@ use App\Exports\ExportInfo;
 use App\Exports\ExportAccount;
 use App\Services\AccountingCacheService;
 use App\Services\LedgerService;
+use App\Services\SystemWalletService;
 use App\Services\TransactionPaymentService;
 use App\Http\Requests\RestoreTransactionRequest;
 use Illuminate\Support\Facades\Auth;
@@ -412,59 +411,152 @@ class AccountingController extends Controller
      }
      public function salesDebtUser(Request $request)
      {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
-      $owner_id=Auth::user()->owner_id;
-      $note= $request->note??'';
-      $amountDollar= $request->amountDollar??0;
-      $amountDinar= $request->amountDinar??0;
-      $user_id=$request->id;
-      $user=  User::with('wallet')->find($user_id);
-      $desc="وصل سحب مباشر"." ".' قاسه'.' '.$user->name.' '.$note;
-      $date= $request->date??0;
-      $details = array_filter([
-          'cars_count' => $request->input('cars_count'),
-          'cmr' => $request->input('cmr'),
-          'driver_name' => $request->input('driver_name'),
-          'entry_date' => $request->input('entry_date'),
-      ], function ($v) { return $v !== null && $v !== ''; });
-      $tag = $request->input('tag') ? trim($request->input('tag')) : null;
-      if($amountDollar){
-        $transactiond=$this->debtWallet($amountDollar,$desc,$this->accounting->mainBox()->id,$user_id,'App\Models\User',0,0,'$',$date,0,'outUserBox');
-        $transactionDetilsd = ['type' => 'outUser','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>$transactiond->id,'details'=>$details,'tag'=>$tag];
-        $transaction = Transactions::create($transactionDetilsd);
-      }
-      if($amountDinar)
-      {
-        $transactionq=$this->debtWallet($amountDinar,$desc,$this->accounting->mainBox()->id,$user_id,'App\Models\User',0,0,'IQD',$date,0,'outUserBox');
-        $transactionDetilsq = ['type' => 'outUser','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>$transactionq->id,'details'=>$details,'tag'=>$tag];
-        $transaction = Transactions::create($transactionDetilsq);
-      }
-      return Response::json($request, 200);
-  
+        $owner_id = Auth::user()->owner_id;
+        $this->accounting->loadAccounts($owner_id);
+
+        $note = $request->note ?? $request->amountNote ?? '';
+        $amountDollar = $request->amountDollar ?? 0;
+        $amountDinar = $request->amountDinar ?? 0;
+        if (!$amountDollar && !$amountDinar) {
+            return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
+        }
+
+        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
+        $user_id = $request->id ?: $mainBox->id;
+        $user = User::with('wallet')->find($user_id);
+
+        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+            return Response::json([
+                'message' => 'حساب القاصة غير موجود',
+                'errors' => ['id' => ['حساب القاصة غير موجود']],
+            ], 422);
+        }
+
+        if (!$user->wallet) {
+            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
+            $user->load('wallet');
+        }
+
+        $desc = 'وصل سحب مباشر قاسه '.$user->name.' '.$note;
+        $date = $request->date ?: $this->currentDate;
+        $tag = $request->input('tag') ? trim($request->input('tag')) : null;
+        $transaction = null;
+
+        if ($amountDollar) {
+            $transactiond = $this->debtWallet($amountDollar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'outUserBox');
+            if (!$transactiond) {
+                return Response::json(['message' => 'تعذر تسجيل السحب من الصندوق'], 500);
+            }
+            $transaction = Transactions::create([
+                'type' => 'outUser',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDollar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => $transactiond->id,
+                'details' => [],
+                'tag' => $tag,
+            ]);
+        }
+        if ($amountDinar) {
+            $transactionq = $this->debtWallet($amountDinar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'outUserBox');
+            if (!$transactionq) {
+                return Response::json(['message' => 'تعذر تسجيل السحب من الصندوق'], 500);
+            }
+            $transaction = Transactions::create([
+                'type' => 'outUser',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDinar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => $transactionq->id,
+                'details' => [],
+                'tag' => $tag,
+            ]);
+        }
+
+        return Response::json($transaction ?? $request, 200);
       }
      public function salesDebtUserAmanah(Request $request)
      {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
-      $owner_id=Auth::user()->owner_id;
-      $note= $request->note??'';
-      $amountDollar= $request->amountDollar??0;
-      $amountDinar= $request->amountDinar??0;
-      $user_id=$request->id;
-      $user=  User::with('wallet')->find($user_id);
-      $desc="وصل سحب أمانة"." ".' قاسه'.' '.$user->name.' '.$note;
-      $date= $request->date??0;
-      if($amountDollar){
-        // الأمانة لا تؤثر على balance - balance فقط للسيارات
-        $transactionDetilsd = ['type' => 'outUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>0];
-        $transaction = Transactions::create($transactionDetilsd);
-      }
-      if($amountDinar)
-      {
-        // الأمانة لا تؤثر على balance - balance فقط للسيارات
-        $transactionDetilsq = ['type' => 'outUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>0];
-        $transaction = Transactions::create($transactionDetilsq);
-      }
-      return Response::json($request, 200);
+        $owner_id = Auth::user()->owner_id;
+        $this->accounting->loadAccounts($owner_id);
+
+        $note = $request->note ?? $request->amountNote ?? '';
+        $amountDollar = $request->amountDollar ?? 0;
+        $amountDinar = $request->amountDinar ?? 0;
+        if (!$amountDollar && !$amountDinar) {
+            return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
+        }
+
+        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
+        $user_id = $request->id ?: $mainBox->id;
+        $user = User::with('wallet')->find($user_id);
+
+        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+            return Response::json([
+                'message' => 'حساب القاصة غير موجود',
+                'errors' => ['id' => ['حساب القاصة غير موجود']],
+            ], 422);
+        }
+
+        if (!$user->wallet) {
+            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
+            $user->load('wallet');
+        }
+
+        $desc = 'وصل سحب أمانة قاسه '.$user->name.' '.$note;
+        $date = $request->date ?: $this->currentDate;
+        $transaction = null;
+
+        if ($amountDollar) {
+            // الأمانة لا تؤثر على balance - balance فقط للسيارات
+            $transaction = Transactions::create([
+                'type' => 'outUserAmanah',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDollar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => 0,
+            ]);
+        }
+        if ($amountDinar) {
+            // الأمانة لا تؤثر على balance - balance فقط للسيارات
+            $transaction = Transactions::create([
+                'type' => 'outUserAmanah',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDinar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => 0,
+            ]);
+        }
+
+        return Response::json($transaction ?? $request, 200);
   
       }
      public function salesDebt(Request $request)
@@ -513,36 +605,79 @@ class AccountingController extends Controller
        }
        public function receiptArrivedUser(Request $request)
        {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
-        $owner_id=Auth::user()->owner_id;
-        $note= $request->amountNote??'';
-        $user_id=$request->id;
-
-        $amountDollar= $request->amountDollar??0;
-        $amountDinar= $request->amountDinar??0;
-        $user=  User::with('wallet')->find($user_id);
-
-        $desc="وصل قبض مباشر"." ".' قاسه'.' '.$user->name.' '.$note;
-        $date= $request->date??0;
-
-        $details = array_filter([
-            'cars_count' => $request->input('cars_count'),
-            'cmr' => $request->input('cmr'),
-            'driver_name' => $request->input('driver_name'),
-            'entry_date' => $request->input('entry_date'),
-        ], function ($v) { return $v !== null && $v !== ''; });
-        $tag = $request->input('tag') ? trim($request->input('tag')) : null;
-
-        if($amountDollar){
-            $transactiond=$this->increaseWallet($amountDollar,$desc,$this->accounting->mainBox()->id,$user_id,'App\Models\User',0,0,'$',$date,0,'inUserBox',$details);
-            $transactionDetilsd = ['type' => 'inUser','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>$transactiond->id,'details'=>$details,'tag'=>$tag];
-            $transaction = Transactions::create($transactionDetilsd);
+        $owner_id = Auth::user()->owner_id;
+        $this->accounting->loadAccounts($owner_id);
+        $note = $request->amountNote ?? $request->note ?? '';
+        $amountDollar = $request->amountDollar ?? 0;
+        $amountDinar = $request->amountDinar ?? 0;
+        if (!$amountDollar && !$amountDinar) {
+            return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
-        if($amountDinar){
-            $transactionq=$this->increaseWallet($amountDinar,$desc,$this->accounting->mainBox()->id,$user_id,'App\Models\User',0,0,'IQD',$date,0,'inUserBox',$details);
-            $transactionDetilsq = ['type' => 'inUser','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>$transactionq->id,'details'=>$details,'tag'=>$tag];
-            $transaction = Transactions::create($transactionDetilsq);
 
+        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
+        $user_id = $request->id ?: $mainBox->id;
+        $user = User::with('wallet')->find($user_id);
+
+        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+            return Response::json([
+                'message' => 'حساب القاصة غير موجود',
+                'errors' => ['id' => ['حساب القاصة غير موجود']],
+            ], 422);
+        }
+
+        if (!$user->wallet) {
+            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
+            $user->load('wallet');
+        }
+
+        $desc = 'وصل قبض مباشر قاسه '.$user->name.' '.$note;
+        $date = $request->date ?: $this->currentDate;
+        $tag = $request->input('tag') ? trim($request->input('tag')) : null;
+        $transaction = null;
+
+        if ($amountDollar) {
+            $transactiond = $this->increaseWallet($amountDollar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'inUserBox', []);
+            if (!$transactiond) {
+                return Response::json(['message' => 'تعذر تسجيل الإيداع في الصندوق'], 500);
+            }
+            $transaction = Transactions::create([
+                'type' => 'inUser',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDollar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => $transactiond->id,
+                'details' => [],
+                'tag' => $tag,
+            ]);
+        }
+        if ($amountDinar) {
+            $transactionq = $this->increaseWallet($amountDinar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'inUserBox', []);
+            if (!$transactionq) {
+                return Response::json(['message' => 'تعذر تسجيل الإيداع في الصندوق'], 500);
+            }
+            $transaction = Transactions::create([
+                'type' => 'inUser',
+                'wallet_id' => $user->wallet->id,
+                'description' => $desc,
+                'amount' => $amountDinar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => $transactionq->id,
+                'details' => [],
+                'tag' => $tag,
+            ]);
         }
 
         return Response::json($transaction, 200);
@@ -550,34 +685,45 @@ class AccountingController extends Controller
         }
        public function receiptArrivedUserAmanah(Request $request)
        {
-        $this->accounting->loadAccounts(Auth::user()->owner_id);
-        $owner_id=Auth::user()->owner_id;
-        $note= $request->amountNote??'';
-        $user_id=$request->id;
+        $owner_id = Auth::user()->owner_id;
+        $this->accounting->loadAccounts($owner_id);
+        $note = $request->amountNote ?? $request->note ?? '';
+        $amountDollar = $request->amountDollar ?? 0;
+        $amountDinar = $request->amountDinar ?? 0;
+        if (!$amountDollar && !$amountDinar) {
+            return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
+        }
 
-        $amountDollar= $request->amountDollar??0;
-        $amountDinar= $request->amountDinar??0;
-        $user=  User::with('wallet')->find($user_id);
+        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
+        $user_id = $request->id ?: $mainBox->id;
+        $user = User::with('wallet')->find($user_id);
 
-        $desc="وصل قبض أمانة"." ".' قاسه'.' '.$user->name.' '.$note;
-        $date= $request->date??0;
+        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+            return Response::json([
+                'message' => 'حساب القاصة غير موجود',
+                'errors' => ['id' => ['حساب القاصة غير موجود']],
+            ], 422);
+        }
 
-        $details = array_filter([
-            'cars_count' => $request->input('cars_count'),
-            'cmr' => $request->input('cmr'),
-            'driver_name' => $request->input('driver_name'),
-            'entry_date' => $request->input('entry_date'),
-        ], function ($v) { return $v !== null && $v !== ''; });
+        if (!$user->wallet) {
+            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
+            $user->load('wallet');
+        }
+
+        $desc = 'وصل قبض أمانة قاسه '.$user->name.' '.$note;
+        $date = $request->date ?: $this->currentDate;
+        $transaction = null;
+
         $tag = $request->input('tag') ? trim($request->input('tag')) : null;
 
         if($amountDollar){
             // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transactionDetilsd = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>0,'details'=>$details,'tag'=>$tag];
+            $transactionDetilsd = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>0,'details'=>[],'tag'=>$tag];
             $transaction = Transactions::create($transactionDetilsd);
         }
         if($amountDinar){
             // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transactionDetilsq = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>0,'details'=>$details,'tag'=>$tag];
+            $transactionDetilsq = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>0,'details'=>[],'tag'=>$tag];
             $transaction = Transactions::create($transactionDetilsq);
         }
 
@@ -654,11 +800,12 @@ class AccountingController extends Controller
 
         if($print==1){
             if($showComplatedCars==1){
+                $printCars = (clone $cars)->where('results', '!=', '2')->get();
                 $clientData = [
                     'totalAmount' =>   $activeTotalAmount,
-                    'data' => $cars->where('results','!=','2')->get(),
+                    'data' => $printCars,
                     'client'=>$client,
-                    'car_total'=>$cars->where('results','!=','2')->count(),
+                    'car_total'=>$printCars->count(),
                     'car_total_unpaid'=>$car_total_unpaid,
                     'car_total_complete'=>$car_total_complete,
                     'car_total_uncomplete'=>$car_total_uncomplete,
@@ -699,10 +846,11 @@ class AccountingController extends Controller
                 ];
             }
 
-            $config=SystemConfig::first();
+            // Empty system_config table used to make print crash (null ArrayAccess in show.blade.php).
+            $config = $this->resolveSystemConfig();
 
             if($printExcel){
-                return Excel::download(new ExportInfo($user_id,$showComplatedCars), $client->name.'.xlsx');
+                return Excel::download(new ExportInfo($user_id,$showComplatedCars), ($client->name ?? 'client').'.xlsx');
             }else{
                 return view('show',compact('clientData','config'));
             }
@@ -711,12 +859,16 @@ class AccountingController extends Controller
          }
 
          if($print==6){
-            $config=SystemConfig::first();
+            $config = $this->resolveSystemConfig();
+            $car = (clone $cars)->where('id', $car_id)->first();
+            if (!$car) {
+                abort(404, 'السيارة غير موجودة');
+            }
             $clientData = [
                 'totalAmount' =>   $activeTotalAmount,
-                'data' => $cars->where('id',$car_id)->get(),
+                'data' => collect([$car]),
                 'client'=>$client,
-                'car_total'=>$cars->where('id',$car_id)->count(),
+                'car_total'=>1,
                 'car_total_unpaid'=>$car_total_unpaid,
                 'car_total_complete'=>$car_total_complete,
                 'car_total_uncomplete'=>$car_total_uncomplete,
@@ -724,10 +876,12 @@ class AccountingController extends Controller
                 'exit_car_total'=>$exit_car_total,
                 'contract_total_debit_Dollar'=>$contract_total_debit_Dollar,
                 'contract_total_debit_Dinar'=>$contract_total_debit_Dinar,
-                'cars_sum'=> $cars->where('id',$car_id)->first()->total_s,
-                'cars_paid'=> $cars->where('id',$car_id)->first()->paid,
-                'cars_discount'=>$cars->where('id',$car_id)->first()->discount,
-                'cars_need_paid'=>$cars->where('id',$car_id)->first()->total_s - $cars->where('id',$car_id)->first()->paid,
+                'cars_sum'=> $car->total_s,
+                'cars_paid'=> $car->paid,
+                'cars_discount'=>$car->discount,
+                'cars_need_paid'=>$car->total_s - $car->paid,
+                'payments_sum_dollar'=>$payments_sum_dollar,
+                'client_balance'=>$client_balance,
                 'transactions'=>$this->attachMoneyAccounts($transactions->get()),
                 'date'=> Carbon::now()->format('Y-m-d'),
                 'print'=> 6
@@ -759,7 +913,7 @@ class AccountingController extends Controller
         ];
 
          if($print==2){
-            $config=SystemConfig::first();
+            $config = $this->resolveSystemConfig();
             $transaction = Transactions ::find($transactions_id);
 
             return $this->renderVoucher('receipt', 'receipt', $config, compact('clientData','config','transactions_id','owner_id','transaction'));
@@ -767,21 +921,36 @@ class AccountingController extends Controller
    
          
          if($print==3){
-            $config=SystemConfig::first();
+            $config = $this->resolveSystemConfig();
             $transaction = Transactions ::find($transactions_id);
             return $this->renderVoucher('receiptPayment', 'payment', $config, compact('clientData','config','transactions_id','transaction','owner_id'));
          }
          if($print==4){
-            $config=SystemConfig::first();
+            $config = $this->resolveSystemConfig();
             return view('receiptPaymentTotal',compact('clientData','config','transactions_id'));
          }
          if($print==5){
-            $config=SystemConfig::first();
+            $config = $this->resolveSystemConfig();
     
             return view('receiptExpensesTotal',compact('clientData','config','transactions_id'));
          }
 
         return Response::json($clientData, 200);
+    }
+
+    /**
+     * Print blades index config as an array; null SystemConfig::first() caused HTTP 500.
+     */
+    protected function resolveSystemConfig(): SystemConfig
+    {
+        return SystemConfig::query()->first() ?? new SystemConfig([
+            'first_title_ar' => (string) config('app.name', ''),
+            'second_title_ar' => '',
+            'third_title_ar' => '',
+            'first_title_kr' => '',
+            'second_title_kr' => '',
+            'third_title_kr' => '',
+        ]);
     }
     public function paySelse(Request $request,$id)
     {
@@ -919,57 +1088,6 @@ class AccountingController extends Controller
 
     }
     
-    public function getGenExpenses (Request $request){
-        $year_date=Carbon::now()->format('Y');
-
-        $expenses = Expenses::where('expenses_type_id',$request->expenses_type_id)->where('year_date',$year_date)->get();
-
-        return Response::json($expenses, 200);    
-
-    }
-    public function GenExpenses (Request $request){
-        $owner_id=Auth::user()->owner_id;
-        $year_date=Carbon::now()->format('Y');
-        $factor=$request->factor ?? 1;
-        $amount=(($request->amount)/ $factor);
-        $expenses_type_id = $request->expenses_type_id;
-        $reason=$request->note ?? '';
-        $desc='';
-        if($expenses_type_id==1){
-            $user_id=$this->accounting->howler()->id;
-            $desc='مصاريف أربيل مبلغ '.' '.($request->amount).'بسعر صرف'.' '.$factor.' '.$reason;
-        }
-        if($expenses_type_id==2){
-            $user_id=$this->accounting->dubai()->id;
-            $desc='مصاريف دبي مبلغ '.' '.($request->amount).'بسعر صرف'.' '.$factor.' '.$reason;
-        }
-        if($expenses_type_id==3){
-            $desc='مصاريف ايران مبلغ '.' '.($request->amount).'بسعر صرف'.' '.$factor.' '.$reason;
-            $user_id=$this->accounting->iran()->id;
-        }
-        if($expenses_type_id==4){
-            $desc='مصاريف الحدود مبلغ '.' '.($request->amount).'بسعر صرف'.' '.$factor.' '.$reason;
-            $user_id=$this->accounting->border()->id;
-        }
-        if($expenses_type_id==5){
-            $desc='مصاريف شهادة coc مبلغ '.' '.($request->amount).'بسعر صرف'.' '.$factor.' '.$reason;
-            $user_id=$this->accounting->shippingCoc()->id;
-        }
-        $tran=$this->decreaseWallet($amount,$desc,$this->accounting->mainBox()->id,$this->accounting->mainBox()->id,'App\Models\User',0,0,'$');
-        $transaction=$this->increaseWallet($amount, $desc,$user_id,$user_id,'App\Models\User',1,0,'$',$this->currentDate,$tran->id);
-        $expenses = Expenses::create([
-            'factor' => $factor,
-            'amount' => ($request->amount)/ $factor ?? 0,
-            'reason' => $reason,
-            'year_date'=>$year_date,
-            'expenses_type_id'=>$expenses_type_id,
-            'transaction_id' =>  $transaction->id,
-            'user_id' => $user_id
-        ]);
-
-        return Response::json($transaction, 200);    
-
-    }
     public function convertDollarDinar(Request $request){
         $this->accounting->loadAccounts(Auth::user()->owner_id);
         $owner_id=Auth::user()->owner_id;

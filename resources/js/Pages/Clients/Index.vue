@@ -15,6 +15,8 @@ import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import { ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
+import { formatMoney } from "@/utils/formatMoney";
+import SearchInput from "@/Components/SearchInput.vue";
 
 let showModalEditClient = ref(false);
 let showModalAddClient = ref(false);
@@ -33,7 +35,7 @@ let page = 1;
 let json = ref({});
 let controller = new AbortController();
 const togglingIds = ref([]);
-/** Active list tab: all clients vs clients flagged for accounting (قاسة / عرض بالمحاسبة). */
+/** Active list tab: all | traders | merchants-with-qasa | system vaults. */
 const activeTab = ref('all');
 
 const refresh = () => {
@@ -42,9 +44,18 @@ const refresh = () => {
   resetData.value = !resetData.value;
 };
 
+/** Tabs that lock free-text / category filters (backend uses dedicated q keys). */
+const isLockedFilterTab = () => ['traders_qasa', 'system_qasa'].includes(activeTab.value);
+
 const effectiveQ = () => {
-  if (activeTab.value === 'qasa') {
-    return 'show_in_dashboard';
+  if (activeTab.value === 'traders') {
+    return 'traders';
+  }
+  if (activeTab.value === 'traders_qasa') {
+    return 'traders_qasa';
+  }
+  if (activeTab.value === 'system_qasa') {
+    return 'system_qasa';
   }
   if (category.value && category.value !== '0') {
     return category.value;
@@ -152,6 +163,8 @@ function confirmDelClient(V) {
       refresh();
     })
     .catch((error) => {
+      const msg = error?.response?.data?.message || 'تعذر حذف القاصة';
+      alert(msg);
       console.error(error);
     });
 }
@@ -172,8 +185,8 @@ async function toggleShowInDashboardQuick(user) {
       show_in_dashboard: next,
     });
     user.show_in_dashboard = response.data.show_in_dashboard;
-    // If viewing قاسة tab and user turned off, drop from current list
-    if (activeTab.value === 'qasa' && !user.show_in_dashboard) {
+    // If viewing «تجار لديهم قاصة» and user turned off, drop from current list
+    if (activeTab.value === 'traders_qasa' && !user.show_in_dashboard) {
       laravelData.value = laravelData.value.filter((u) => u.id !== user.id);
     }
   } catch (error) {
@@ -185,8 +198,7 @@ async function toggleShowInDashboardQuick(user) {
 }
 
 function formatBalance(balance) {
-  const n = Number(balance) || 0;
-  return `${n.toLocaleString('en-US')} $`;
+  return `${formatMoney(balance, "$")} $`;
 }
 
 function unpaidCars(user) {
@@ -230,7 +242,7 @@ function unpaidCars(user) {
       <div class="mx-auto sm:px-6 lg:px-8">
         <div class="clients-card overflow-hidden shadow-sm sm:rounded-xl">
           <div class="p-4 sm:p-6">
-            <!-- Tabs: الكل | قاسة -->
+            <!-- Tabs: الكل | التجار | تجار لديهم قاصة | قاصات النظام | قاصة الشركة -->
             <div class="clients-tabs mb-5" role="tablist" :aria-label="$t('clients')">
               <button
                 type="button"
@@ -245,13 +257,35 @@ function unpaidCars(user) {
               <button
                 type="button"
                 role="tab"
-                :aria-selected="activeTab === 'qasa'"
+                :aria-selected="activeTab === 'traders'"
                 class="clients-tab"
-                :class="{ 'is-active': activeTab === 'qasa' }"
-                @click="setTab('qasa')"
-                :title="$t('show_in_accounting')"
+                :class="{ 'is-active': activeTab === 'traders' }"
+                @click="setTab('traders')"
+                :title="$t('tab_traders')"
               >
-                {{ $t('qasa') }}
+                {{ $t('tab_traders') }}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="activeTab === 'traders_qasa'"
+                class="clients-tab"
+                :class="{ 'is-active': activeTab === 'traders_qasa' }"
+                @click="setTab('traders_qasa')"
+                :title="$t('tab_traders_qasa_hint')"
+              >
+                {{ $t('tab_traders_qasa') }}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="activeTab === 'system_qasa'"
+                class="clients-tab"
+                :class="{ 'is-active': activeTab === 'system_qasa' }"
+                @click="setTab('system_qasa')"
+                :title="$t('tab_system_qasa_hint')"
+              >
+                {{ $t('tab_system_qasa') }}
               </button>
               <Link
                 :href="route('company_treasury')"
@@ -266,21 +300,14 @@ function unpaidCars(user) {
             <div class="clients-filters grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
               <div class="lg:col-span-2">
                 <InputLabel for="simple-search" :value="$t('search')" class="mb-1" />
-                <div class="relative">
-                  <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg class="h-5 w-5 text-gray-400 dark:text-slate-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                      <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                  <input
-                    id="simple-search"
-                    v-model="q"
-                    type="text"
-                    class="clients-input w-full pl-10"
-                    :placeholder="$t('search_name_phone_vin')"
-                    :disabled="activeTab === 'qasa'"
-                  />
-                </div>
+                <SearchInput
+                  id="simple-search"
+                  v-model="q"
+                  type="text"
+                  input-class="clients-input"
+                  :placeholder="$t('search_name_phone_vin')"
+                  :disabled="isLockedFilterTab()"
+                />
               </div>
 
               <div>
@@ -289,7 +316,7 @@ function unpaidCars(user) {
                   id="category"
                   v-model="category"
                   class="clients-input w-full pr-8"
-                  :disabled="activeTab === 'qasa'"
+                  :disabled="isLockedFilterTab()"
                 >
                   <option value="0">{{ $t("allOwners") }}</option>
                   <option value="debit">{{ $t('has_debt') }}</option>
@@ -380,7 +407,7 @@ function unpaidCars(user) {
                             <edit />
                           </button>
                           <button
-                            v-if="!user.car_count"
+                            v-if="user.can_delete"
                             type="button"
                             class="action-btn action-del"
                             title="حذف"
@@ -494,8 +521,15 @@ function unpaidCars(user) {
   color: #0f172a;
   font-size: 0.875rem;
   border-radius: 0.5rem;
-  padding: 0.55rem 0.75rem;
+  /* Logical padding so icon+text never collide in RTL/LTR (shorthand was killing pl/ps). */
+  padding-block: 0.55rem;
+  padding-inline-end: 0.75rem;
+  padding-inline-start: 0.75rem;
   outline: none;
+}
+
+.erp-search .clients-input {
+  padding-inline-start: 2.5rem;
 }
 
 .clients-input:focus {

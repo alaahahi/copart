@@ -6,7 +6,6 @@ import { ref } from "vue";
 import ModalAddSales from "@/Components/ModalAddSales.vue";
 import ModalAddDebt from "@/Components/ModalAddDebt.vue";
 import ModalAddExpenses from "@/Components/ModalAddExpenses.vue";
-import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
 
 
@@ -29,6 +28,7 @@ import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
 import debounce from 'lodash/debounce';
 import { formatBaghdadTimestamp } from "@/utils/datetime";
+import { formatNumber } from "@/utils/formatMoney";
 
 
 const laravelData = ref({});
@@ -300,11 +300,7 @@ function UpdatePage (){
   refresh();
 }
 function updateResults(input) {
-  const n = Number(input);
-  if (!Number.isFinite(n)) {
-    return (0).toLocaleString();
-  }
-  return n.toLocaleString();
+  return formatNumber(input);
 }
 
 function safeNum(v) {
@@ -318,25 +314,33 @@ const todayDiffDinar = () => safeNum(transactionInTodayDinar.value) + safeNum(tr
 const IN_TYPES = ['in', 'inUser', 'inUserBox'];
 const OUT_TYPES = ['out', 'outUser', 'outUserBox', 'debt'];
 
-function formatAmount(tran, direction) {
+function getAmountParts(tran, direction) {
   if (!tran) {
-    return '';
+    return null;
   }
   const amount = Number(tran.amount);
   if (Number.isNaN(amount)) {
-    return '';
+    return null;
   }
   if (direction === 'in' && IN_TYPES.includes(tran.type)) {
-    return `${updateResults(Math.abs(amount))} ${tran.currency ?? '$'}`.trim();
+    return {
+      value: updateResults(Math.abs(amount)),
+      currency: tran.currency ?? '$',
+    };
   }
   if (direction === 'out' && OUT_TYPES.includes(tran.type)) {
-    return `${updateResults(Math.abs(amount))} ${tran.currency ?? '$'}`.trim();
+    return {
+      value: updateResults(Math.abs(amount)),
+      currency: tran.currency ?? '$',
+    };
   }
-  return '';
+  return null;
 }
 
 function getAmountClass(direction) {
-  return direction === 'in' ? 'amount-pill amount-pill--in dark:text-white text-xl font-bold' : 'amount-pill amount-pill--out dark:text-white text-xl font-bold';
+  return direction === 'in'
+    ? 'amount-pill amount-pill--in flex flex-col items-center justify-center leading-tight gap-0 dark:text-white text-white font-bold'
+    : 'amount-pill amount-pill--out flex flex-col items-center justify-center leading-tight gap-0 dark:text-white text-white font-bold';
 }
 
 function getRowClasses(tran) {
@@ -497,21 +501,6 @@ async function saveDescription(tran) {
   }
 }
 
-// دالة للحصول على لون البرتقالي بناءً على الفهرس
-function getOrangeColorClass(index) {
-  const orangeColors = [
-    'bg-orange-300',
-    'bg-orange-400',
-    'bg-orange-500',
-    'bg-orange-600',
-    'bg-orange-700',
-    'bg-orange-800',
-    'bg-orange-900'
-  ];
-  return orangeColors[index % orangeColors.length];
-}
- 
- 
 </script>
 
 <template>
@@ -561,7 +550,8 @@ function getOrangeColorClass(index) {
             :show="showModalAddSales ? true : false"
             :data="users"
             :accounts="accounts"
-            :showExtendedFields="false"
+            title="وصل قبض"
+            subtitle="إضافة مبلغ إلى الصندوق بالدولار أو الدينار"
             @a="confirm($event)"
             @close="showModalAddSales = false"
             />
@@ -576,17 +566,14 @@ function getOrangeColorClass(index) {
             
            </template>
       </ModalAddDebt>
-      <ModalAddExpenses 
+      <ModalAddExpenses
             :show="showModalAddExpenses ? true : false"
             :boxes="boxes"
+            title="وصل صرف"
+            subtitle="سحب مبلغ من الصندوق بالدولار أو الدينار"
             @a="confirmdebt($event)"
             @close="showModalAddExpenses = false"
-            >
-          <template #header>
-            <h3 class="text-center text-gray-900 dark:text-gray-100 font-semibold">ادخال مصاريف</h3>
-            
-           </template>
-      </ModalAddExpenses>
+            />
       <ModalConvertDollarDinar 
             :show="showModalConvertDollarDinar ? true : false"
             :boxes="boxes"
@@ -611,170 +598,157 @@ function getOrangeColorClass(index) {
       </div>
     </div>
     <div>
-      <div class="max-w-9xl mx-auto sm:px-6 lg:px-8">
-        <div class="overflow-hidden shadow-sm sm:rounded-lg">
-          <div class=" border-b border-gray-200">
-          
+      <div class="mx-auto max-w-9xl sm:px-6 lg:px-8">
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div class="border-b border-slate-200 dark:border-slate-700">
 
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3">
-              <div class="pt-5  print:hidden">
-              <button style=" width: 100%; margin-top: 4px;" v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5|| $page.props.auth.user.type_id==6" className="px-4 py-2 text-white bg-green-500 rounded-md focus:outline-none"
-                                            @click="openAddSales()">
-                                            {{ $t('receipt_voucher_add') }}
+            <!-- Row 1: compact actions + converts + wallets + dates + filter -->
+            <div class="flex flex-wrap items-end gap-2 border-b border-slate-200 p-3 dark:border-slate-700 print:hidden">
+              <button
+                v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5 || $page.props.auth.user.type_id==6"
+                type="button"
+                class="min-h-[38px] rounded-lg bg-emerald-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                @click="openAddSales()"
+              >
+                {{ $t('receipt_voucher_add') }}
               </button>
-              </div>
 
-              <div class="pt-5  hidden">
-              <button style=" width: 100%; margin-top: 4px;"  v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5" className="px-4 py-2 text-white bg-yellow-500 rounded-md focus:outline-none"
-                                            @click="opendebtSales()">
-                                             تحويل لحساب 
+              <button
+                v-if="false"
+                type="button"
+                class="min-h-[38px] rounded-lg bg-amber-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-amber-700"
+                @click="opendebtSales()"
+              >
+                تحويل لحساب
               </button>
-              </div>
-              
-              <div class="pt-5  print:hidden">
-              <button  style=" width: 100%; margin-top: 4px;"  v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2|| $page.props.auth.user.type_id==5|| $page.props.auth.user.type_id==6" className="px-4 py-2 text-white bg-rose-500 rounded-md focus:outline-none"
-                                            @click="openAddExpenses()">
-                                             {{ $t('payment_voucher_withdraw') }}
 
+              <button
+                v-if="$page.props.auth.user.type_id==1 || $page.props.auth.user.type_id==2 || $page.props.auth.user.type_id==5 || $page.props.auth.user.type_id==6"
+                type="button"
+                class="min-h-[38px] rounded-lg bg-rose-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-rose-800"
+                @click="openAddExpenses()"
+              >
+                {{ $t('payment_voucher_withdraw') }}
               </button>
-       
-              </div>
-              
-              <div class=" px-4">
-                          <div >
-                              <InputLabel for="from" :value="$t('from_date')" />
-                              <TextInput
-                                id="from"
-                                type="date"
-                                class="mt-1 block w-full"
-                                v-model="from"
-                                
-                              />
-                            </div>
-              </div>
-              <div class=" px-4">
-                            <div >
-                              <InputLabel for="to" :value="$t('until_date')" />
-                              <TextInput
-                                id="to"
-                                type="date"
-                                class="mt-1 block w-full"
-                                v-model="to"
-                              />
-                            </div>
-              </div>
-              <div class=" mr-5 print:hidden">
-                            <InputLabel for="pay" :value="$t('filter')" />
-                            <button
-                            @click.prevent="refresh()"
-                            class="px-6 mb-6 py-2 mt-1 font-bold text-white bg-gray-500 rounded" style="width: 100%">
-                            <span v-if="!isLoading">{{ $t('filter') }}</span>
-                            <span v-else>{{ $t('saving') }}</span>
-                          </button>
-              </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-3">
-                        <div>
-                          <button
-                            type="button"
-                            @click="openConvertDollarDinar()"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 w-full py-2 font-bold text-white bg-teal-500 rounded">
-                             {{ $t('convert_usd_to_iqd') }}
-                          </button>
-                        </div>
-                        <div>
-                          <button
-                            type="button"
-                            @click="openConvertDinarDollar()"
-                            style="min-width:150px;"
-                            className="px-6 mb-6 w-full py-2 font-bold text-white bg-yellow-500 rounded">
-                             {{ $t('convert_iqd_to_usd') }}
-                          </button>
-                        </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 lg:gap-3" v-if="flaggedWallets && flaggedWallets.length > 0">
-              <div v-for="(wallet, index) in flaggedWallets" :key="wallet.id">
+
+              <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
+
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-sky-500/60 bg-sky-50 px-3.5 py-1.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-500/40 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/60"
+                @click="openConvertDollarDinar()"
+              >
+                {{ $t('convert_usd_to_iqd') }}
+              </button>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg border border-amber-500/60 bg-amber-50 px-3.5 py-1.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60"
+                @click="openConvertDinarDollar()"
+              >
+                {{ $t('convert_iqd_to_usd') }}
+              </button>
+
+              <template v-if="flaggedWallets && flaggedWallets.length > 0 && $page.props.auth.user.owner_id==1">
+                <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
                 <Link
-                  v-if="$page.props.auth.user.owner_id==1"
-                  type="button"
+                  v-for="wallet in flaggedWallets"
+                  :key="wallet.id"
                   :href="`/wallet?id=${wallet.id}`"
-                  style="min-width:150px;"
-                  :class="`px-6 mb-6 py-2 font-bold text-white ${getOrangeColorClass(index)} rounded w-full mt-1 text-center`">
+                  class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-500/50 bg-orange-50 px-3.5 py-1.5 text-sm font-semibold text-orange-900 transition hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-950/60"
+                >
                   {{ wallet.name }}
                 </Link>
+              </template>
+
+              <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
+
+              <div class="flex min-w-[8.5rem] flex-col gap-0.5">
+                <label for="from" class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('from_date') }}</label>
+                <TextInput
+                  id="from"
+                  type="date"
+                  class="mt-0 block w-full min-h-[38px] bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  v-model="from"
+                />
+              </div>
+              <div class="flex min-w-[8.5rem] flex-col gap-0.5">
+                <label for="to" class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('until_date') }}</label>
+                <TextInput
+                  id="to"
+                  type="date"
+                  class="mt-0 block w-full min-h-[38px] bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  v-model="to"
+                />
+              </div>
+              <button
+                type="button"
+                class="min-h-[38px] rounded-lg bg-slate-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                @click.prevent="refresh()"
+              >
+                <span v-if="!isLoading">{{ $t('filter') }}</span>
+                <span v-else>{{ $t('saving') }}</span>
+              </button>
+            </div>
+
+            <!-- Row 2: balances + search + daily summary -->
+            <div class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('cash_balance_usd') }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {{ updateResults(laravelData?.user?.wallet?.balance ?? 0) }}
+                  <span class="text-sm font-normal text-slate-400">$</span>
+                </div>
+              </div>
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('cash_balance_iqd') }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-sky-700 dark:text-sky-300">
+                  {{ updateResults(laravelData?.user?.wallet?.balance_dinar ?? 0) }}
+                  <span class="text-sm font-normal text-slate-400">د.ع</span>
+                </div>
+              </div>
+              <div class="flex flex-col justify-end">
+                <label for="q" class="mb-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('search_voucher_or_desc') }}</label>
+                <TextInput
+                  id="q"
+                  type="text"
+                  class="mt-0 block w-full min-h-[42px] bg-white text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:placeholder-slate-400"
+                  v-model="q"
+                  @input="debouncedGetResultsCar"
+                />
+              </div>
+              <div class="overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
+                <table class="w-full text-center text-sm text-slate-100">
+                  <thead class="bg-slate-800 text-slate-100">
+                    <tr>
+                      <th class="border border-slate-700 px-2 py-1.5">{{ $t('currency') }}</th>
+                      <th class="border border-slate-700 px-2 py-1.5">{{ $t('income') }}</th>
+                      <th class="border border-slate-700 px-2 py-1.5">{{ $t('outcome') }}</th>
+                      <th class="border border-slate-700 px-2 py-1.5">{{ $t('difference') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="bg-slate-900">
+                      <td class="border border-slate-700 px-2 py-1.5 font-bold text-emerald-300">{{ $t('usd') }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold text-emerald-200">{{ updateResults(transactionInTodayDollar) }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold text-rose-200">{{ updateResults(transactionOutTodayDollar) }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold">
+                        <span :class="todayDiffDollar() > 0 ? 'text-emerald-300' : 'text-rose-300'">{{ updateResults(todayDiffDollar()) }}</span>
+                      </td>
+                    </tr>
+                    <tr class="bg-slate-900">
+                      <td class="border border-slate-700 px-2 py-1.5 font-bold text-indigo-300">{{ $t('iqd') }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold text-emerald-200">{{ updateResults(transactionInTodayDinar) }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold text-rose-200">{{ updateResults(transactionOutTodayDinar) }}</td>
+                      <td class="border border-slate-700 px-2 py-1.5 font-semibold">
+                        <span :class="todayDiffDinar() > 0 ? 'text-emerald-300' : 'text-rose-300'">{{ updateResults(todayDiffDinar()) }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 lg:gap-3">
-             
 
-
-              <div class=" px-4">
-                              <InputLabel for="to" :value="$t('cash_balance_usd')" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full"
-                                :value="laravelData?.user?.wallet?.balance ?? 0"
-                              />
-              </div>
-              <div class=" px-4">
-                              <InputLabel for="to" :value="$t('cash_balance_iqd')" />
-                              <TextInput
-                                id="to"
-                                type="number"
-                                disabled
-                                class="mt-1 block w-full"
-                                :value="laravelData?.user?.wallet?.balance_dinar ?? 0"
-                              />
-              </div>
-              <div class="relative w-full px-4">
-                          <InputLabel for="to" :value="$t('search_voucher_or_desc')" />
-                          <TextInput
-                                id="q"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="q"
-                                @input="debouncedGetResultsCar"                              />
-             
-              </div>
-               <div class="relative w-full px-4">
-                          <table class="w-full text-sm text-center text-gray-100 border border-gray-700 rounded-lg overflow-hidden bg-slate-900">
-                            <thead class="bg-slate-800 text-gray-100">
-                              <tr>
-                                <th class="border p-2">{{ $t('currency') }}</th>
-                                <th class="border p-2">{{ $t('income') }}</th>
-                                <th class="border p-2">{{ $t('outcome') }}</th>
-                                <th class="border p-2">{{ $t('difference') }}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <!-- دولار -->
-                              <tr class="bg-slate-900">
-                                <td class="border border-gray-700 p-2 font-bold text-emerald-300">{{ $t('usd') }}</td>
-                                <td class="border border-gray-700 p-2 text-emerald-200 font-semibold">{{updateResults(transactionInTodayDollar)}}</td>
-                                <td class="border border-gray-700 p-2 text-rose-200 font-semibold">{{updateResults(transactionOutTodayDollar)}}</td>
-                                <td class="border border-gray-700 p-2 font-semibold">
-                                  <span :class="todayDiffDollar() > 0 ? 'text-emerald-300' : 'text-rose-300'" >{{updateResults(todayDiffDollar())}}</span>
-                                </td>
-                              </tr>
-                              <!-- دينار -->
-                              <tr class="bg-slate-900">
-                                <td class="border border-gray-700 p-2 font-bold text-indigo-300">{{ $t('iqd') }}</td>
-                                <td class="border border-gray-700 p-2 text-emerald-200 font-semibold">{{updateResults(transactionInTodayDinar)}}</td>
-                                <td class="border border-gray-700 p-2 text-rose-200 font-semibold">{{updateResults(transactionOutTodayDinar)}}</td>
-                                <td class="border border-gray-700 p-2 font-semibold">
-                                  <span :class="todayDiffDinar() > 0 ? 'text-emerald-300' : 'text-rose-300'">{{updateResults(todayDiffDinar())}}</span>
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-
-            </div>
-         
-         <div class="overflow-x-auto shadow-lg mt-5 rounded-lg">
+         <div class="overflow-x-auto shadow-lg mx-3 mb-3 mt-2 rounded-lg">
               <table class="w-full text-right text-gray-100 dark:text-gray-100 text-center bg-slate-900 rounded-lg overflow-hidden">
                 <thead class="uppercase bg-slate-800 text-gray-100 text-center">
                   <tr class="rounded-l-lg mb-2 sm:mb-0">
@@ -801,7 +775,7 @@ function getOrangeColorClass(index) {
                     :key="tran.id"
                     :class="getRowClasses(tran)"
                   >
-                    <td class="border border-transparent text-center px-2 py-1 whitespace-nowrap">
+                    <td class="border border-transparent text-center px-2 py-1 align-middle whitespace-nowrap">
                       <Link
                         v-if="getAccountLink(tran)"
                         :href="getAccountLink(tran)"
@@ -814,16 +788,16 @@ function getOrangeColorClass(index) {
                       </span>
                     </td>
 
-                    <td class="border border-transparent text-center px-2 py-1 whitespace-nowrap">
+                    <td class="border border-transparent text-center px-2 py-1 align-middle whitespace-nowrap">
                       <span :class="getMoneyAccountBadgeClass(tran)">
                         {{ getMoneyAccountLabel(tran) ?? '—' }}
                       </span>
                     </td>
 
-                    <td class="border border-transparent text-center px-2 py-1 whitespace-nowrap">
+                    <td class="border border-transparent text-center px-2 py-1 align-middle whitespace-nowrap">
                       {{ formatBaghdadTimestamp(tran?.created_at) }}
                     </td>
-                    <th class="border border-transparent text-center px-2 py-1 align-top">
+                    <td class="border border-transparent text-center px-2 py-1 align-middle">
                     <div v-if="editingDescriptionId === tran.id" class="space-y-2 text-right">
                       <textarea
                         v-model="descriptionDraft"
@@ -859,27 +833,37 @@ function getOrangeColorClass(index) {
                         </button>
                       </div>
                     </div>
-                    <div v-else class="space-y-1 text-center">
-                      <span class="block whitespace-pre-line leading-6 pt-5">{{ tran.description }}</span>
+                    <div v-else class="flex flex-col items-center justify-center gap-1 text-center">
+                      <span class="whitespace-pre-line leading-snug">{{ tran.description }}</span>
                       <span
                         v-if="tran._descriptionUpdated"
-                        class="inline-flex items-center text-xs font-semibold text-green-600"
+                        class="inline-flex items-center text-xs font-semibold text-emerald-300"
                       >
                         تم التحديث
                       </span>
                     </div>
-                  </th>
-                    <td class="border border-transparent text-center px-2 py-1">
-                      <span v-if="formatAmount(tran, 'in')" :class="getAmountClass('in')">
-                        {{ formatAmount(tran, 'in') }}
+                  </td>
+                    <td class="border border-transparent text-center px-2 py-1 align-middle">
+                      <span
+                        v-for="parts in [getAmountParts(tran, 'in')].filter(Boolean)"
+                        :key="`in-${tran.id}`"
+                        :class="getAmountClass('in')"
+                      >
+                        <span class="leading-none text-base">{{ parts.value }}</span>
+                        <span class="leading-none text-xs opacity-90">{{ parts.currency }}</span>
                       </span>
                     </td>
-                    <td class="border border-transparent text-center px-2 py-1">
-                      <span v-if="formatAmount(tran, 'out')" :class="getAmountClass('out')">
-                        {{ formatAmount(tran, 'out') }}
+                    <td class="border border-transparent text-center px-2 py-1 align-middle">
+                      <span
+                        v-for="parts in [getAmountParts(tran, 'out')].filter(Boolean)"
+                        :key="`out-${tran.id}`"
+                        :class="getAmountClass('out')"
+                      >
+                        <span class="leading-none text-base">{{ parts.value }}</span>
+                        <span class="leading-none text-xs opacity-90">{{ parts.currency }}</span>
                       </span>
                     </td>
-                    <td class="border border-transparent text-center px-2 py-1">
+                    <td class="border border-transparent text-center px-2 py-1 align-middle">
                       <div class="action-group">
                         <button
                           class="action-btn action-btn--edit"
@@ -941,7 +925,7 @@ function getOrangeColorClass(index) {
                         </a>
                       </div>
                    </td>
-                  <td>
+                  <td class="border border-transparent text-center px-1 py-1 align-middle print:hidden">
                     <a
                       v-for="(image, index) in (tran.transactions_images || [])"
                       :key="index"
@@ -974,21 +958,31 @@ function getOrangeColorClass(index) {
 }
 
 .amount-pill {
-  display: inline-block;
-  padding: 0.25rem 0.6rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.1;
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  padding: 0.35rem 0.55rem;
   border-radius: 9999px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.875rem;
+  vertical-align: middle;
 }
 
 .amount-pill--in {
-  background-color: rgba(16, 185, 129, 0.15);
-  color: #047857;
+  background-color: rgba(16, 185, 129, 0.28);
+  color: #ecfdf5;
+  border: 1px solid rgba(110, 231, 183, 0.35);
 }
 
 .amount-pill--out {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #b91c1c;
+  background-color: rgba(244, 63, 94, 0.28);
+  color: #fff1f2;
+  border: 1px solid rgba(251, 113, 133, 0.35);
 }
 
 .action-group {
@@ -1080,26 +1074,26 @@ function getOrangeColorClass(index) {
 }
 
 .money-account-badge--cash {
-  background-color: rgba(16, 185, 129, 0.18);
-  color: #34d399;
-  border-color: rgba(16, 185, 129, 0.35);
+  background-color: #115e59;
+  color: #ffffff;
+  border-color: #0f766e;
 }
 
 .money-account-badge--treasury {
-  background-color: rgba(245, 158, 11, 0.18);
-  color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.35);
+  background-color: #334155;
+  color: #ffffff;
+  border-color: #475569;
 }
 
 .money-account-badge--other {
-  background-color: rgba(99, 102, 241, 0.18);
-  color: #a5b4fc;
-  border-color: rgba(99, 102, 241, 0.35);
+  background-color: #312e81;
+  color: #ffffff;
+  border-color: #4338ca;
 }
 
 .money-account-badge--none {
-  background-color: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
-  border-color: rgba(148, 163, 184, 0.25);
+  background-color: #334155;
+  color: #f8fafc;
+  border-color: #475569;
 }
 </style>

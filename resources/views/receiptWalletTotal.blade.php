@@ -115,15 +115,15 @@
 <div class="row p-2 text-center border-bottom alert-primary" style="font-size: 14px">
     <div class="col-3"> 
         إجمالي الإيداع بالدولار:
-        {{number_format($totalInDollar, 2)}}
+        {{\App\Helpers\Help::formatMoney($totalInDollar, '$')}}
     </div>
     <div class="col-3">
         إجمالي السحب بالدولار:
-        {{number_format($totalOutDollar, 2)}}
+        {{\App\Helpers\Help::formatMoney($totalOutDollar, '$')}}
     </div>
     <div class="col-3">
         الرصيد بالدولار:
-        {{number_format($balanceDollar, 2)}}
+        {{\App\Helpers\Help::formatMoney($balanceDollar, '$')}}
     </div>
     <div class="col-3">
         عدد المعاملات:
@@ -135,15 +135,15 @@
 <div class="row p-2 text-center border-bottom alert-info" style="font-size: 14px">
     <div class="col-3"> 
         إجمالي الإيداع بالدينار:
-        {{number_format($totalInDinar, 2)}}
+        {{\App\Helpers\Help::formatMoney($totalInDinar, 'IQD')}}
     </div>
     <div class="col-3">
         إجمالي السحب بالدينار:
-        {{number_format($totalOutDinar, 2)}}
+        {{\App\Helpers\Help::formatMoney($totalOutDinar, 'IQD')}}
     </div>
     <div class="col-3">
         الرصيد بالدينار:
-        {{number_format($balanceDinar, 2)}}
+        {{\App\Helpers\Help::formatMoney($balanceDinar, 'IQD')}}
     </div>
     <div class="col-3"></div>
 </div>
@@ -189,14 +189,14 @@
                 <td>{{ $transactionObj->description ?? '' }}</td>
                 <td>
                     @if(in_array($type, ['inUser', 'inUserAmanah']))
-                        {{ number_format(abs($transactionObj->amount ?? 0), 2) }}
+                        {{ \App\Helpers\Help::formatMoney(abs($transactionObj->amount ?? 0), $transactionObj->currency ?? '$') }}
                     @else
                         -
                     @endif
                 </td>
                 <td>
                     @if(in_array($type, ['outUser', 'outUserAmanah']))
-                        {{ number_format(abs($transactionObj->amount ?? 0), 2) }}
+                        {{ \App\Helpers\Help::formatMoney(abs($transactionObj->amount ?? 0), $transactionObj->currency ?? '$') }}
                     @else
                         -
                     @endif

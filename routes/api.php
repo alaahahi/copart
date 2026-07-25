@@ -108,6 +108,9 @@ Route::get('client',[DashboardController::class, 'client'])->name('client');
 Route::get('getIndexCar',[DashboardController::class, 'getIndexCar'])->name('getIndexCar');
 Route::get('getIndexCarSearch',[DashboardController::class, 'getIndexCarSearch'])->name('getIndexCarSearch');
 Route::get('totalInfo',[DashboardController::class, 'totalInfo'])->name('totalInfo');
+Route::get('dashboardRecentActivity',[DashboardController::class, 'recentActivity'])->name('dashboardRecentActivity');
+Route::get('dashboardWeather',[DashboardController::class, 'weather'])->name('dashboardWeather');
+Route::get('dashboardExchangeRates',[DashboardController::class, 'exchangeRates'])->name('dashboardExchangeRates');
 Route::get('recalculateProfit',[DashboardController::class, 'recalculateProfit'])->name('recalculateProfit');
 Route::get('getIndexCarAnnual',[AnnualController::class, 'getIndexCarAnnual'])->name('getIndexCarAnnual');
 
@@ -119,10 +122,8 @@ Route::post('delCarsAnnualr',[AnnualController::class, 'delCarsAnnualr'])->name(
 Route::post('TransactionsUpload',[AccountingController::class, 'TransactionsUpload'])->name('TransactionsUpload');
 Route::get('TransactionsImageDel',[AccountingController::class, 'TransactionsImageDel'])->name('TransactionsImageDel');
 
-Route::get('getIndexExpenses',[DashboardController::class, 'getIndexExpenses'])->name('getIndexExpenses');
 Route::get('showCar',[CarConfigController::class, 'showCar']);
 
-Route::get('addExpenses',[DashboardController::class, 'addExpenses'])->name('addExpenses');
 Route::get('addPaymentCar',[AccountingController::class, 'addPaymentCar'])->name('addPaymentCar');
 
 
@@ -178,9 +179,6 @@ Route::post('createDriverLoanRepayment',[AccountingController::class, 'createDri
 Route::post('toggleShowInDashboard',[UserController::class, 'toggleShowInDashboard'])->name('toggleShowInDashboard');
 
 
-Route::post('GenExpenses',[AccountingController::class, 'GenExpenses'])->name('GenExpenses');
-Route::get('getGenExpenses',[AccountingController::class, 'getGenExpenses'])->name('getGenExpenses');
-
 Route::post('convertDollarDinar',[AccountingController::class, 'convertDollarDinar'])->name('convertDollarDinar');
 Route::post('convertDinarDollar',[AccountingController::class, 'convertDinarDollar'])->name('convertDinarDollar');
 
@@ -209,6 +207,7 @@ Route::get('ledgerTrialBalance',[LedgerController::class, 'trialBalance'])->name
 Route::get('ledgerChartOfAccounts',[LedgerController::class, 'chartOfAccounts'])->name('ledgerChartOfAccounts');
 Route::get('ledgerAccount',[LedgerController::class, 'accountLedger'])->name('ledgerAccount');
 Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('ledgerJournals');
+Route::post('ledgerAccountStore',[LedgerController::class, 'storeAccount'])->name('ledgerAccountStore');
 Route::post('ledgerAccountUpdate',[LedgerController::class, 'updateAccount'])->name('ledgerAccountUpdate');
 Route::post('ledgerAccountDeactivate',[LedgerController::class, 'deactivateAccount'])->name('ledgerAccountDeactivate');
 

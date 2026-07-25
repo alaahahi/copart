@@ -15,8 +15,39 @@
 }
 
 @layer components {
-  /* Unify ERP content panels in dark mode (many pages use bg-white + inner dark:bg-gray-900) */
-  html.dark main .bg-white {
+  /*
+   * Search field with absolute icon (RTL/LTR safe).
+   * Icon at inline-start → reserve padding-inline-start so placeholder/text never collide.
+   * !important beats shorthand padding from page CSS (e.g. .clients-input) and p-*.
+   */
+  .erp-search {
+    position: relative;
+  }
+
+  .erp-search__icon {
+    pointer-events: none;
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    display: flex;
+    align-items: center;
+    padding-inline-start: 0.75rem;
+  }
+
+  .erp-search__input {
+    padding-inline-start: 2.5rem !important;
+    padding-inline-end: 0.75rem;
+  }
+
+  /*
+   * Unify ERP panels in dark mode.
+   * Scope is broader than `main` because Teleport modals render under body
+   * and would otherwise keep light pastel/white surfaces with inherited light text.
+   */
+  html.dark main .bg-white,
+  html.dark body > [role="dialog"] .bg-white,
+  html.dark body > .modal-mask .bg-white,
+  html.dark body > .erp-modal-mask .bg-white {
     background-color: #111827;
     border: 1px solid #1f2937;
     box-shadow: none;
@@ -26,6 +57,20 @@
   html.dark main .bg-white > [class*="p-6"] {
     background-color: #111827;
     color: #e5e7eb;
+  }
+
+  /* Soft pastel KPI chips → solid dark surfaces (avoid pale-on-pale) */
+  html.dark main .bg-slate-50,
+  html.dark main .bg-emerald-50,
+  html.dark main .bg-rose-50,
+  html.dark main .bg-sky-50,
+  html.dark main .bg-amber-50,
+  html.dark main .bg-indigo-50,
+  html.dark body > [role="dialog"] .bg-slate-50,
+  html.dark body > [role="dialog"] .bg-emerald-50,
+  html.dark body > [role="dialog"] .bg-rose-50,
+  html.dark body > [role="dialog"] .bg-sky-50 {
+    background-color: #1e293b !important;
   }
 
   /* Stronger table header contrast across list pages */
@@ -51,23 +96,50 @@
     border-color: #1f2937 !important;
   }
 
-  /* Inputs / selects that otherwise blend into dark panels */
+  /*
+   * Inputs / selects: include teleported modals (outside main).
+   * Never leave white inputs with light-gray labels on navy dialogs.
+   */
   html.dark main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   html.dark main select,
-  html.dark main textarea {
+  html.dark main textarea,
+  html.dark body > [role="dialog"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > [role="dialog"] select,
+  html.dark body > [role="dialog"] textarea,
+  html.dark body > .modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > .modal-mask select,
+  html.dark body > .modal-mask textarea,
+  html.dark body > .erp-modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > .erp-modal-mask select,
+  html.dark body > .erp-modal-mask textarea {
     background-color: #0f172a;
     border-color: #4b5563;
     color: #f3f4f6;
   }
 
   html.dark main input::placeholder,
-  html.dark main textarea::placeholder {
+  html.dark main textarea::placeholder,
+  html.dark body > [role="dialog"] input::placeholder,
+  html.dark body > [role="dialog"] textarea::placeholder,
+  html.dark body > .modal-mask input::placeholder,
+  html.dark body > .modal-mask textarea::placeholder,
+  html.dark body > .erp-modal-mask input::placeholder,
+  html.dark body > .erp-modal-mask textarea::placeholder {
     color: #9ca3af;
   }
 
   html.dark main input:focus,
   html.dark main select:focus,
-  html.dark main textarea:focus {
+  html.dark main textarea:focus,
+  html.dark body > [role="dialog"] input:focus,
+  html.dark body > [role="dialog"] select:focus,
+  html.dark body > [role="dialog"] textarea:focus,
+  html.dark body > .modal-mask input:focus,
+  html.dark body > .modal-mask select:focus,
+  html.dark body > .modal-mask textarea:focus,
+  html.dark body > .erp-modal-mask input:focus,
+  html.dark body > .erp-modal-mask select:focus,
+  html.dark body > .erp-modal-mask textarea:focus {
     border-color: #60a5fa;
     outline: none;
     box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);

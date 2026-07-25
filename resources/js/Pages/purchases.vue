@@ -1,1138 +1,636 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/inertia-vue3';
+import { Head, Link } from '@inertiajs/inertia-vue3';
 import Modal from "@/Components/Modal.vue";
 import ModalAddCar from "@/Components/ModalAddCars.vue";
 import ModalEditCars from "@/Components/ModalEditCars.vue";
-import ModalAddExpenses from "@/Components/ModalAddExpenses.vue";
-import ModalAddGenExpenses from "@/Components/ModalAddGenExpenses.vue";
 import ModalAddCarExpenses from "@/Components/ModalAddCarExpenses.vue";
-import ModalSpanFromBox from "@/Components/ModalSpanFromBox.vue";
-import ModalAddTransfers from "@/Components/ModalAddTransfers.vue";
 import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
-import { TailwindPagination } from "laravel-vue-pagination";
 import { useToast } from "vue-toastification";
 import axios from 'axios';
-import { ref } from 'vue';
-import { useI18n } from "vue-i18n";
-import VuePincodeInput from 'vue3-pincode-input';
-import { Link } from '@inertiajs/inertia-vue3';
+import { ref, computed, onMounted, watch } from 'vue';
 import show from "@/Components/icon/show.vue";
-import pay from "@/Components/icon/pay.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
-import TextInput from "@/Components/TextInput.vue";
-import InputLabel from "@/Components/InputLabel.vue";
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
-import newContracts from "@/Components/icon/new.vue";
 import { erbilTransferSubtotal, ensureErbilFormFields } from "@/utils/carFields";
-
+import { asNumber, formatMoney } from "@/utils/formatMoney";
+import { carPaymentStatusMeta } from "@/utils/carPaymentStatus";
 import debounce from 'lodash/debounce';
+import SearchInput from "@/Components/SearchInput.vue";
+import CarsGridView from "@/Components/CarsGridView.vue";
 
+defineProps({ client: Array, auctions: { type: Array, default: () => [] } });
 
-const {t} = useI18n();
-
-
-const props = defineProps({client:Array, auctions:{ type: Array, default: () => [] }});
-
-
-let data = ref({});
-let pincode = ref(0);
-let from = ref('');
-let to = ref('');
-// const columnTypes = ref({ 'date': new Plugin(),'numeric': new NumberColumnType('0,0') });
 const toast = useToast();
+const money = (v) => formatMoney(v, "$");
 
-// Backend sometimes returns numeric fields as strings; guard `.toFixed()` usages.
-const asNumber = (v) => {
-  if (v === null || v === undefined || v === "") return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = Number.parseFloat(String(v).replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
-};
-const fixed = (v, digits = 0) => asNumber(v).toFixed(digits);
+const PURCHASES_PIN = "12457";
+const PIN_STORAGE_KEY = "purchases-pin-ok";
+const pinUnlocked = ref(false);
+const pinInput = ref("");
+const pinError = ref(false);
 
-//   const handleEdit = (event) => {
-
-//   const rowIndex = event.detail.rowIndex;
-//   const colIndex = (event.detail.prop).replace(/["\s]/g, '');
-//   const newValue = event.detail.val;
-//   const id =car.value.data[rowIndex].id;
-//   //car.value.data[rowIndex][colIndex] = newValue;
-
-//   // You can save the changes to a backend here if needed
-//   saveChangesToBackend(id,colIndex,newValue);
-// };
-let showModal = ref(false);
-
-const saveChangesToBackend = (id,colIndex,newValue) => {
-  data.value={'id':id,[colIndex]:newValue}
-  showModal.value=true;
-  // Simulated function to save changes to a backend
+const CARS_VIEW_KEY = "purchases-cars-view";
+const carsViewMode = ref(
+  typeof localStorage !== "undefined" && localStorage.getItem(CARS_VIEW_KEY) === "grid"
+    ? "grid"
+    : "list"
+);
+watch(carsViewMode, (mode) => {
+  try {
+    localStorage.setItem(CARS_VIEW_KEY, mode);
+  } catch (_) {
+    /* ignore quota / private mode */
+  }
+});
+const setCarsViewMode = (mode) => {
+  carsViewMode.value = mode === "grid" ? "grid" : "list";
 };
 
+onMounted(() => {
+  try {
+    pinUnlocked.value = sessionStorage.getItem(PIN_STORAGE_KEY) === "1";
+  } catch {
+    pinUnlocked.value = false;
+  }
+});
 
-let searchTerm = ref('');
-let showModalAddCarExpenses =  ref(false);
+function submitPin() {
+  const entered = String(pinInput.value || "").trim();
+  if (entered === PURCHASES_PIN) {
+    pinUnlocked.value = true;
+    pinError.value = false;
+    pinInput.value = "";
+    try {
+      sessionStorage.setItem(PIN_STORAGE_KEY, "1");
+    } catch {
+      /* ignore quota / private mode */
+    }
+    return;
+  }
+  pinError.value = true;
+  pinInput.value = "";
+  toast.error("رمز غير صحيح", {
+    timeout: 3000,
+    position: "bottom-right",
+    rtl: true,
+  });
+}
 
-let showModalCar =  ref(false);
-let showModalAddExpenses =  ref(false);
-let showModalAddGenExpenses =  ref(false);
-let showModalToBox =  ref(false);
-let showModalFromBox =  ref(false);
-let showModalAddTransfers =  ref(false);
-let showModalAddCarPayment =  ref(false);
-let showModalEditCars=ref(false);
-let showModalDelCar =  ref(false);
-let mainAccount= ref(0)
-let allCars= ref(0)
-let sumTotal= ref(0)
-let sumPaid= ref(0)
-let sumProfit= ref(0)
-let sumDebit= ref(0)
+const data = ref({});
+const from = ref('');
+const to = ref('');
+const showModal = ref(false);
+const showModalAddCarExpenses = ref(false);
+const showModalCar = ref(false);
+const showModalAddCarPayment = ref(false);
+const showModalEditCars = ref(false);
+const showModalDelCar = ref(false);
+const formData = ref({});
+const car = ref([]);
+const json = ref({});
+const resetData = ref(false);
+const currentWork = ref(true);
+let user_id = "";
+let page = 1;
+let q = '';
 
-function openModalEditCars(form={}){
+const kpiCars = computed(() => asNumber(json.value?.totalCars));
+const kpiCosts = computed(() => asNumber(json.value?.resultsDollar));
+const kpiSales = computed(() => asNumber(json.value?.resultsTotalS));
+const kpiPaid = computed(() => asNumber(json.value?.resultsPaid));
+const kpiDebt = computed(() => kpiSales.value - kpiPaid.value);
+const kpiProfit = computed(() => asNumber(json.value?.resultsProfit));
+
+const inputClass =
+  "min-h-[42px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/20 dark:border-slate-600 dark:bg-slate-950 dark:text-white";
+
+function openModalEditCars(form = {}) {
   formData.value = JSON.parse(JSON.stringify(form || {}));
   ensureErbilFormFields(formData.value, false);
   showModalEditCars.value = true;
 }
-function openModalDelCar(form={}) {
-  formData.value=form
+function openModalDelCar(form = {}) {
+  formData.value = form;
   showModalDelCar.value = true;
 }
-
-function openAddCar(form={}) {
-    formData.value=form
-    ensureErbilFormFields(formData.value, false);
-    showModalCar.value = true;
+function openAddCar(form = {}) {
+  formData.value = form;
+  ensureErbilFormFields(formData.value, false);
+  showModalCar.value = true;
+}
+function openAddCarPayment(form = {}) {
+  formData.value = form;
+  showModalAddCarPayment.value = true;
 }
 
-function openAddExpenses(form={}) {
-    formData.value=form
-    showModalAddExpenses.value = true;
-}
-function openAddGenExpenses(form={}) {
-    formGenExpenses.value=form
-    showModalAddGenExpenses.value = true;
-}
-function openAddToBox(form={}) {
-    formData.value=form
-    showModalToBox.value = true;
-}
-function openAddFromBox(form={}) {
-    formData.value=form
-    showModalFromBox.value = true;
-}
-function openAddTransfers(form={}) {
-    formData.value=form
-    showModalAddTransfers.value = true;
-}
-function openAddCarPayment(form={}) {
-    formData.value=form
-    showModalAddCarPayment.value = true;
-}
-function openwshowModalAddCarExpenses(form={}) {
-  formData.value=form
-  showModalAddCarExpenses.value = true;
-}
-
-const formData = ref({});
-const formGenExpenses = ref({});
-const car = ref([]);
-const carResult = ref([]);
-
-
-const dateValue = ref({
-    startDate: '',
-    endDate: ''
-})
-const countComp = ref()
-const formatter = ref({
-  date: 'D/MM/YYYY',
-  month: 'MM'
-})
-let resetData = ref(false);
-let user_id = 0;
-let page = 1;
-let q = '';
-let json  =ref({});
 const refresh = () => {
   page = 0;
   car.value.length = 0;
   resetData.value = !resetData.value;
-
-
 };
-function  calculateSum(carexpenses) {
-      // Use reduce to sum up carexpenses.amount_dollar
-      return carexpenses.reduce((sum, expense) => sum + (expense.amount_dollar || 0), 0);
-    }
 
 const getResultsCar = async ($state) => {
-  console.log($state)
   try {
-
-
     const response = await axios.get(`/getIndexCar`, {
       params: {
         limit: 100,
-        page: page,
-        q: q,
-        user_id: user_id,
-         from:from.value,
-        to:to.value
-      }
+        page,
+        q,
+        user_id,
+        from: from.value,
+        to: to.value,
+      },
     });
 
-     json.value = response.data;
+    json.value = response.data;
 
-
-    if (json.value.data.length < 100){
+    if (json.value.data.length < 100) {
       car.value.push(...json.value.data);
       $state.complete();
-    } 
-    else {
+    } else {
       car.value.push(...json.value.data);
-       $state.loaded();
+      $state.loaded();
     }
-
-
     page++;
   } catch (error) {
     console.log(error);
-    //$state.error();
   }
 };
-function confirmExpensesCar(V) { 
-  axios.post('/api/confirmExpensesCar',V)
-  .then(response => {
-    showModalAddCarExpenses.value = false;
-    toast.success( "تم إضافة السيارة بنجاح ", {
+
+function confirmExpensesCar(V) {
+  axios
+    .post('/api/confirmExpensesCar', V)
+    .then(() => {
+      showModalAddCarExpenses.value = false;
+      toast.success("تم إضافة السيارة بنجاح ", {
         timeout: 3000,
         position: "bottom-right",
-        rtl: true
-
+        rtl: true,
       });
-
-
-      refresh()
-
-  })
-  .catch(error => {
-    console.error(error);
-  })
-}
-
-const getcountTotalInfo = async () => {
-  axios.get('/api/totalInfo')
-  .then(response => {
-    mainAccount.value = response.data.data.mainAccount;
-    sumTotal.value= response.data.data.sumTotal;
-    sumPaid.value= response.data.data.sumPaid;
-    allCars.value =response.data.data.allCars;
-    sumProfit.value= response.data.data.sumProfit;
-    sumDebit.value= response.data.data.sumDebit;
-  })
-  .catch(error => {
-    console.error(error);
-  })
-  
-    
-}
-getcountTotalInfo()
-
-function recalculateProfit() {
-  axios.get('/api/recalculateProfit')
-  .then(response => {
-    if (response.data.success) {
-      toast.success(
-        response.data.message + " - مجموع الربح المتوقع: " + fixed(response.data.totalExpectedProfit, 2),
-        {
-        timeout: 5000,
-        position: "bottom-right",
-        rtl: true
-        }
-      );
-      // تحديث البيانات بعد إعادة الحساب
       refresh();
-      getcountTotalInfo();
-    } else {
-      toast.error(response.data.error || "حدث خطأ في إعادة حساب الربح", {
-        timeout: 5000,
-        position: "bottom-right",
-        rtl: true
-      });
-    }
-  })
-  .catch(error => {
-    toast.error("لم يتم إعادة حساب الربح بنجاح", {
-      timeout: 5000,
-      position: "bottom-right",
-      rtl: true
-    });
-    console.error(error);
-  });
+    })
+    .catch((error) => console.error(error));
 }
 
 function confirmCar(V) {
-  axios.post('/api/addCars',V)
-  .then(response => {
-    showModalCar.value = false;
-    refresh()
-    getcountTotalInfo()
-  })
-  .catch(error => {
-    console.error(error);
-  })
+  axios
+    .post('/api/addCars', V)
+    .then(() => {
+      showModalCar.value = false;
+      refresh();
+    })
+    .catch((error) => console.error(error));
 }
+
 function confirmUpdateCar(V) {
   showModalEditCars.value = false;
-
-  axios.post('/api/updateCarsP',V)
-  .then(response => {
-    showModal.value = false;
-    toast.success("تم التعديل بنجاح", {
+  axios
+    .post('/api/updateCarsP', V)
+    .then(() => {
+      showModal.value = false;
+      toast.success("تم التعديل بنجاح", {
         timeout: 2000,
         position: "bottom-right",
-        rtl: true
-
+        rtl: true,
       });
-      refresh()
-      getcountTotalInfo()
-      
-
-  })
-  .catch(error => {
-    showModal.value = false;
-
-    toast.error("لم التعديل بنجاح", {
+      refresh();
+    })
+    .catch(() => {
+      showModal.value = false;
+      toast.error("لم التعديل بنجاح", {
         timeout: 2000,
         position: "bottom-right",
-        rtl: true
-
+        rtl: true,
       });
-
-  })
+    });
 }
-
-
 
 function confirmDelCar(V) {
-  axios.post('/api/DelCar',V)
-  .then(response => {
-    showModalDelCar.value = false;
-    refresh()
-    getcountTotalInfo()
-  })
-  .catch(error => {
-    console.error(error);
-  })
-
-
+  axios
+    .post('/api/DelCar', V)
+    .then(() => {
+      showModalDelCar.value = false;
+      refresh();
+    })
+    .catch((error) => console.error(error));
 }
- 
 
 function confirmAddPayment(V) {
-  axios.get(`/api/addPaymentCar?car_id=${V.id}&discount=${V.discountPayment??0}&amount=${V.amountPayment??0}&note=${V.notePayment??''}`)
-  .then(response => {
-    showModalAddCarPayment.value = false;
-    toast.success( " تم دفع مبلغ دولار "+V.amountPayment+" بنجاح ", {
+  axios
+    .get(`/api/addPaymentCar?car_id=${V.id}&discount=${V.discountPayment ?? 0}&amount=${V.amountPayment ?? 0}&note=${V.notePayment ?? ''}`)
+    .then((response) => {
+      showModalAddCarPayment.value = false;
+      toast.success(" تم دفع مبلغ دولار " + V.amountPayment + " بنجاح ", {
         timeout: 3000,
         position: "bottom-right",
-        rtl: true
-
+        rtl: true,
       });
-      let transaction=response.data
-      window.open(`/api/getIndexAccountsSelas?user_id=${V.client.id}&print=2&transactions_id=${transaction.id}`, '_blank');
-
-  })
-  .catch(error => {
-    showModal.value = false;
-
-    toast.error("لم التعديل بنجاح", {
+      const transaction = response.data;
+      window.open(
+        `/api/getIndexAccountsSelas?user_id=${V.client.id}&print=2&transactions_id=${transaction.id}`,
+        '_blank'
+      );
+    })
+    .catch(() => {
+      showModal.value = false;
+      toast.error("لم التعديل بنجاح", {
         timeout: 2000,
         position: "bottom-right",
-        rtl: true
-
+        rtl: true,
       });
-
-  })
+    });
 }
 
-function updateResults(input) {
-  // Ensure the input is a number
-  if (typeof input !== 'number') {
-    // Try converting the input to a number
-    input = parseFloat(input) || 0;
+const debouncedGetResultsCar = debounce(refresh, 500);
+
+/** Solid dark-safe row surfaces from payment amounts. */
+function rowClass(row) {
+  const { status } = carPaymentStatusMeta(row);
+  if (status === "paid") {
+    return "bg-emerald-100 text-slate-800 dark:bg-emerald-900 dark:text-slate-100";
   }
-  
-  // Use toLocaleString to format the number with commas
-  return input.toLocaleString();
+  if (status === "partially_paid") {
+    return "bg-amber-100 text-slate-800 dark:bg-amber-900 dark:text-slate-100";
+  }
+  if (status === "unpaid" && asNumber(row?.total_s) > 0) {
+    return "bg-rose-100 text-slate-800 dark:bg-rose-900 dark:text-slate-100";
+  }
+  return "bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100";
 }
-const debouncedGetResultsCar = debounce(refresh, 500); // Adjust the debounce delay (in milliseconds) as needed
-const currentWork = ref(true);
+
+function rowProfit(row) {
+  return asNumber(row.total_s) - asNumber(row.total);
+}
 </script>
 
 <template>
-    <Head title="Dashboard" />
-    <ModalAddCarExpenses
-            :formData="formData"
-            :show="showModalAddCarExpenses ? true : false"
-            :currentWork="currentWork"
-            @a="confirmExpensesCar($event)"
-            @close="showModalAddCarExpenses = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddCarExpenses>
+  <Head :title="$t('purchases')" />
 
-    <Modal
-            :data="data"
-            :show="showModal ? true : false"
-            @a="confirmUpdateCar($event)"
-            @close="showModal = false"
-            >
-        <template #header>
-          <h2 class="text-center" style="font-size:20px;">
-            هل متأكد من تعديل البيانات
-          </h2>
-        </template>
-    </Modal>
-    <ModalAddCar
-            :formData="formData"
-            :show="showModalCar ? true : false"
-            :client="client"
-            :auctions="auctions"
-            @a="confirmCar($event)"
-            @close="showModalCar = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddCar>
-    <ModalEditCars
-            :formData="formData"
-            :show="showModalEditCars ? true : false"
-            :client="client"
-            :auctions="auctions"
-            @a="confirmUpdateCar($event)"
-            @close="showModalEditCars = false"
-            >
-        <template #header>
-          </template>
-    </ModalEditCars>
+  <ModalAddCarExpenses
+    :formData="formData"
+    :show="showModalAddCarExpenses ? true : false"
+    :currentWork="currentWork"
+    @a="confirmExpensesCar($event)"
+    @close="showModalAddCarExpenses = false"
+  >
+    <template #header />
+  </ModalAddCarExpenses>
 
- 
-    <ModalAddCarPayment
-            :formData="formData"
-            :show="showModalAddCarPayment ? true : false"
-            @a="confirmAddPayment($event)"
-            @close="showModalAddCarPayment = false"
-            >
-        <template #header>
-          </template>
-    </ModalAddCarPayment>
+  <Modal
+    :data="data"
+    :show="showModal ? true : false"
+    @a="confirmUpdateCar($event)"
+    @close="showModal = false"
+  >
+    <template #header>
+      <h2 class="text-center text-lg">هل متأكد من تعديل البيانات</h2>
+    </template>
+  </Modal>
 
-    <ModalDelCar
-            :show="showModalDelCar ? true : false"
-            :formData="formData"
-            @a="confirmDelCar($event)"
-            @close="showModalDelCar = false"
-            >
-          <template #header>
-            <h2 class=" mb-5 dark:text-white text-center">
-          هل متأكد من حذف السيارة
-          ؟
-        </h2>
-          </template>
-    </ModalDelCar>
+  <ModalAddCar
+    :formData="formData"
+    :show="showModalCar ? true : false"
+    :client="client"
+    :auctions="auctions"
+    @a="confirmCar($event)"
+    @close="showModalCar = false"
+  >
+    <template #header />
+  </ModalAddCar>
 
-    <AuthenticatedLayout >
-      <section  v-if="$page.props.auth.user.type_id==1||$page.props.auth.user.type_id==6">
-      <div class="py-2" v-if="false">
-        <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
-            <div class="overflow-hidden shadow-sm d-flex text-center "  dir="ltr">
-              <VuePincodeInput v-model="pincode" :digits="5" :secure="true" class="justify-center"
-              :autofocus="true"
-              success-class="border-2 border-green-400"
-              input-class="rounded-full  text-gray-500 border-2 border-gray-200 shadow mx-2  mt-5"
+  <ModalEditCars
+    :formData="formData"
+    :show="showModalEditCars ? true : false"
+    :client="client"
+    :auctions="auctions"
+    @a="confirmUpdateCar($event)"
+    @close="showModalEditCars = false"
+  >
+    <template #header />
+  </ModalEditCars>
 
+  <ModalAddCarPayment
+    :formData="formData"
+    :show="showModalAddCarPayment ? true : false"
+    @a="confirmAddPayment($event)"
+    @close="showModalAddCarPayment = false"
+  >
+    <template #header />
+  </ModalAddCarPayment>
+
+  <ModalDelCar
+    :show="showModalDelCar ? true : false"
+    :formData="formData"
+    @a="confirmDelCar($event)"
+    @close="showModalDelCar = false"
+  >
+    <template #header>
+      <h2 class="mb-5 text-center text-slate-800 dark:text-slate-200">
+        هل متأكد من حذف السيارة؟
+      </h2>
+    </template>
+  </ModalDelCar>
+
+  <AuthenticatedLayout>
+    <!-- PIN unlock gate (frontend only, per-tab via sessionStorage) -->
+    <section
+      v-if="!pinUnlocked"
+      class="flex min-h-[70vh] items-center justify-center px-4 py-10"
+    >
+      <div
+        class="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 p-6 shadow-xl sm:p-8"
+      >
+        <h1 class="mb-2 text-center text-xl font-bold text-white sm:text-2xl">
+          {{ $t("purchases") }}
+        </h1>
+        <p class="mb-6 text-center text-sm text-slate-200">
+          أدخل رمز الدخول لعرض المشتريات
+        </p>
+        <form class="space-y-4" @submit.prevent="submitPin">
+          <div>
+            <label for="purchases-pin" class="mb-1.5 block text-sm font-medium text-slate-200">
+              رمز الدخول
+            </label>
+            <input
+              id="purchases-pin"
+              v-model="pinInput"
+              type="password"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="12"
+              autofocus
+              class="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-center text-lg tracking-[0.35em] text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              :class="pinError ? 'border-rose-500' : ''"
+              placeholder="•••••"
+              @input="pinError = false"
+            />
+            <p v-if="pinError" class="mt-2 text-center text-sm text-rose-300">
+              رمز غير صحيح
+            </p>
+          </div>
+          <button
+            type="submit"
+            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
+          >
+            فتح الصفحة
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <section
+      v-else-if="$page.props.auth.user.type_id == 1 || $page.props.auth.user.type_id == 6"
+      class="py-4 sm:py-6"
+    >
+      <div class="mx-auto max-w-9xl px-3 sm:px-6 lg:px-8">
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                {{ $t("purchases") }}
+              </h1>
+              <div class="flex flex-wrap items-center gap-2">
+                <div
+                  class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-800"
+                  role="group"
+                  :aria-label="$t('view_mode')"
+                >
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+                    :class="
+                      carsViewMode === 'list'
+                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                    "
+                    :aria-pressed="carsViewMode === 'list'"
+                    @click="setCarsViewMode('list')"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M3 5h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2z" />
+                    </svg>
+                    {{ $t("view_list") }}
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+                    :class="
+                      carsViewMode === 'grid'
+                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                    "
+                    :aria-pressed="carsViewMode === 'grid'"
+                    @click="setCarsViewMode('grid')"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
+                    </svg>
+                    {{ $t("view_grid") }}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex min-h-[42px] items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  @click="openAddCar()"
+                >
+                  {{ $t("addCar") }}
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div class="lg:col-span-2">
+                <SearchInput
+                  v-model="q"
+                  :placeholder="$t('search')"
+                  @input="debouncedGetResultsCar"
                 />
+              </div>
+
+              <select v-model="user_id" :class="inputClass" @change="refresh()">
+                <option value="" disabled>{{ $t("selectCustomer") }}</option>
+                <option value="">{{ $t("allOwners") }}</option>
+                <option v-for="(user, index) in client" :key="index" :value="user.id">{{ user.name }}</option>
+              </select>
+
+              <input v-model="from" type="date" :class="inputClass" :aria-label="$t('from_date')" />
+              <input v-model="to" type="date" :class="inputClass" :aria-label="$t('to_date')" />
+
+              <button
+                type="button"
+                class="min-h-[42px] rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                @click.prevent="refresh()"
+              >
+                {{ $t("filter") }}
+              </button>
             </div>
           </div>
-        </div >
-          <div class="py-2"  >
-          <div class="max-w-9xl mx-auto sm:px-6 lg:px-8 ">
-              <div class="bg-white overflow-hidden shadow-sm ">
-                  <div class="p-6  dark:bg-gray-900">
-                      <div class="flex flex-col">
-                        
 
-                        <div class="mt-4 mb-5 grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6">     
-                          <!-- "رأس المال" KPI intentionally removed: it was a buggy derived value
-                               (sumTotal - sumPaid across ALL cars) with no backing capital/opening-equity
-                               transactions, so it produced meaningless negative numbers (see Dashboard.vue,
-                               where this KPI was already omitted for the same reason). -->
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('total_costs') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumTotal) }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('total_customer_payments') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumPaid) }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-orange-100 bg-orange-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div class="mr-4" >
-                              <h2 class="font-semibold ">{{ $t('analytics_net_profit') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumProfit) }}</p>
-                            </div>
-                          </div>
-
-
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('debt') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ updateResults(sumDebit) }}</p>
-                            </div>
-                          </div>
-                          <!-- <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                      
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('cash_out') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ outAccount.wallet?.balance }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                      
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('debt_to_fund') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ debtAccount.wallet?.balance }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                      
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('transfer') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ transfersAccount.wallet?.balance }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('total_car_count') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{carCount}}</p>
-                            </div>
-                          </div> -->
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('all_cars') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{allCars}}</p>
-                            </div>
-                          </div>
-
-                          <!-- <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                      
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('supplier_debt') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ debtSupplier.wallet?.balance }}</p>
-                            </div>
-                          </div>
-                          <div class="flex items-start rounded-xl dark:bg-gray-600 dark:text-gray-300 bg-white p-4 shadow-lg">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full border border-red-100 bg-red-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                              </svg>
-                            </div>
-                      
-                            <div class="mr-4">
-                              <h2 class="font-semibold">{{ $t('supplier_payments') }}</h2>
-                              <p class="mt-2 text-sm text-gray-500 dark:text-gray-200">{{ outSupplier.wallet?.balance }}</p>
-                            </div>
-                          </div> -->
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-2 lg:gap-1">
-                          <div className="mb-4">
-                            <InputLabel for="car_total" :value="$t('cars_with_filter')" />
-                            <TextInput
-                              id="car_total"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="json?.totalCars"
-                              disabled
-                            />
-                          </div>
-                        
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              :value="$t('total_costs_usd')"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsDollar)"
-                              disabled
-                            />
-                          </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              :value="$t('total_sales_usd')"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsTotalS)"
-                              disabled
-                            />
-                          </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              :value="$t('total_debt_usd')"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsTotalS-json?.resultsPaid)"
-                              disabled
-                            />
-                          </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              :value="$t('total_paid_usd')"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsPaid)"
-                              disabled
-                            />
-                          </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="car_total_complete"
-                              :value="$t('analytics_net_profit')"
-                            />
-                            <TextInput
-                              id="car_total_complete"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.resultsProfit)"
-                              disabled
-                            />
-                          </div>
-                          <div className="mb-4  mr-2">
-                            <InputLabel
-                              for="expected_profit"
-                              :value="$t('expected_profit')"
-                            />
-                            <TextInput
-                              id="expected_profit"
-                              type="text"
-                              class="mt-1 block w-full"
-                              :value="updateResults(json?.expectedProfit)"
-                              disabled
-                            />
-                          </div>
-                          <div class="px-4">
-                            <div className="mb-4">
-                              <InputLabel for="from" :value="$t('from_date')" />
-                              <TextInput
-                                id="from"
-                                type="date"
-                                class="mt-1 block w-full"
-                                v-model="from"
-                              />
-                            </div>
-                          </div>
-                          <div class="px-4">
-                            <div className="mb-4 ">
-                              <InputLabel for="to" :value="$t('to_date')" />
-                              <TextInput
-                                id="to"
-                                type="date"
-                                class="mt-1 block w-full"
-                                v-model="to"
-                              />
-                            </div>
-                          </div>
-                          <div className="mb-4  mr-2 print:hidden">
-                            <InputLabel for="pay" :value="$t('filter')" />
-                            <button
-                              @click.prevent="refresh()"
-                              class="px-6 py-2 mt-1 font-bold text-white bg-gray-500 rounded hover:bg-gray-600"
-                              style="width: 100%"
-                            >
-                              <span>{{ $t('filter') }}</span>
-                            </button>
-                          </div>
-                          <div className="mb-4  mr-2 print:hidden">
-                            <InputLabel for="pay" :value="$t('recalculate_profit')" />
-                            <button
-                              @click.prevent="recalculateProfit"
-                              class="px-6 py-2 mt-1 font-bold text-white bg-blue-500 rounded hover:bg-blue-600"
-                              style="width: 100%"
-                            >
-                              <span>{{ $t('recalculate_profit') }}</span>
-                            </button>
-                          </div>
-                          <div className="mb-4  mr-2  hidden">
-                            <InputLabel for="pay" :value="$t('print')" />
-                            <a
-                              :href="`/api/getIndexAccountsSelas?user_id=${client_Select}&from=${from}&to=${to}&print=1`"
-                              target="_blank"
-                              class="px-6 mb-12 py-2 mt-1 font-bold text-white bg-orange-500 rounded block text-center"
-                              style="width: 100%"
-                            >
-                              <span>{{ $t('print') }}</span>
-                            </a>
-                          </div>
-                      
-                          <!-- <div class="text-center">
-                            <button
-                              type="button"
-                              @click="openAddToBox()"
-                              style="min-width:150px;"
-                              className="px-6 mb-12 mx-2 py-2 font-bold text-white bg-purple-600 rounded">
-                              {{ $t('addToTheFund') }}  
-                            </button>
-                          </div>
-                          <div  class="text-center">
-                            <button
-                              type="button"
-                              @click="openAddFromBox()"
-                              style="min-width:150px;"
-                              className="px-6 mb-12 mx-2 py-2 font-bold text-white bg-pink-600 rounded">
-                              {{ $t('withdrawFromTheFund') }}   
-                            </button>
-                          </div> -->
-
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-2 lg:gap-1">
-                          <div>
-                            <form class="flex items-center max-w-5xl">
-                              <label  class="dark:text-gray-200" for="simple-search"  ></label>
-                              <div class="relative w-full">
-                                <div
-                                  class="
-                                    absolute
-                                    inset-y-0
-                                    left-0
-                                    flex
-                                    items-center
-                                    pl-3
-                                    pointer-events-none
-                                  "
-                                >
-                                  <svg
-                                    aria-hidden="true"
-                                    class="w-5 h-5 text-gray-500 dark:text-gray-200 dark:text-gray-400"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                  >
-                                    <path
-                                      fill-rule="evenodd"
-                                      d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                                      clip-rule="evenodd"
-                                    ></path>
-                                  </svg>
-                                </div>
-                                <input
-                                  v-model="q"
-                                  @input="debouncedGetResultsCar"
-                                  type="text"
-                                  id="simple-search"
-                                  class="
-                                    bg-gray-50
-                                    border border-gray-300
-                                    text-gray-900 text-sm
-                                    rounded-lg
-                                    focus:ring-blue-500 focus:border-blue-500
-                                    block
-                                    w-full
-                                    pl-10
-                                    p-2.5
-                                    dark:bg-gray-700
-                                    dark:border-gray-600
-                                    dark:placeholder-gray-400
-                                    dark:text-white
-                                    dark:focus:ring-blue-500
-                                    dark:focus:border-blue-500
-                                  "
-                                  placeholder="بحث"
-                                  required
-                                />
-                              </div>
-                            </form>
-                          </div>
-                    
-                          <div>
-                              <select @change="refresh()" v-model="user_id" id="default" class="pr-8 bg-gray-50 border border-gray-300 text-gray-900 mb-6 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-red-500 dark:focus:border-red-500">
-                                <option value="undefined" disabled> {{ $t("selectCustomer") }}</option>
-                                <option value="">{{ $t("allOwners") }}</option>
-                                <option v-for="(user, index) in client" :key="index" :value="user.id">{{ user.name }}</option>
-                              </select>
-                          </div>
-                          <div class="text-center">
-                            <button
-                              type="button"
-                              @click="openAddCar()"
-                              style="min-width:150px;"
-                              className="px-6 mb-12 mx-2 py-2 font-bold text-white bg-green-500 rounded">
-                              {{ $t('addCar') }} 
-                            </button>
-                          </div>
-                          </div>
-                        <div>
-                          <div class="relative overflow-x-auto shadow-md sm:rounded-lg">
-                            <table class="w-full text-sm text-right text-gray-500 dark:text-gray-200 dark:text-gray-400 text-center">
-                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 text-center" >
-                                    <tr>
-                                        <th scope="col" class="px-1 py-3 text-base	">
-                                          {{ $t('no') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base	">
-                                          {{ $t('car_owner') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('car_type') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('year') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('color') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('vin') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('car_number') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('car_price_usa') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('transfer_usa') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('recovery') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('repair_expenses') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('transfer_erbil') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('erbil_expenses') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('total') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('paid') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('profit') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('date') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base">
-                                          {{ $t('note') }}
-                                        </th>
-                                        <th scope="col" class="px-1 py-3 text-base" style="width: 200px;">
-                                          {{ $t('execute') }}
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-
-
-                                  <tr v-for="(car,index) in car" :key="car.id" :class="car.results == 0 ?'':car.results == 1 ?'bg-red-100 dark:bg-red-900':'bg-green-100 dark:bg-green-900'"  class="bg-white border-b dark:bg-gray-900 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                    <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ index+1}}</td>
-
-                                      <td className="border dark:border-gray-900 text-center dark:text-gray-200 text-black px-1 py-2 " style="font-weight: bold;font-size: 16px;">{{ car.client?.name }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_type}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.year}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_color }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.vin }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.car_number }}</td> 
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.shipping_dolar}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.dinar}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.coc_dolar  }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.checkout}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ erbilTransferSubtotal(car, false) }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.commission ?? 0 }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(car.total, 0)  }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.paid}}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ fixed(asNumber(car.total_s) - asNumber(car.total), 0) }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.date  }}</td>
-                                      <td className="border dark:border-gray-800 text-center px-1 py-2 ">{{ car.note }}</td>
-
-                                      <td className="border dark:border-gray-800 text-start px-1 py-2">
-                                        <button
-                                        tabIndex="1"
-                                        
-                                        class="px-1 py-1  text-white mx-1 bg-slate-500 rounded"
-                                        @click="openModalEditCars(car)"
-                                      >
-                                      <edit />
-                                    
-
-                                      </button>
- 
-                                      <button
-                                        tabIndex="1"
-                                        
-                                        class="px-1 py-1  text-white mx-1 bg-orange-500 rounded"
-                                        @click="openModalDelCar(car)"
-                                      >
-                                      <trash />
-                                      </button>
-                                      <Link
-                                        style="display:inline-flex;"
-                                        className="px-1 py-1  text-white mx-1 bg-blue-500 rounded d-inline-block"
-                                        :href="route('showClients',car?.client?.id||0)">
-                                      <show />
-                                      </Link>
-
-                                    
-                                      <!-- <button
-                                        v-if="car.total_s != car.paid"
-                                        tabIndex="1"
-                                        class="px-1 py-1  text-white mx-1 bg-green-500 rounded"
-                                        @click="openAddCarPayment(car)"
-                                      >
-                                        {{ $t('complet_pay') }}
-                                      </button> -->
-                                      <!-- 
-            
-                                      <button
-                                        tabIndex="1"
-                                        class="px-4 py-1 text-base text-white mx-1 bg-purple-500 rounded"
-                                        v-if="car.results == 0"
-                                        @click="openSaleCar(car)"
-                                      >
-                                        {{ $t('sell') }}
-                                      </button>
-                                      <button
-                                        tabIndex="1"
-                                        class="px-1 py-1 text-base text-white mx-1 bg-blue-600 rounded"
-                                        @click="openAddExpenses(car)"
-                                      >
-                                        {{ $t('expenses') }}
-                                      </button>
-                                      <button
-                                        tabIndex="1"
-                                        class="px-1 py-1 text-base text-white mx-1 bg-green-500 rounded"
-                                        v-if="car.results != 0 && (car.pay_price - car.paid_amount_pay == 0)"
-                                        @click="openAddCarPayment(car)"
-                                      >
-                                        {{ $t('view_payments') }}
-                                      </button>
-                                      <button
-                                        tabIndex="1"
-                                        class="px-1 py-1 text-base text-white mx-1 bg-red-700 rounded"
-                                        v-if="car.results == 1 && (car.pay_price - car.paid_amount_pay != 0)"
-                                        @click="openAddCarPayment(car)"
-                                      >
-                                        {{ $t('add_payment') }}
-                                      </button>
-
-                                      -->
-
-                                      </td> 
-                                  </tr>
-                                </tbody>
-                            </table>
-                          </div>
-                          <div class="spaner">
-                            <InfiniteLoading :car="car" @infinite="getResultsCar" :identifier="resetData" />
-
-                        </div>
-                        </div>
-            
-                        </div>
-                    </div>
-                  </div>
+          <!-- Single KPI strip — net profit = Σ(total_s − total), same as table rows -->
+          <div class="border-b border-slate-200 p-4 dark:border-slate-700">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("cars_with_filter") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ kpiCars }}</div>
               </div>
+              <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">{{ $t("total_costs_usd") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ money(kpiCosts) }}</div>
+              </div>
+              <div class="rounded-xl border border-sky-400 bg-white px-4 py-3 shadow-sm dark:border-sky-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-sky-800 dark:text-sky-300">{{ $t("total_sales_usd") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-sky-700 dark:text-sky-200">{{ money(kpiSales) }}</div>
+              </div>
+              <div class="rounded-xl border border-emerald-400 bg-white px-4 py-3 shadow-sm dark:border-emerald-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">{{ $t("total_paid_usd") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{{ money(kpiPaid) }}</div>
+              </div>
+              <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">{{ $t("total_debt_usd") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold tabular-nums text-amber-700 dark:text-amber-200">{{ money(kpiDebt) }}</div>
+              </div>
+              <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800">
+                <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">{{ $t("analytics_net_profit") }}</div>
+                <div
+                  class="mt-1 font-mono text-lg font-bold tabular-nums"
+                  :class="kpiProfit >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-700 dark:text-rose-300'"
+                >
+                  {{ money(kpiProfit) }}
+                </div>
+              </div>
+            </div>
           </div>
-          <div >
-          <!-- <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                  <div class="p-6  dark:bg-gray-900" style="border-radius: 8px;">
-                    <div class="flex flex-row">
-                                      <div class="basis-1/4">
-                                        <button
-                                          type="button"
-                                          @click="getcountComp()"
-                                          style="width: 70%;"
-                                          className="px-6 mb-12 mx-2 py-2 font-bold text-white bg-rose-500 rounded"
-                                        >
-                                        فلترة
-                                        </button>
-                                      </div>
-                                      <div class="basis-3/4" style="direction: ltr;">
-                                        <vue-tailwind-datepicker overlay :options="options" :disable-date="dDate"  i18n="ar"  as-single use-range v-model="dateValue" />
-                                      </div>
-                    </div>
-                    <div class="flex pt-5 items-center">
-                    <div class="mx-auto container align-middle">
-                          <div class="grid grid-cols-2 gap-2" style="display: flow-root;">
-                            <div class="shadow rounded-lg py-3 px-5 bg-white" >
-                              <div class="flex flex-row justify-between items-center">
-                                <div>
-                                  <h6 class="text-2xl">المعاملات المنجزة </h6>
-                                  <h4 class="text-black text-4xl font-bold text-rigth">{{countComp}}</h4>
-                                </div>
-                                <div>
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-12 w-12"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="#14B8A6"
-                                    stroke-width="2"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                                    />
-                                  </svg>
-                                </div>
-                              </div>
-                              <div class="text-left flex flex-row justify-start items-center">
-                                <span class="mr-1">
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-6 w-6"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="#14B8A6"
-                                    stroke-width="2"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                                    />
-                                  </svg>
-                                </span>
-                              
-                              </div>
-                            </div>
-                            <div class="shadow rounded-lg py-3 px-5 bg-white" v-if="false">
-                              <div class="flex flex-row justify-between items-center">
-                                <div>
-                                  <h6 class="text-2xl">Serials viewed</h6>
-                                  <h4 class="text-black text-4xl font-bold text-left">41</h4>
-                                </div>
-                                <div>
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-12 w-12"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="#EF4444"
-                                    stroke-width="2"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                                    />
-                                  </svg>
-                                </div>
-                              </div>
-                              <div class="text-left flex flex-row justify-start items-center">
-                                <span class="mr-1">
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-6 w-6"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="#EF4444"
-                                    stroke-width="{2}"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
-                                    />
-                                  </svg>
-                                </span>
-                                <p><span class="text-red-500 font-bold">12%</span> in 7 days</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                    </div>
-                  </div>
-                      </div> -->
-      </div>  
-    </section> 
-    </AuthenticatedLayout>
+
+          <div class="p-4">
+            <CarsGridView
+              v-if="carsViewMode === 'grid'"
+              :cars="car"
+              variant="purchase"
+            >
+              <template #actions="{ car: row }">
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-slate-600 px-1.5 py-0.5 text-white hover:bg-slate-700"
+                  :title="$t('edit')"
+                  @click="openModalEditCars(row)"
+                >
+                  <edit />
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-orange-500 px-1.5 py-0.5 text-white hover:bg-orange-600"
+                  :title="$t('trash')"
+                  @click="openModalDelCar(row)"
+                >
+                  <trash />
+                </button>
+                <Link
+                  class="inline-flex items-center rounded-md bg-sky-600 px-1.5 py-0.5 text-white hover:bg-sky-700"
+                  :href="route('showClients', row?.client?.id || 0)"
+                >
+                  <show />
+                </Link>
+              </template>
+            </CarsGridView>
+
+            <!-- List / table -->
+            <div
+              v-else
+              class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700"
+            >
+              <table class="w-full text-center text-sm text-slate-800 dark:text-slate-100">
+                <thead>
+                  <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("no") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("car_owner") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("car_type") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("year") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("color") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("vin") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("car_number") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("car_price_usa") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("transfer_usa") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("recovery") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("repair_expenses") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("transfer_erbil") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("erbil_expenses") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("total") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("paid") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("profit") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("date") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold">{{ $t("note") }}</th>
+                    <th class="px-2 py-3 text-xs font-semibold" style="min-width: 140px">{{ $t("execute") }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <tr
+                    v-for="(row, index) in car"
+                    :key="row.id"
+                    :class="rowClass(row)"
+                    class="border-b border-slate-200 hover:brightness-95 dark:border-slate-700 dark:hover:brightness-110"
+                  >
+                    <td class="px-1 py-2 tabular-nums">{{ index + 1 }}</td>
+                    <td class="px-1 py-2 font-semibold text-slate-900 dark:text-white">{{ row.client?.name }}</td>
+                    <td class="px-1 py-2">{{ row.car_type }}</td>
+                    <td class="px-1 py-2">{{ row.year }}</td>
+                    <td class="px-1 py-2">{{ row.car_color }}</td>
+                    <td class="px-1 py-2 font-mono text-xs">{{ row.vin }}</td>
+                    <td class="px-1 py-2">{{ row.car_number }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(row.shipping_dolar) }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(row.dinar) }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(row.coc_dolar) }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(row.checkout) }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(erbilTransferSubtotal(row, false)) }}</td>
+                    <td class="px-1 py-2 tabular-nums">{{ money(row.commission ?? 0) }}</td>
+                    <td class="px-1 py-2 font-semibold tabular-nums">{{ money(row.total) }}</td>
+                    <td class="px-1 py-2 tabular-nums text-emerald-700 dark:text-emerald-300">{{ money(row.paid) }}</td>
+                    <td
+                      class="px-1 py-2 font-semibold tabular-nums"
+                      :class="rowProfit(row) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                    >
+                      {{ money(rowProfit(row)) }}
+                    </td>
+                    <td class="whitespace-nowrap px-1 py-2">{{ row.date }}</td>
+                    <td class="max-w-[140px] truncate px-1 py-2" :title="row.note">{{ row.note }}</td>
+                    <td class="px-1 py-2">
+                      <div class="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          class="rounded bg-slate-600 px-1.5 py-1 text-white hover:bg-slate-700"
+                          @click="openModalEditCars(row)"
+                        >
+                          <edit />
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded bg-orange-500 px-1.5 py-1 text-white hover:bg-orange-600"
+                          @click="openModalDelCar(row)"
+                        >
+                          <trash />
+                        </button>
+                        <Link
+                          class="inline-flex rounded bg-sky-600 px-1.5 py-1 text-white hover:bg-sky-700"
+                          :href="route('showClients', row?.client?.id || 0)"
+                        >
+                          <show />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="spaner mt-2">
+              <InfiniteLoading :car="car" :identifier="resetData" @infinite="getResultsCar" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </AuthenticatedLayout>
 </template>

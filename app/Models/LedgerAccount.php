@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
@@ -19,6 +20,7 @@ class LedgerAccount extends Model
         'party_id',
         'is_system',
         'is_active',
+        'parent_id',
     ];
 
     protected $casts = [
@@ -31,9 +33,24 @@ class LedgerAccount extends Model
         return $this->hasMany(JournalLine::class, 'ledger_account_id');
     }
 
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
     public function party(): MorphTo
     {
         return $this->morphTo(__FUNCTION__, 'party_type', 'party_id');
+    }
+
+    public function hasMovements(): bool
+    {
+        return $this->lines()->exists();
     }
 
     public function balance(?string $currency = null): float

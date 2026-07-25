@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Car;
-use App\Models\Expenses;
 use App\Models\Transactions;
 use App\Models\Wallet;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -81,11 +80,6 @@ class TransactionPaymentService
                     $leg->delete();
                 }
                 $deleted->push($leg);
-            }
-
-            $firstChild = $legs->first(fn (Transactions $t) => (int) $t->parent_id > 0) ?? $legs->first();
-            if ($firstChild) {
-                Expenses::where('transaction_id', $firstChild->id)->delete();
             }
 
             foreach (array_unique(array_filter($syncedFromLedger)) as $uid) {
@@ -226,13 +220,6 @@ class TransactionPaymentService
                     $this->legacyApplyWalletMovement($transaction);
                 }
                 $transaction->restore();
-            }
-
-            $firstChild = $children->first();
-            if ($firstChild) {
-                Expenses::onlyTrashed()
-                    ->where('transaction_id', $firstChild->id)
-                    ->restore();
             }
 
             $paymentLegs = collect([$originalTransaction->fresh()])->merge(

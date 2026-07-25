@@ -1,8 +1,10 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
+import ModalLedgerAccount from "@/Components/ModalLedgerAccount.vue";
 import { Head } from "@inertiajs/inertia-vue3";
 import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
+import { formatMoney as formatMoneyAmount } from "@/utils/formatMoney";
 
 const tab = ref("tree");
 const currency = ref("$");
@@ -14,6 +16,7 @@ const errorMsg = ref("");
 const successMsg = ref("");
 
 const treeGroups = ref([]);
+const parentOptions = ref([]);
 const trialRows = ref([]);
 const totalDebit = ref(0);
 const totalCredit = ref(0);
@@ -25,10 +28,70 @@ const ledgerRows = ref([]);
 
 const journals = ref([]);
 
-const editingId = ref(null);
-const editNameAr = ref("");
-const savingEdit = ref(false);
+const showAccountModal = ref(false);
+const accountModalMode = ref("create");
+const editingAccount = ref(null);
+const savingAccount = ref(false);
 const deactivatingId = ref(null);
+
+const TREE_COLLAPSE_KEY = "ledger_tree_collapsed_groups";
+const collapsedGroups = ref(loadCollapsedGroups());
+
+function loadCollapsedGroups() {
+  try {
+    const raw = localStorage.getItem(TREE_COLLAPSE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistCollapsedGroups() {
+  try {
+    localStorage.setItem(TREE_COLLAPSE_KEY, JSON.stringify(collapsedGroups.value));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function isGroupCollapsed(type) {
+  return !!collapsedGroups.value[type];
+}
+
+function toggleGroup(type) {
+  collapsedGroups.value = {
+    ...collapsedGroups.value,
+    [type]: !collapsedGroups.value[type],
+  };
+  persistCollapsedGroups();
+}
+
+function expandAllGroups() {
+  collapsedGroups.value = {};
+  persistCollapsedGroups();
+}
+
+function collapseAllGroups() {
+  const next = {};
+  for (const g of treeGroups.value) {
+    next[g.type] = true;
+  }
+  collapsedGroups.value = next;
+  persistCollapsedGroups();
+}
+
+function groupAccent(type) {
+  const map = {
+    asset: "border-sky-500",
+    liability: "border-amber-500",
+    equity: "border-violet-500",
+    income: "border-emerald-500",
+    expense: "border-rose-500",
+  };
+  return map[type] || "border-slate-500";
+}
 
 // --- تحويل بين الحسابات ---
 const transferAccounts = ref([]);
@@ -70,6 +133,10 @@ const withdrawSubmitting = ref(false);
 
 const currencyLabel = computed(() => (currency.value === "$" ? "USD" : "IQD"));
 
+const treeAccountCount = computed(() =>
+  treeGroups.value.reduce((n, g) => n + (g.accounts?.length || 0), 0)
+);
+
 function getTodayDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -81,10 +148,7 @@ function getFirstDayOfMonth() {
 }
 
 function formatMoney(v) {
-  const n = Number(v || 0);
-  return currency.value === "$"
-    ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return formatMoneyAmount(v, currency.value);
 }
 
 function typeLabel(type) {
@@ -114,6 +178,7 @@ async function loadTree() {
       params: { currency: currency.value, q: q.value },
     });
     treeGroups.value = data.groups || [];
+    parentOptions.value = data.parent_options || [];
   } catch (e) {
     errorMsg.value = e?.response?.data?.message || "تعذر تحميل شجرة الحسابات";
   } finally {
@@ -139,7 +204,7 @@ async function loadTrial() {
 }
 
 async function openAccount(accountId) {
-  if (editingId.value) return;
+  if (showAccountModal.value) return;
   selectedAccountId.value = accountId;
   tab.value = "ledger";
   await loadAccountLedger();
@@ -341,46 +406,54 @@ async function deleteProfitEntry(entry) {
   }
 }
 
+function openCreateAccount() {
+  accountModalMode.value = "create";
+  editingAccount.value = null;
+  showAccountModal.value = true;
+  errorMsg.value = "";
+}
+
 function startEdit(acc, e) {
   e?.stopPropagation?.();
-  editingId.value = acc.id;
-  editNameAr.value = acc.name_ar || acc.name || "";
+  accountModalMode.value = "edit";
+  editingAccount.value = { ...acc };
+  showAccountModal.value = true;
   errorMsg.value = "";
 }
 
-function cancelEdit(e) {
-  e?.stopPropagation?.();
-  editingId.value = null;
-  editNameAr.value = "";
+function closeAccountModal() {
+  if (savingAccount.value) return;
+  showAccountModal.value = false;
+  editingAccount.value = null;
 }
 
-async function saveEdit(acc, e) {
-  e?.stopPropagation?.();
-  const nameAr = (editNameAr.value || "").trim();
-  if (!nameAr) {
-    errorMsg.value = "الاسم العربي للحساب مطلوب";
-    return;
-  }
-
-  savingEdit.value = true;
+async function submitAccountModal(payload) {
+  savingAccount.value = true;
   errorMsg.value = "";
   try {
-    const { data } = await axios.post("/api/ledgerAccountUpdate", {
-      id: acc.id,
-      name_ar: nameAr,
-      name: nameAr,
-    });
-    editingId.value = null;
-    editNameAr.value = "";
-    flashSuccess(data.message || "تم تحديث اسم الحساب بنجاح");
+    if (accountModalMode.value === "create") {
+      const { data } = await axios.post("/api/ledgerAccountStore", payload);
+      flashSuccess(data.message || "تم إضافة الحساب بنجاح");
+    } else {
+      const { data } = await axios.post("/api/ledgerAccountUpdate", {
+        id: editingAccount.value.id,
+        ...payload,
+      });
+      flashSuccess(data.message || "تم تحديث الحساب بنجاح");
+    }
+    showAccountModal.value = false;
+    editingAccount.value = null;
     await loadTree();
   } catch (err) {
+    const errors = err?.response?.data?.errors || {};
     errorMsg.value =
       err?.response?.data?.message ||
-      err?.response?.data?.errors?.name_ar?.[0] ||
-      "تعذر تحديث اسم الحساب";
+      errors.code?.[0] ||
+      errors.name_ar?.[0] ||
+      Object.values(errors)[0]?.[0] ||
+      "تعذر حفظ الحساب";
   } finally {
-    savingEdit.value = false;
+    savingAccount.value = false;
   }
 }
 
@@ -426,7 +499,8 @@ watch([from, to], () => {
   if (tab.value === "trial" || tab.value === "ledger") refresh();
 });
 watch(tab, () => {
-  editingId.value = null;
+  showAccountModal.value = false;
+  editingAccount.value = null;
   refresh();
 });
 watch(profitsCurrency, () => loadProfitsSummary());
@@ -539,103 +613,133 @@ onMounted(() => refresh());
           <div class="p-4">
             <div v-if="loading" class="py-10 text-center text-slate-500">جاري التحميل...</div>
 
-            <!-- شجرة بسيطة جداً -->
+            <!-- شجرة الحسابات — مجموعات قابلة للطي + شبكة مضغوطة -->
             <template v-else-if="tab === 'tree'">
-              <div class="mx-auto max-w-2xl space-y-4">
+              <div class="space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                      @click="expandAllGroups"
+                    >
+                      توسيع الكل
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                      @click="collapseAllGroups"
+                    >
+                      طي الكل
+                    </button>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                      {{ treeAccountCount }} حساب
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
+                    @click="openCreateAccount"
+                  >
+                    + إضافة حساب
+                  </button>
+                </div>
+
                 <div
                   v-for="group in treeGroups"
                   :key="group.type"
-                  class="rounded-xl border border-slate-200 dark:border-slate-700"
+                  class="rounded-lg border border-slate-200 dark:border-slate-700"
+                  :class="`border-r-4 ${groupAccent(group.type)}`"
                 >
-                  <div class="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                    <span class="text-base font-bold text-slate-900 dark:text-white">{{ group.label }}</span>
-                    <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  <button
+                    type="button"
+                    class="sticky top-0 z-10 flex w-full items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/95 px-3 py-2 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95"
+                    :aria-expanded="!isGroupCollapsed(group.type)"
+                    @click="toggleGroup(group.type)"
+                  >
+                    <div class="flex min-w-0 items-center gap-2 text-right">
+                      <span
+                        class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-500 transition-transform dark:text-slate-300"
+                        :class="isGroupCollapsed(group.type) ? '-rotate-90' : ''"
+                        aria-hidden="true"
+                      >▼</span>
+                      <span class="truncate text-sm font-bold text-slate-900 dark:text-white">{{ group.label }}</span>
+                      <span class="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {{ group.accounts?.length || 0 }}
+                      </span>
+                    </div>
+                    <span class="shrink-0 font-mono text-xs font-semibold text-slate-700 dark:text-slate-100">
                       {{ formatMoney(group.total) }} {{ currencyLabel }}
                     </span>
-                  </div>
-                  <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-                    <li
+                  </button>
+
+                  <div
+                    v-show="!isGroupCollapsed(group.type)"
+                    class="grid grid-cols-1 gap-px bg-slate-100 p-px dark:bg-slate-800 md:grid-cols-2 xl:grid-cols-3"
+                  >
+                    <div
                       v-for="acc in group.accounts"
                       :key="acc.id"
-                      class="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                      :class="editingId === acc.id ? '' : 'cursor-pointer'"
+                      class="group flex cursor-pointer items-center gap-2 bg-white px-2.5 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80"
+                      :style="{ paddingRight: `${0.625 + (acc.depth || 0) * 0.75}rem` }"
                       @click="openAccount(acc.id)"
                     >
-                      <div class="flex items-center justify-between gap-3">
-                        <div class="min-w-0 flex-1 text-right">
-                          <template v-if="editingId === acc.id">
-                            <div class="flex flex-wrap items-center justify-end gap-2" @click.stop>
-                              <input
-                                v-model="editNameAr"
-                                type="text"
-                                class="min-w-[10rem] flex-1 rounded-lg border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
-                                placeholder="الاسم العربي"
-                                @keyup.enter="saveEdit(acc)"
-                                @keyup.escape="cancelEdit"
-                              />
-                              <button
-                                type="button"
-                                class="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                                :disabled="savingEdit"
-                                @click="saveEdit(acc, $event)"
-                              >
-                                حفظ
-                              </button>
-                              <button
-                                type="button"
-                                class="rounded bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                                :disabled="savingEdit"
-                                @click="cancelEdit($event)"
-                              >
-                                إلغاء
-                              </button>
-                            </div>
-                          </template>
-                          <template v-else>
-                            <div class="truncate font-semibold text-slate-900 dark:text-slate-100">
-                              {{ acc.name }}
-                              <span
-                                v-if="acc.is_system"
-                                class="mr-1 text-[10px] font-normal text-slate-400"
-                              >نظامي</span>
-                            </div>
-                            <div class="font-mono text-xs text-slate-500">{{ acc.code }}</div>
-                          </template>
+                      <div class="min-w-0 flex-1 text-right">
+                        <div class="flex items-center justify-end gap-1 truncate text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
+                          <span v-if="acc.depth" class="text-slate-400">↳</span>
+                          <span class="truncate">{{ acc.name }}</span>
+                          <span
+                            v-if="acc.is_system"
+                            class="shrink-0 rounded bg-slate-200 px-1 py-px text-[9px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                          >نظامي</span>
                         </div>
-                        <div class="flex shrink-0 items-center gap-2">
-                          <div
-                            v-if="editingId !== acc.id"
-                            class="font-mono text-sm font-bold text-slate-800 dark:text-white"
-                          >
-                            {{ formatMoney(acc.balance) }}
-                          </div>
-                          <button
-                            v-if="editingId !== acc.id"
-                            type="button"
-                            class="rounded px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
-                            title="تعديل الاسم"
-                            @click="startEdit(acc, $event)"
-                          >
-                            تعديل
-                          </button>
-                          <button
-                            v-if="editingId !== acc.id && !acc.is_system"
-                            type="button"
-                            class="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
-                            title="إيقاف الحساب"
-                            :disabled="deactivatingId === acc.id"
-                            @click="deactivateAccount(acc, $event)"
-                          >
-                            إيقاف
-                          </button>
+                        <div class="font-mono text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+                          {{ acc.code }}
+                          <span v-if="acc.currency">· {{ acc.currency === '$' ? 'USD' : acc.currency }}</span>
                         </div>
                       </div>
-                    </li>
-                  </ul>
+                      <div class="flex shrink-0 items-center gap-0.5">
+                        <span class="font-mono text-xs font-bold tabular-nums text-slate-800 dark:text-white">
+                          {{ formatMoney(acc.balance) }}
+                        </span>
+                        <button
+                          type="button"
+                          class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600 opacity-70 hover:bg-indigo-50 hover:opacity-100 group-hover:opacity-100 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+                          title="تعديل الحساب"
+                          @click="startEdit(acc, $event)"
+                        >
+                          تعديل
+                        </button>
+                        <button
+                          v-if="!acc.is_system"
+                          type="button"
+                          class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 opacity-70 hover:bg-rose-50 hover:opacity-100 disabled:opacity-50 group-hover:opacity-100 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                          title="إيقاف الحساب"
+                          :disabled="deactivatingId === acc.id"
+                          @click="deactivateAccount(acc, $event)"
+                        >
+                          إيقاف
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
                 <div v-if="!treeGroups.length" class="py-10 text-center text-slate-500">لا توجد حسابات</div>
-                <p class="text-center text-xs text-slate-500">اضغط على أي حساب لعرض حركته · تعديل لتغيير الاسم · إيقاف لإخفاء الحساب غير النظامي</p>
+                <p class="text-center text-[11px] text-slate-500 dark:text-slate-400">
+                  إضافة حساب · تعديل (اسم/أب/رمز إن لم تُرحَّل عليه قيود) · إيقاف بدل الحذف · الحسابات النظامية مقفلة
+                </p>
               </div>
+
+              <ModalLedgerAccount
+                :show="showAccountModal"
+                :mode="accountModalMode"
+                :account="editingAccount"
+                :parent-options="parentOptions"
+                :submitting="savingAccount"
+                @close="closeAccountModal"
+                @submit="submitAccountModal"
+              />
             </template>
 
             <template v-else-if="tab === 'trial'">
@@ -871,7 +975,7 @@ onMounted(() => refresh());
                       <tr v-for="acc in transferAccounts" :key="acc.id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
                         <td class="px-3 py-2 text-right font-semibold">{{ acc.name }}</td>
                         <td class="px-3 py-2 font-mono">{{ formatMoney(acc.balance) }}</td>
-                        <td class="px-3 py-2 font-mono">{{ acc.balance_dinar?.toLocaleString() }}</td>
+                        <td class="px-3 py-2 font-mono">{{ formatMoneyAmount(acc.balance_dinar, "IQD") }}</td>
                       </tr>
                       <tr v-if="!transferAccounts.length">
                         <td colspan="3" class="px-3 py-8 text-slate-500">لا توجد حسابات</td>
