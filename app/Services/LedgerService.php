@@ -1126,12 +1126,25 @@ class LedgerService
     }
 
     /**
+     * Driver-safe SQL: bound string prefix + integer/text column (MySQL CONCAT / SQLite ||).
+     */
+    public static function sqlConcatBoundPrefixWithColumn(string $boundPlaceholder, string $column): string
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "({$boundPlaceholder} || {$column})";
+        }
+
+        return "CONCAT({$boundPlaceholder}, {$column})";
+    }
+
+    /**
      * Per-client COALESCE(ledger, wallet) then sum — safe before/after opening migration.
      */
     public function sumClientsReceivableWithFallback(int $ownerId, int $clientTypeId, string $currency = '$'): float
     {
         $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
         $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
+        $codeExpr = self::sqlConcatBoundPrefixWithColumn('?', 'u.id');
 
         $row = DB::selectOne(
             "SELECT ROUND(COALESCE(SUM(client_bal), 0), 2) AS total
@@ -1143,7 +1156,7 @@ class LedgerService
                         INNER JOIN journal_lines AS jl ON jl.ledger_account_id = la.id
                         INNER JOIN journal_entries AS je ON je.id = jl.journal_entry_id AND je.deleted_at IS NULL
                         WHERE la.owner_id = ?
-                          AND la.code = CONCAT(?, u.id)
+                          AND la.code = {$codeExpr}
                           AND jl.currency = ?
                     ),
                     (
@@ -1202,8 +1215,9 @@ class LedgerService
     {
         $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
         $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
+        $codeExpr = self::sqlConcatBoundPrefixWithColumn('?', 'users.id');
 
-        return function ($subquery) use ($ownerId, $currency, $prefix, $walletColumn) {
+        return function ($subquery) use ($ownerId, $currency, $prefix, $walletColumn, $codeExpr) {
             $subquery->selectRaw(
                 "COALESCE(
                     (
@@ -1212,7 +1226,7 @@ class LedgerService
                         INNER JOIN journal_lines AS jl ON jl.ledger_account_id = la.id
                         INNER JOIN journal_entries AS je ON je.id = jl.journal_entry_id AND je.deleted_at IS NULL
                         WHERE la.owner_id = ?
-                          AND la.code = CONCAT(?, users.id)
+                          AND la.code = {$codeExpr}
                           AND jl.currency = ?
                     ),
                     (

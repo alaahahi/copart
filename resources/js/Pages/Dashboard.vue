@@ -26,13 +26,37 @@ const refreshingOps = ref(false);
 const toast = useToast();
 let showModal = ref(false);
 
-function sendWhatsAppMessage(phoneNumber) {
-  if (phoneNumber) {
-    phoneNumber = '964' + phoneNumber;
-    const message = `السلام عليكم: ${appName} - أربيل ,يرجى الأخذ بالعلم تسديد المبلغ المستحق عليكم في أقرب وقت ممكن. شكرا لتعاونكم  ..........   سڵاوی خواتان لێبێت: کۆمپانیای ${appName} - تکایە ئاگاداربن بە زووترین کات ئەو بڕە پارەیەی کە قەرزارن بیدەن. سوپاس بۆ هەماهەنگیت`;
-    const whatsappURL = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
-    window.open(whatsappURL);
+function sendWhatsAppMessage(user) {
+  const phoneNumber = user?.phone;
+  if (!phoneNumber) {
+    toast.error(t('waDebtNoPhone'));
+    return;
   }
+
+  axios
+    .post(route('whatsapp.debt_notice'), {
+      client_id: user.id,
+      balance: user.balance,
+    })
+    .then(({ data }) => {
+      if (data?.queued) {
+        toast.success(data.message || t('waDebtQueued'));
+        return;
+      }
+      // Integration off or skipped → legacy WhatsApp Web
+      openWhatsAppWeb(phoneNumber);
+    })
+    .catch(() => {
+      openWhatsAppWeb(phoneNumber);
+    });
+}
+
+function openWhatsAppWeb(phoneNumber) {
+  const normalized = String(phoneNumber).replace(/\D/g, '');
+  const withCountry = normalized.startsWith('964') ? normalized : `964${normalized.replace(/^0/, '')}`;
+  const message = `السلام عليكم: ${appName} - أربيل ,يرجى الأخذ بالعلم تسديد المبلغ المستحق عليكم في أقرب وقت ممكن. شكرا لتعاونكم  ..........   سڵاوی خواتان لێبێت: کۆمپانیای ${appName} - تکایە ئاگاداربن بە زووترین کات ئەو بڕە پارەیەی کە قەرزارن بیدەن. سوپاس بۆ هەماهەنگیت`;
+  const whatsappURL = `https://api.whatsapp.com/send?phone=${withCountry}&text=${encodeURIComponent(message)}`;
+  window.open(whatsappURL);
 }
 
 let searchTerm = ref('');
@@ -656,7 +680,7 @@ function directionClass(direction) {
               :href="route('showClients', { id: user.id, q: searchTerm })"
               class="group flex min-h-[72px] items-center gap-3 rounded-2xl p-4 text-white shadow-sm transition duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:focus-visible:ring-offset-[#0b1220]"
               :class="changeColor(user.balance)"
-              @dblclick.prevent="sendWhatsAppMessage(user.phone)"
+              @dblclick.prevent="sendWhatsAppMessage(user)"
             >
               <div
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition group-hover:bg-white/25"

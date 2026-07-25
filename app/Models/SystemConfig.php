@@ -32,5 +32,22 @@ class SystemConfig extends Model
         'receipt_logo_left_3',
         'receipt_logo_haulf',
         'receipt_logo_main',
+        'app_logo',
+        'app_cover',
+        'wa_enabled',
+        'wa_base_host',
+        'wa_tenant',
+        'wa_source',
+        'wa_created_by',
+        'wa_notify_debt',
+        'wa_notify_car_created',
+        'wa_notify_payment',
+    ];
+
+    protected $casts = [
+        'wa_enabled' => 'boolean',
+        'wa_notify_debt' => 'boolean',
+        'wa_notify_car_created' => 'boolean',
+        'wa_notify_payment' => 'boolean',
     ];
 }

@@ -57,8 +57,14 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
             <div class="flex min-w-0 items-center gap-3 lg:gap-5">
               <Link
                 :href="route('dashboard')"
-                class="inline-flex min-h-[44px] items-center rounded-2xl px-3 py-2 text-right transition hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                class="inline-flex min-h-[44px] items-center gap-2.5 rounded-2xl px-3 py-2 text-right transition hover:bg-slate-100 dark:hover:bg-slate-800/80"
               >
+                <img
+                  v-if="$page.props.branding?.logo"
+                  :src="$page.props.branding.logo"
+                  alt=""
+                  class="h-9 w-9 rounded-lg object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                />
                 <div class="flex flex-col leading-tight">
                   <span class="text-sm font-bold text-slate-900 dark:text-white">
                     {{ $page.props.appName }}

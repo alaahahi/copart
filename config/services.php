@@ -31,4 +31,15 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | WA Queue (https://wa.intellij-app.com/{tenant}/api/v1/queue)
+    | Runtime settings live in system_config; env values are defaults only.
+    */
+    'wa_queue' => [
+        'base_host' => env('WA_QUEUE_BASE_HOST', 'https://wa.intellij-app.com'),
+        'tenant' => env('WA_QUEUE_TENANT'),
+        'source' => env('WA_QUEUE_SOURCE', 'sales'),
+        'created_by' => env('WA_QUEUE_CREATED_BY', 'copart-erp'),
+    ],
+
 ];

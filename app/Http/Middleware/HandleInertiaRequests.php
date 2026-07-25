@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SystemConfig;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tightenco\Ziggy\Ziggy;
@@ -43,8 +44,16 @@ class HandleInertiaRequests extends Middleware
             $accessToken = $user->createToken('Token Name')->accessToken;
         }
 
+        $branding = SystemConfig::query()
+            ->select(['app_logo', 'app_cover', 'first_title_ar'])
+            ->first();
+
         return array_merge(parent::share($request), [
-            'appName' => config('app.name'),
+            'appName' => $branding?->first_title_ar ?: config('app.name'),
+            'branding' => [
+                'logo' => $branding?->app_logo,
+                'cover' => $branding?->app_cover,
+            ],
             'auth' => [
                 'user' => $user,
                 'accessToken' => $accessToken?->token,

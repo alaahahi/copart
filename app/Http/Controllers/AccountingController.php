@@ -37,6 +37,7 @@ use App\Services\AccountingCacheService;
 use App\Services\LedgerService;
 use App\Services\SystemWalletService;
 use App\Services\TransactionPaymentService;
+use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -1022,6 +1023,25 @@ class AccountingController extends Controller
         if((($car->paid)+($car->discount))-$car->total_s < 0 && $amount){
             $car->update(['results'=>1]);
         }
+
+        try {
+            $client = User::find($car->client_id);
+            if ($client && $tran) {
+                app(WhatsAppQueueService::class)->notifyPayment(
+                    $client,
+                    (float) $amount,
+                    '$',
+                    (int) $tran->id,
+                    (string) ($car->vin ?: $car->car_number)
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('WA payment_received hook failed', [
+                'car_id' => $car_id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
         return Response::json($transaction, 200);
     }
     public function addPaymentCarTotal()
@@ -1052,6 +1072,24 @@ class AccountingController extends Controller
             $this->increaseWallet($amount_o, $desc, $this->accounting->mainAccount()->id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
 
             $transaction = $this->decreaseWallet((int) $amount_o + (int) $discount, $desc, $client_id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
+
+            try {
+                $client = User::find($client_id);
+                if ($client && $tran) {
+                    app(WhatsAppQueueService::class)->notifyPayment(
+                        $client,
+                        (float) $amount_o,
+                        '$',
+                        (int) $tran->id,
+                        (string) $note
+                    );
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('WA payment_received (total) hook failed', [
+                    'client_id' => $client_id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
 
             return Response::json($transaction, 200);
         }

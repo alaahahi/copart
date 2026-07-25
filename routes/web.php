@@ -157,6 +157,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('settings',[SystemConfigController::class, 'index'])->name('settings');
     Route::get('settings/receipt-preview',[SystemConfigController::class, 'previewReceipt'])->name('settings.receipt_preview');
     Route::post('settings',[SystemConfigController::class, 'update'])->name('settings.update');
+    Route::post('whatsapp/debt-notice',[SystemConfigController::class, 'queueDebtNotice'])->name('whatsapp.debt_notice');
     Route::get('sync-monitor', function () {
         return Inertia::render('SyncMonitor');
     })->name('sync-monitor');

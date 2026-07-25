@@ -26,6 +26,7 @@ use App\Services\DashboardActivityService;
 use App\Services\SystemWalletService;
 use App\Services\ExchangeRateService;
 use App\Services\WeatherService;
+use App\Services\WhatsAppQueueService;
 
 use Carbon\Carbon;
 use App\Services\LedgerService;
@@ -395,6 +396,20 @@ class DashboardController extends Controller
                     }
                 }
 
+        $carId = (int) $car->id;
+        DB::afterCommit(function () use ($carId) {
+            try {
+                $fresh = Car::with('Client')->find($carId);
+                if ($fresh) {
+                    app(WhatsAppQueueService::class)->notifyCarCreated($fresh);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('WA car_created hook failed', [
+                    'car_id' => $carId,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        });
 
         return Response::json('ok', 200);    
     }
