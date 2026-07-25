@@ -76,7 +76,7 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
                   v-if="brandingLogo && !brandingLogoBroken"
                   :src="brandingLogo"
                   alt=""
-                  class="h-9 w-9 rounded-lg object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                  class="h-12 w-12 shrink-0 rounded-xl object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                   @error="onBrandingLogoError"
                 />
                 <div class="flex flex-col leading-tight">

@@ -18,26 +18,7 @@
 </head>
 <body style="direction: rtl;">
 <div class="container-fluid">       
-<div class="row">
-    <div class="col-4 text-center py-3">
-        <h5>
-       {{$config['first_title_ar']}}
-        </h5>
-        <h5>
-        {{$config['second_title_ar']}}
-        </h5>
-    </div>
-    <div class="col-4 text-center py-3">
-
-    
-       
-    <h5 class="pt-3">  جميع الدفعات </h5>
-    </div>
-    <div class="col-4 text-center py-3"> 
-        @include('Components.logo')
-
-    </div>
-    </div>
+@include('Components.reportHeader', ['title' => 'جميع الدفعات', 'config' => $config ?? null])
     <div class="row p-2 text-center border-top border-bottom" style="font-size: 14px">
     <div class="col"> 
     حساب:

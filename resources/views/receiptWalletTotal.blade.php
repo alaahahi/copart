@@ -25,40 +25,20 @@
 </head>
 <body style="direction: rtl;">
 <div class="container-fluid">       
-<div class="row">
-    <div class="col-4 text-center py-3">
-        <h5>
-       {{$config['first_title_ar']}}
-        </h5>
-        <h5>
-        {{$config['second_title_ar']}}
-        </h5>
-    </div>
-    <div class="col-4 text-center py-3">
-        @php
-            // تحويل transactions إلى collection
-            $transactions = is_object($data['transactions']) && method_exists($data['transactions'], 'items') 
-                ? collect($data['transactions']->items()) 
-                : collect($data['transactions']);
-            $isAmanah = false;
-            if($transactions->count() > 0) {
-                $firstItem = $transactions->first();
-                $firstType = is_array($firstItem) ? ($firstItem['type'] ?? '') : ($firstItem->type ?? '');
-                $isAmanah = in_array($firstType, ['inUserAmanah', 'outUserAmanah']);
-            }
-        @endphp
-        <h5 class="pt-3">
-            @if($isAmanah)
-                كشف حساب الأمانة
-            @else
-                كشف حساب الصندوق
-            @endif
-        </h5>
-    </div>
-    <div class="col-4 text-center py-3"> 
-        @include('Components.logo')
-    </div>
-</div>
+@php
+    // تحويل transactions إلى collection
+    $transactions = is_object($data['transactions']) && method_exists($data['transactions'], 'items') 
+        ? collect($data['transactions']->items()) 
+        : collect($data['transactions']);
+    $isAmanah = false;
+    if($transactions->count() > 0) {
+        $firstItem = $transactions->first();
+        $firstType = is_array($firstItem) ? ($firstItem['type'] ?? '') : ($firstItem->type ?? '');
+        $isAmanah = in_array($firstType, ['inUserAmanah', 'outUserAmanah']);
+    }
+    $walletReportTitle = $isAmanah ? 'كشف حساب الأمانة' : 'كشف حساب الصندوق';
+@endphp
+@include('Components.reportHeader', ['title' => $walletReportTitle, 'config' => $config ?? null])
 <div class="row p-2 text-center border-top border-bottom" style="font-size: 14px">
     <div class="col"> 
         حساب:
@@ -67,10 +47,6 @@
     <div class="col">
         موبايل:
         {{$data['user']->phone ?? ''}}
-    </div>
-    <div class="col">
-        تاريخ الطباعة:
-        {{date('Y-m-d')}}
     </div>
 </div>
 

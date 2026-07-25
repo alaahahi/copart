@@ -707,7 +707,7 @@ function directionClass(direction) {
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3 sm:gap-4">
             <!-- Live clock + sky / weather — full-card phase gradient -->
             <div
-              class="relative min-w-0 overflow-hidden rounded-2xl border border-white/15 p-4 shadow-sm sm:p-5"
+              class="dash-sky-card relative min-w-0 overflow-hidden rounded-2xl border border-white/15 p-4 pb-36 shadow-sm sm:p-5 sm:pb-36"
               :class="skyPanelClass"
               :aria-label="weatherTempLabel || $t(dayPhaseLabelKey)"
             >
@@ -759,9 +759,9 @@ function directionClass(direction) {
                   </p>
                 </div>
 
-                <!-- Weather (temp stays bottom-start / visual right in RTL) -->
-                <div class="relative z-10 mt-4 flex min-h-[7.5rem] items-end justify-start">
-                  <div class="min-w-0 max-w-[58%]">
+                <!-- Weather: physical bottom-RIGHT (away from sun) -->
+                <div class="relative z-10 mt-4 min-h-[5.5rem]">
+                  <div class="dash-weather-temp absolute bottom-0 right-0 z-10 min-w-0 max-w-[48%] text-end">
                     <p class="truncate text-[11px] font-semibold uppercase tracking-wider text-white/90">
                       {{ $t(dayPhaseLabelKey) }}
                     </p>
@@ -783,10 +783,11 @@ function directionClass(direction) {
                 </div>
               </div>
 
-              <!-- Celestial: physical bottom-left (avoids RTL end/start flip over temp) -->
+              <!-- ONE celestial: physical bottom-LEFT empty corner (not under °C) -->
               <div
-                class="dash-celestial pointer-events-none absolute bottom-2 left-2 z-[5]"
+                class="dash-celestial pointer-events-none absolute z-[1]"
                 :class="`dash-celestial--${dayPhase}`"
+                style="bottom: 0.75rem; left: 0.75rem; right: auto;"
                 aria-hidden="true"
               >
                 <!-- Dawn / soft sun -->
@@ -1231,7 +1232,25 @@ body {
   background: linear-gradient(155deg, #1e1b4b 0%, #0f172a 55%, #020617 100%);
 }
 
+/* Physical corners — never use start/end (RTL would flip sun onto °C) */
+.dash-sky-card {
+  position: relative;
+}
+
+.dash-weather-temp {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: auto;
+}
+
 .dash-celestial {
+  position: absolute !important;
+  bottom: 0.75rem !important;
+  left: 0.75rem !important;
+  right: auto !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: auto !important;
   display: flex;
   align-items: center;
   justify-content: center;
