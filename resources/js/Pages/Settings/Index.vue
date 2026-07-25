@@ -163,8 +163,24 @@ function onLogoChange(field, event) {
   logoPreviews.value[field] = URL.createObjectURL(file);
 }
 
+/** Match ERP static paths under /public (legacy /img/... still works). */
+function resolvePublicAsset(path) {
+  if (!path) return "";
+  if (/^(https?:)?\/\//i.test(path) || path.startsWith("blob:") || path.startsWith("data:")) {
+    return path;
+  }
+  let p = path.startsWith("/") ? path : `/${path}`;
+  while (p.startsWith("/public/public/")) {
+    p = p.slice(7);
+  }
+  if (p.startsWith("/img/")) {
+    p = `/public${p}`;
+  }
+  return p;
+}
+
 function logoSrc(field) {
-  return logoPreviews.value[field] || logoPaths.value[field] || "";
+  return logoPreviews.value[field] || resolvePublicAsset(logoPaths.value[field]) || "";
 }
 
 function onBrandingChange(field, event) {
@@ -218,9 +234,7 @@ async function save() {
       }
     });
 
-    const { data } = await axios.post(route("settings.update"), formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    const { data } = await axios.post(route("settings.update"), formData);
 
     if (data.config) {
       logoFields.forEach(({ key }) => {

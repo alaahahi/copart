@@ -46,4 +46,56 @@ class Help
 
         return self::formatNumber($number, $isUsd ? 2 : 0);
     }
+
+    /**
+     * Normalize a public web path for this deploy (docroot is often project root,
+     * so static files live under /public/... — matching uploads elsewhere).
+     *
+     * Accepts stored values like /img/receipt/x.png, public/img/..., or full URLs.
+     */
+    public static function normalizePublicPath(?string $path): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return null;
+        }
+
+        if (preg_match('#^(https?:)?//#i', $path) || str_starts_with($path, 'data:')) {
+            return $path;
+        }
+
+        $path = '/'.ltrim($path, '/');
+
+        while (str_starts_with($path, '/public/public/')) {
+            $path = substr($path, 7);
+        }
+
+        // Legacy receipt paths omitted /public (404 when site is served from project root).
+        if (preg_match('#^/img/#', $path)) {
+            $path = '/public'.$path;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Public asset URL for receipts/print (absolute preferred for print/PDF reliability).
+     */
+    public static function publicAssetUrl(?string $path, bool $absolute = true): ?string
+    {
+        $normalized = self::normalizePublicPath($path);
+        if ($normalized === null || $normalized === '') {
+            return null;
+        }
+
+        if (preg_match('#^(https?:)?//#i', $normalized) || str_starts_with($normalized, 'data:')) {
+            return $normalized;
+        }
+
+        return $absolute ? url($normalized) : $normalized;
+    }
 }

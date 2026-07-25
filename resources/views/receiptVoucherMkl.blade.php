@@ -53,6 +53,9 @@
             align-items: flex-start;
             gap: 10px;
             margin-bottom: 6px;
+            /* Keep partner logos on visual left and HAULF/MKL on visual right
+               even though the voucher sheet is RTL. */
+            direction: ltr;
         }
         .mkl-logos-left {
             display: flex;
@@ -87,8 +90,8 @@
             color: #1a1a1a;
         }
         .mkl-main-logo {
-            height: 44px;
-            max-width: 110px;
+            height: 52px;
+            max-width: 130px;
             object-fit: contain;
         }
         .mkl-branch {

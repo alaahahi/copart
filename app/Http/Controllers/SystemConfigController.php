@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Help;
 use App\Http\Requests\QueueDebtNoticeRequest;
 use App\Http\Requests\UpdateSystemConfigRequest;
 use App\Models\SystemConfig;
@@ -55,7 +56,7 @@ class SystemConfigController extends Controller
         }
 
         return Inertia::render('Settings/Index', [
-            'config' => $config,
+            'config' => $this->configForClient($config),
             'waSources' => WhatsAppQueueService::SOURCES,
         ]);
     }
@@ -96,6 +97,12 @@ class SystemConfigController extends Controller
             if ($request->hasFile($field)) {
                 $this->deleteStoredLogo($config->{$field});
                 $config->{$field} = $this->storeReceiptLogo($request->file($field), $field);
+            } elseif (! empty($config->{$field})) {
+                // Persist normalized /public/... paths for legacy /img/receipt/... values.
+                $normalized = Help::normalizePublicPath($config->{$field});
+                if ($normalized && $normalized !== $config->{$field}) {
+                    $config->{$field} = $normalized;
+                }
             }
         }
 
@@ -103,7 +110,7 @@ class SystemConfigController extends Controller
 
         return Response::json([
             'message' => 'تم حفظ الإعدادات',
-            'config' => $config->fresh(),
+            'config' => $this->configForClient($config->fresh()),
         ]);
     }
 
@@ -148,7 +155,7 @@ class SystemConfigController extends Controller
 
         return view('receiptVoucherMkl', array_merge(
             $this->sampleVoucherData($type),
-            ['config' => $config ? $config->toArray() : []]
+            ['config' => $config ? $this->configForClient($config) : []]
         ));
     }
 
@@ -170,6 +177,25 @@ class SystemConfigController extends Controller
         }
     }
 
+    /**
+     * Expose config to Inertia/JSON with receipt logo paths normalized for /public deploy.
+     */
+    protected function configForClient(?SystemConfig $config): array
+    {
+        if (! $config) {
+            return [];
+        }
+
+        $data = $config->toArray();
+        foreach ($this->logoFields as $field) {
+            if (! empty($data[$field])) {
+                $data[$field] = Help::normalizePublicPath($data[$field]);
+            }
+        }
+
+        return $data;
+    }
+
     protected function storeReceiptLogo($file, string $field): string
     {
         $dir = public_path('img/receipt');
@@ -181,16 +207,22 @@ class SystemConfigController extends Controller
         $name = $field.'_'.time().'.'.$ext;
         $file->move($dir, $name);
 
-        return '/img/receipt/'.$name;
+        // Match project convention (/public/uploads/...) for hosts whose docroot is project root.
+        return '/public/img/receipt/'.$name;
     }
 
     protected function deleteStoredLogo(?string $path): void
     {
-        if (! $path || ! str_starts_with($path, '/img/receipt/')) {
+        if (! $path) {
             return;
         }
 
-        $full = public_path(ltrim($path, '/'));
+        $normalized = str_replace('\\', '/', $path);
+        if (! preg_match('#(?:^|/)(?:public/)?(img/receipt/[^/?#]+)$#', $normalized, $m)) {
+            return;
+        }
+
+        $full = public_path($m[1]);
         if (File::isFile($full)) {
             File::delete($full);
         }

@@ -23,11 +23,11 @@
     $phone = $cfg['receipt_phone'] ?? '+964 750 468 0510 / 750 705 3555 / 750 438 0888';
     $address = $cfg['receipt_address'] ?? '100 M road near Hanouf motel';
     $website = $cfg['receipt_website'] ?? 'Mklmersin.com';
-    $logoLeft1 = $cfg['receipt_logo_left_1'] ?? null;
-    $logoLeft2 = $cfg['receipt_logo_left_2'] ?? null;
-    $logoLeft3 = $cfg['receipt_logo_left_3'] ?? null;
-    $logoHaulf = $cfg['receipt_logo_haulf'] ?? null;
-    $logoMain = $cfg['receipt_logo_main'] ?? '/img/logo.jpg';
+    $logoLeft1 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_1'] ?? null);
+    $logoLeft2 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_2'] ?? null);
+    $logoLeft3 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_3'] ?? null);
+    $logoHaulf = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_haulf'] ?? null);
+    $logoMain = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_main'] ?? '/img/logo.jpg');
 
     if ($isReceipt) {
         $typeKr = 'وەسڵی وەرگرتن';
