@@ -783,9 +783,9 @@ function directionClass(direction) {
                 </div>
               </div>
 
-              <!-- Celestial: bottom-left (physical end in RTL), ~3× prior size, breathe animation -->
+              <!-- Celestial: physical bottom-left (avoids RTL end/start flip over temp) -->
               <div
-                class="dash-celestial pointer-events-none absolute bottom-2 end-2 z-[5]"
+                class="dash-celestial pointer-events-none absolute bottom-2 left-2 z-[5]"
                 :class="`dash-celestial--${dayPhase}`"
                 aria-hidden="true"
               >
