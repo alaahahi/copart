@@ -51,7 +51,7 @@ class Help
      * Normalize a public web path for this deploy (docroot is often project root,
      * so static files live under /public/... — matching uploads elsewhere).
      *
-     * Accepts stored values like /img/receipt/x.png, public/img/..., or full URLs.
+     * Accepts stored values like /img/receipt/x.png, /storage/branding/..., or full URLs.
      */
     public static function normalizePublicPath(?string $path): ?string
     {
@@ -64,8 +64,51 @@ class Help
             return null;
         }
 
-        if (preg_match('#^(https?:)?//#i', $path) || str_starts_with($path, 'data:')) {
+        if (str_starts_with($path, 'data:')) {
             return $path;
+        }
+
+        // Absolute / protocol-relative: rewrite path segment only, keep host.
+        if (preg_match('#^(https?:)?//#i', $path)) {
+            $parts = parse_url($path);
+            if (empty($parts['host']) || empty($parts['path'])) {
+                return $path;
+            }
+
+            $normalizedPath = self::normalizePublicPath($parts['path']);
+            if ($normalizedPath === null || $normalizedPath === $parts['path']) {
+                return $path;
+            }
+
+            $prefix = '';
+            if (! empty($parts['scheme'])) {
+                $prefix = $parts['scheme'].'://';
+            } elseif (str_starts_with($path, '//')) {
+                $prefix = '//';
+            }
+
+            if (! empty($parts['user'])) {
+                $prefix .= $parts['user'];
+                if (isset($parts['pass'])) {
+                    $prefix .= ':'.$parts['pass'];
+                }
+                $prefix .= '@';
+            }
+
+            $prefix .= $parts['host'];
+            if (! empty($parts['port'])) {
+                $prefix .= ':'.$parts['port'];
+            }
+
+            $suffix = '';
+            if (isset($parts['query'])) {
+                $suffix .= '?'.$parts['query'];
+            }
+            if (isset($parts['fragment'])) {
+                $suffix .= '#'.$parts['fragment'];
+            }
+
+            return $prefix.$normalizedPath.$suffix;
         }
 
         $path = '/'.ltrim($path, '/');
@@ -74,8 +117,8 @@ class Help
             $path = substr($path, 7);
         }
 
-        // Legacy receipt paths omitted /public (404 when site is served from project root).
-        if (preg_match('#^/img/#', $path)) {
+        // Legacy paths omitted /public (404 when site is served from project root).
+        if (preg_match('#^/img/#', $path) || preg_match('#^/storage/#', $path)) {
             $path = '/public'.$path;
         }
 

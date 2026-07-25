@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\Help;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -13,6 +14,7 @@ class SystemBrandingService
 
     /**
      * Store logo or cover under storage/app/public/branding and return a public URL path.
+     * Uses /public/storage/... so hosts whose docroot is the project root can serve files.
      */
     public function store(UploadedFile $file, string $field): string
     {
@@ -21,7 +23,8 @@ class SystemBrandingService
 
         $path = $file->storeAs(self::DIR, $name, self::DISK);
 
-        return Storage::disk(self::DISK)->url($path);
+        // Prefer relative /public/storage/... (same deploy pattern as receipt logos).
+        return Help::normalizePublicPath('/storage/'.$path) ?? '/public/storage/'.$path;
     }
 
     /**

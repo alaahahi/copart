@@ -68,8 +68,6 @@
                 @if($logoMain)
                     <img src="{{ $logoMain }}" alt="Logo" class="mkl-main-logo">
                 @endif
-                <div class="mkl-branch">Georgia Branch</div>
-                <div class="mkl-branch-url">GEORGIA.MKLSHIPPING.COM</div>
             </div>
         </div>
     </div>

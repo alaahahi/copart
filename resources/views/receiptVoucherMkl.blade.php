@@ -90,20 +90,9 @@
             color: #1a1a1a;
         }
         .mkl-main-logo {
-            height: 52px;
-            max-width: 130px;
+            height: 64px;
+            max-width: 155px;
             object-fit: contain;
-        }
-        .mkl-branch {
-            font-size: 11px;
-            font-weight: 700;
-            margin-top: 2px;
-        }
-        .mkl-branch-url {
-            font-size: 10px;
-            color: #444;
-            direction: ltr;
-            unicode-bidi: isolate;
         }
         .mkl-type-bar {
             display: flex;
