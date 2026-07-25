@@ -1,32 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-    <title>{{ config('app.company_name') }}</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-    @page { size: auto; margin: 15px; margin-top: 60px; }
-    @media print { .no-print { display: none !important; } }
-    </style>
+@include('Components.reportHead', [
+    'pageTitle' => !empty($entryId) ? 'وصل قاصة الشركة' : 'كشف قاصة الشركة',
+])
 </head>
-<body style="direction: rtl;">
-<div class="container-fluid">
+<body class="erp-report">
+@include('Components.reportToolbar')
+<div class="erp-report-page">
 @include('Components.reportHeader', [
     'title' => !empty($entryId) ? 'وصل قاصة الشركة' : 'كشف قاصة الشركة',
-    'subtitle' => ($currency === '$' ? 'دولار USD' : 'دينار IQD'),
+    'subtitle' => ($currency === '$' ? 'عملة: دولار أمريكي' : 'عملة: دينار عراقي'),
     'config' => $config ?? null,
 ])
 
-<div class="row p-2 text-center border-top border-bottom" style="font-size: 14px">
+@if((!empty($from) && !empty($to)) || !empty($tag))
+<div class="erp-report-meta">
     @if(!empty($from) && !empty($to))
-    <div class="col">الفترة: {{ $from }} — {{ $to }}</div>
+    <div class="erp-report-meta__item">
+        <span class="erp-report-meta__label">الفترة:</span>
+        <span class="erp-report-meta__value">{{ $from }} — {{ $to }}</span>
+    </div>
     @endif
     @if(!empty($tag))
-    <div class="col">التاغ: {{ $tag }}</div>
+    <div class="erp-report-meta__item">
+        <span class="erp-report-meta__label">التصنيف:</span>
+        <span class="erp-report-meta__value">{{ $tag }}</span>
+    </div>
     @endif
 </div>
+@endif
 
 @php
     $totalDebit = $entries->sum('debit');
@@ -34,28 +37,46 @@
     $lastBalance = $entries->last()?->balance ?? 0;
 @endphp
 
-<div class="row p-2 text-center border-bottom alert-primary" style="font-size: 14px">
-    <div class="col-3">إجمالي المدين: {{ \App\Helpers\Help::formatMoney($totalDebit, $currency) }}</div>
-    <div class="col-3">إجمالي الدائن: {{ \App\Helpers\Help::formatMoney($totalCredit, $currency) }}</div>
-    <div class="col-3">رصيد نهاية الكشف: {{ \App\Helpers\Help::formatMoney($lastBalance, $currency) }}</div>
-    <div class="col-3">عدد الحركات: {{ $entries->count() }}</div>
+<div class="erp-report-summary">
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">إجمالي المدين</span>
+        <span class="erp-report-summary__value num">{{ \App\Helpers\Help::formatMoney($totalDebit, $currency) }}</span>
+    </div>
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">إجمالي الدائن</span>
+        <span class="erp-report-summary__value num">{{ \App\Helpers\Help::formatMoney($totalCredit, $currency) }}</span>
+    </div>
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">رصيد نهاية الكشف</span>
+        <span class="erp-report-summary__value num">{{ \App\Helpers\Help::formatMoney($lastBalance, $currency) }}</span>
+    </div>
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">عدد الحركات</span>
+        <span class="erp-report-summary__value">{{ $entries->count() }}</span>
+    </div>
 </div>
 
 @if(empty($entryId))
-<div class="row p-2 text-center border-bottom" style="font-size: 13px">
-    <div class="col-6">رصيد الدولار الحالي: {{ \App\Helpers\Help::formatMoney($balanceUsd ?? 0, '$') }} $</div>
-    <div class="col-6">رصيد الدينار الحالي: {{ \App\Helpers\Help::formatMoney($balanceIqd ?? 0, 'IQD') }} IQD</div>
+<div class="erp-report-summary">
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">رصيد الدولار الحالي</span>
+        <span class="erp-report-summary__value num">{{ \App\Helpers\Help::formatMoney($balanceUsd ?? 0, '$') }}</span>
+    </div>
+    <div class="erp-report-summary__card">
+        <span class="erp-report-summary__label">رصيد الدينار الحالي</span>
+        <span class="erp-report-summary__value num">{{ \App\Helpers\Help::formatMoney($balanceIqd ?? 0, 'IQD') }}</span>
+    </div>
 </div>
 @endif
 
-<div class="row text-center py-2">
-    <table class="table table-sm table-striped table-bordered" style="font-size: 12px">
+<div class="erp-report-table-wrap">
+    <table class="erp-report-table">
         <thead>
             <tr>
                 <th>#</th>
                 <th>التاريخ</th>
                 <th>البيان</th>
-                <th>التاغ</th>
+                <th>التصنيف</th>
                 <th>مدين</th>
                 <th>دائن</th>
                 <th>الرصيد</th>
@@ -66,11 +87,11 @@
             <tr>
                 <td>{{ $index + 1 }}</td>
                 <td>{{ $entry->entry_date?->format('Y-m-d') ?? '' }}</td>
-                <td>{{ $entry->description ?? '' }}</td>
+                <td class="text-start-rtl">{{ $entry->description ?? '' }}</td>
                 <td>{{ $entry->tag ?? '—' }}</td>
-                <td>{{ $entry->debit > 0 ? \App\Helpers\Help::formatMoney($entry->debit, $currency) : '—' }}</td>
-                <td>{{ $entry->credit > 0 ? \App\Helpers\Help::formatMoney($entry->credit, $currency) : '—' }}</td>
-                <td>{{ \App\Helpers\Help::formatMoney($entry->balance, $currency) }}</td>
+                <td class="num">{{ $entry->debit > 0 ? \App\Helpers\Help::formatMoney($entry->debit, $currency) : '—' }}</td>
+                <td class="num">{{ $entry->credit > 0 ? \App\Helpers\Help::formatMoney($entry->credit, $currency) : '—' }}</td>
+                <td class="num">{{ \App\Helpers\Help::formatMoney($entry->balance, $currency) }}</td>
             </tr>
             @empty
             <tr><td colspan="7">لا توجد حركات</td></tr>
@@ -78,20 +99,18 @@
         </tbody>
         @if($entries->count())
         <tfoot>
-            <tr class="table-secondary fw-bold">
+            <tr>
                 <td colspan="4">المجموع</td>
-                <td>{{ \App\Helpers\Help::formatMoney($totalDebit, $currency) }}</td>
-                <td>{{ \App\Helpers\Help::formatMoney($totalCredit, $currency) }}</td>
-                <td>{{ \App\Helpers\Help::formatMoney($lastBalance, $currency) }}</td>
+                <td class="num">{{ \App\Helpers\Help::formatMoney($totalDebit, $currency) }}</td>
+                <td class="num">{{ \App\Helpers\Help::formatMoney($totalCredit, $currency) }}</td>
+                <td class="num">{{ \App\Helpers\Help::formatMoney($lastBalance, $currency) }}</td>
             </tr>
         </tfoot>
         @endif
     </table>
 </div>
-</div>
 
-<script>
-$(document).ready(function() { window.print(); });
-</script>
+@include('Components.reportFooter', ['config' => $config ?? null])
+</div>
 </body>
 </html>

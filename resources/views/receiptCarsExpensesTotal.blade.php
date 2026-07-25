@@ -1,95 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-    <title>{{ config('app.name') }}</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-    @page {
-      size: auto; /* auto is the initial value */
-
-      /* this affects the margin in the printer settings */
-      margin: 15px;
-      margin-top: 60px;
-    }
-    </style>
+@include('Components.reportHead', ['pageTitle' => 'تقرير مصاريف السيارات'])
 </head>
-<body style="direction: rtl;">
-<div class="container-fluid">       
+<body class="erp-report">
+@include('Components.reportToolbar')
+<div class="erp-report-page">
 @include('Components.reportHeader', ['title' => 'تقرير مصاريف السيارات', 'config' => $config ?? null])
-    <div class="row p-2 text-center border-top border-bottom" style="font-size: 14px">
-    <div class="col"> 
-    حساب:
-    {{$data['client']->name}}
+
+    <div class="erp-report-meta">
+        <div class="erp-report-meta__item">
+            <span class="erp-report-meta__label">الحساب:</span>
+            <span class="erp-report-meta__value">{{ $data['client']->name }}</span>
+        </div>
+        <div class="erp-report-meta__item">
+            <span class="erp-report-meta__label">الهاتف:</span>
+            <span class="erp-report-meta__value">{{ $data['client']->phone }}</span>
+        </div>
     </div>
-    <div class="col">
-    موبايل:
-    {{$data['client']->phone}}
-    </div>
-    
-  </div>
-  <div class="row p-2 text-center border-bottom alert-primary "  style="font-size: 14px">
+
     @php
-      $totalAmountDollar = 0;
-      $totalAmountDinar = 0;
-    @endphp
-    @foreach ($data['carexpenses'] as $key => $expense)
-    @php
-        $totalAmountDollar += $expense->amount_dollar;
-        $totalAmountDinar += $expense->amount_dinar;
-
-    @endphp
-@endforeach
-
-
-    <div class="col-6"> 
-     مجموع النهائي بالدولار: 
-    {{$totalAmountDollar??0}}
-    </div>
-    <div class="col-6">
-    مجموع النهائي بالدينار:
-    {{$totalAmountDinar??0}}
-    </div>
-    
-  </div>
-  <div class="row text-center py-2">
-    <table class="table table-sm table-striped table-bordered" style="font-size: 12px">
-        <thead>
-          <tr>
-            <th scope="col">تاريخ</th>
-            <th scope="col">ملاحظة</th>
-            <th scope="col">المبلغ بالدولار</th>
-            <th scope="col">المبلغ بالدينار</th>
-          </tr>
-        </thead>
-        <tbody>
-            @foreach ($data['carexpenses'] as $key=>$data)
-            <tr>
-                <td>{{ $data->created }}</td>
-                <td>{{ $data->note }}</td>
-                <td>{{ \App\Helpers\Help::formatMoney($data->amount_dollar, '$') }}</td>
-                <td>{{ \App\Helpers\Help::formatMoney($data->amount_dinar, 'IQD') }}</td>
-            </tr>
-            @endforeach
-        </tbody>
-      </table>  
-  </div>
-</div>
-
-
-<script>
-    $(document).ready(function() {
-        // Function to open the print dialog
-        function openPrintDialog() {
-             window.print();
+        $totalAmountDollar = 0;
+        $totalAmountDinar = 0;
+        $carExpenses = $data['carexpenses'];
+        foreach ($carExpenses as $expense) {
+            $totalAmountDollar += $expense->amount_dollar;
+            $totalAmountDinar += $expense->amount_dinar;
         }
-    
-        // Call the function to open the print dialog
-        openPrintDialog();
-    });
-    </script>
+    @endphp
 
+    <div class="erp-report-summary">
+        <div class="erp-report-summary__card">
+            <span class="erp-report-summary__label">المجموع بالدولار</span>
+            <span class="erp-report-summary__value num">{{ $totalAmountDollar ?? 0 }}</span>
+        </div>
+        <div class="erp-report-summary__card">
+            <span class="erp-report-summary__label">المجموع بالدينار</span>
+            <span class="erp-report-summary__value num">{{ $totalAmountDinar ?? 0 }}</span>
+        </div>
+    </div>
+
+    <div class="erp-report-table-wrap">
+        <table class="erp-report-table">
+            <thead>
+                <tr>
+                    <th scope="col">التاريخ</th>
+                    <th scope="col">الملاحظة</th>
+                    <th scope="col">المبلغ بالدولار</th>
+                    <th scope="col">المبلغ بالدينار</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($carExpenses as $expense)
+                <tr>
+                    <td>{{ $expense->created }}</td>
+                    <td class="text-start-rtl">{{ $expense->note }}</td>
+                    <td class="num">{{ \App\Helpers\Help::formatMoney($expense->amount_dollar, '$') }}</td>
+                    <td class="num">{{ \App\Helpers\Help::formatMoney($expense->amount_dinar, 'IQD') }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+@include('Components.reportFooter', ['config' => $config ?? null])
+</div>
 </body>
 </html>
