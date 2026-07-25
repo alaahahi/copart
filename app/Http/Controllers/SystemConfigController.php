@@ -229,7 +229,7 @@ class SystemConfigController extends Controller
         }
 
         $normalized = str_replace('\\', '/', $path);
-        if (! preg_match('#(?:^|/)(?:public/)?(img/receipt/[^/?#]+)$#', $normalized, $m)) {
+        if (! preg_match('#(?:^|/)(?:public/)?(img/receipt/[^/?]+)$#', $normalized, $m)) {
             return;
         }
 

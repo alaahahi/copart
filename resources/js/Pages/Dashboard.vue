@@ -759,9 +759,9 @@ function directionClass(direction) {
                   </p>
                 </div>
 
-                <!-- Weather + celestial (breathe scale animation) -->
-                <div class="mt-4 flex items-center justify-between gap-3">
-                  <div class="min-w-0">
+                <!-- Weather (temp stays bottom-start / visual right in RTL) -->
+                <div class="relative z-10 mt-4 flex min-h-[7.5rem] items-end justify-start">
+                  <div class="min-w-0 max-w-[58%]">
                     <p class="truncate text-[11px] font-semibold uppercase tracking-wider text-white/90">
                       {{ $t(dayPhaseLabelKey) }}
                     </p>
@@ -780,86 +780,87 @@ function directionClass(direction) {
                       {{ weatherTempLabel }}
                     </p>
                   </div>
-
-                  <div class="dash-celestial shrink-0" :class="`dash-celestial--${dayPhase}`">
-                    <!-- Dawn / soft sun -->
-                    <svg
-                      v-if="dayPhase === 'dawn'"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      class="h-11 w-11"
-                      aria-hidden="true"
-                    >
-                      <defs>
-                        <radialGradient id="dashDawnGlow" cx="50%" cy="55%" r="50%">
-                          <stop offset="0%" stop-color="#fde68a" stop-opacity="0.95" />
-                          <stop offset="100%" stop-color="#fbbf24" stop-opacity="0" />
-                        </radialGradient>
-                      </defs>
-                      <circle cx="24" cy="26" r="16" fill="url(#dashDawnGlow)" />
-                      <circle cx="24" cy="26" r="8" fill="#fbbf24" />
-                      <path d="M8 34h32" stroke="#fcd34d" stroke-width="2" stroke-linecap="round" opacity="0.7" />
-                      <path d="M12 38h24" stroke="#fde68a" stroke-width="1.5" stroke-linecap="round" opacity="0.5" />
-                    </svg>
-
-                    <!-- Bright day sun -->
-                    <svg
-                      v-else-if="dayPhase === 'day'"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      class="h-11 w-11"
-                      aria-hidden="true"
-                    >
-                      <g stroke="#fde047" stroke-width="2.2" stroke-linecap="round">
-                        <path d="M24 6v4M24 38v4M6 24h4M38 24h4M11 11l2.8 2.8M34.2 34.2L37 37M37 11l-2.8 2.8M11 37l2.8-2.8" />
-                      </g>
-                      <circle cx="24" cy="24" r="9" fill="#fde047" stroke="#facc15" stroke-width="1.5" />
-                    </svg>
-
-                    <!-- Sunset -->
-                    <svg
-                      v-else-if="dayPhase === 'sunset'"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      class="h-11 w-11"
-                      aria-hidden="true"
-                    >
-                      <defs>
-                        <linearGradient id="dashSunsetSky" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stop-color="#fdba74" stop-opacity="0.45" />
-                          <stop offset="100%" stop-color="#ea580c" stop-opacity="0" />
-                        </linearGradient>
-                      </defs>
-                      <rect x="4" y="8" width="40" height="22" rx="4" fill="url(#dashSunsetSky)" />
-                      <circle cx="24" cy="28" r="9" fill="#fb923c" />
-                      <path d="M6 34c6-4 12-4 18 0s12 4 18 0" fill="none" stroke="#fdba74" stroke-width="2" stroke-linecap="round" />
-                      <path d="M4 38h40" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.9" />
-                    </svg>
-
-                    <!-- Night moon -->
-                    <svg
-                      v-else
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      class="h-11 w-11"
-                      aria-hidden="true"
-                    >
-                      <defs>
-                        <radialGradient id="dashMoonGlow" cx="42%" cy="38%" r="55%">
-                          <stop offset="0%" stop-color="#f1f5f9" stop-opacity="1" />
-                          <stop offset="55%" stop-color="#cbd5e1" stop-opacity="0.95" />
-                          <stop offset="100%" stop-color="#64748b" stop-opacity="0.35" />
-                        </radialGradient>
-                      </defs>
-                      <path
-                        d="M30 8.5a14 14 0 1 0 9.5 24.2A12 12 0 1 1 30 8.5Z"
-                        fill="url(#dashMoonGlow)"
-                      />
-                      <circle cx="36" cy="12" r="1.2" fill="#f8fafc" opacity="0.85" />
-                      <circle cx="40" cy="18" r="0.8" fill="#e2e8f0" opacity="0.7" />
-                    </svg>
-                  </div>
                 </div>
+              </div>
+
+              <!-- Celestial: bottom-left (physical end in RTL), ~3× prior size, breathe animation -->
+              <div
+                class="dash-celestial pointer-events-none absolute bottom-2 end-2 z-[5]"
+                :class="`dash-celestial--${dayPhase}`"
+                aria-hidden="true"
+              >
+                <!-- Dawn / soft sun -->
+                <svg
+                  v-if="dayPhase === 'dawn'"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  class="h-32 w-32"
+                >
+                  <defs>
+                    <radialGradient id="dashDawnGlow" cx="50%" cy="55%" r="50%">
+                      <stop offset="0%" stop-color="#fde68a" stop-opacity="0.95" />
+                      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0" />
+                    </radialGradient>
+                  </defs>
+                  <circle cx="24" cy="26" r="16" fill="url(#dashDawnGlow)" />
+                  <circle cx="24" cy="26" r="8" fill="#fbbf24" />
+                  <path d="M8 34h32" stroke="#fcd34d" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+                  <path d="M12 38h24" stroke="#fde68a" stroke-width="1.5" stroke-linecap="round" opacity="0.5" />
+                </svg>
+
+                <!-- Bright day sun -->
+                <svg
+                  v-else-if="dayPhase === 'day'"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  class="h-32 w-32"
+                >
+                  <g stroke="#fde047" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M24 6v4M24 38v4M6 24h4M38 24h4M11 11l2.8 2.8M34.2 34.2L37 37M37 11l-2.8 2.8M11 37l2.8-2.8" />
+                  </g>
+                  <circle cx="24" cy="24" r="9" fill="#fde047" stroke="#facc15" stroke-width="1.5" />
+                </svg>
+
+                <!-- Sunset -->
+                <svg
+                  v-else-if="dayPhase === 'sunset'"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  class="h-32 w-32"
+                >
+                  <defs>
+                    <linearGradient id="dashSunsetSky" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#fdba74" stop-opacity="0.45" />
+                      <stop offset="100%" stop-color="#ea580c" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <rect x="4" y="8" width="40" height="22" rx="4" fill="url(#dashSunsetSky)" />
+                  <circle cx="24" cy="28" r="9" fill="#fb923c" />
+                  <path d="M6 34c6-4 12-4 18 0s12 4 18 0" fill="none" stroke="#fdba74" stroke-width="2" stroke-linecap="round" />
+                  <path d="M4 38h40" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" opacity="0.9" />
+                </svg>
+
+                <!-- Night moon -->
+                <svg
+                  v-else
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  class="h-32 w-32"
+                >
+                  <defs>
+                    <radialGradient id="dashMoonGlow" cx="42%" cy="38%" r="55%">
+                      <stop offset="0%" stop-color="#f1f5f9" stop-opacity="1" />
+                      <stop offset="55%" stop-color="#cbd5e1" stop-opacity="0.95" />
+                      <stop offset="100%" stop-color="#64748b" stop-opacity="0.35" />
+                    </radialGradient>
+                  </defs>
+                  <path
+                    d="M30 8.5a14 14 0 1 0 9.5 24.2A12 12 0 1 1 30 8.5Z"
+                    fill="url(#dashMoonGlow)"
+                  />
+                  <circle cx="36" cy="12" r="1.2" fill="#f8fafc" opacity="0.85" />
+                  <circle cx="40" cy="18" r="0.8" fill="#e2e8f0" opacity="0.7" />
+                </svg>
               </div>
             </div>
 

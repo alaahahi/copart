@@ -60,7 +60,7 @@ class SystemBrandingService
         $path = str_replace('\\', '/', $path);
 
         // Current location: public/img/branding/...
-        if (preg_match('#(?:^|/)(?:public/)?(img/branding/[^/?#]+)$#', $path, $m)) {
+        if (preg_match('#(?:^|/)(?:public/)?(img/branding/[^/?]+)$#', $path, $m)) {
             $rel = $m[1];
             if (File::isFile(public_path($rel))) {
                 return '/public/'.$rel;
@@ -70,7 +70,7 @@ class SystemBrandingService
         }
 
         // Legacy: /storage/branding/... or /public/storage/branding/...
-        if (preg_match('#(?:^|/)(?:public/)?storage/(branding/[^/?#]+)$#', $path, $m)) {
+        if (preg_match('#(?:^|/)(?:public/)?storage/(branding/[^/?]+)$#', $path, $m)) {
             $storageRel = $m[1];
             $basename = basename($storageRel);
             $newRel = self::REL_DIR.'/'.$basename;
