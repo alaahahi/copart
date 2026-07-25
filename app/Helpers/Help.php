@@ -118,7 +118,7 @@ class Help
         }
 
         // Legacy paths omitted /public (404 when site is served from project root).
-        if (preg_match('#^/img/#', $path) || preg_match('#^/storage/#', $path)) {
+        if (preg_match('#^/(img|storage|css)/#', $path)) {
             $path = '/public'.$path;
         }
 
