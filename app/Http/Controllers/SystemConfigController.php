@@ -55,6 +55,10 @@ class SystemConfigController extends Controller
             ]);
         }
 
+        if ($this->branding->syncStoredPaths($config)) {
+            $config->save();
+        }
+
         return Inertia::render('Settings/Index', [
             'config' => $this->configForClient($config),
             'waSources' => WhatsAppQueueService::SOURCES,
@@ -174,15 +178,9 @@ class SystemConfigController extends Controller
                 $this->branding->delete($config->{$field});
                 $config->{$field} = $this->branding->store($request->file($field), $field);
             } elseif (! empty($config->{$field})) {
-                // Persist /public/storage/... for legacy /storage/... (or absolute) values.
-                $normalized = Help::normalizePublicPath($config->{$field});
-                if ($normalized) {
-                    $pathOnly = parse_url($normalized, PHP_URL_PATH) ?: $normalized;
-                    $pathOnly = Help::normalizePublicPath($pathOnly);
-                    if ($pathOnly && $pathOnly !== $config->{$field}) {
-                        $config->{$field} = $pathOnly;
-                    }
-                }
+                // Migrate legacy /storage/branding → /public/img/branding when file exists.
+                $resolved = $this->branding->resolve($config->{$field});
+                $config->{$field} = $resolved;
             }
         }
     }
@@ -197,10 +195,13 @@ class SystemConfigController extends Controller
         }
 
         $data = $config->toArray();
-        foreach (array_merge($this->logoFields, ['app_logo', 'app_cover']) as $field) {
+        foreach ($this->logoFields as $field) {
             if (! empty($data[$field])) {
                 $data[$field] = Help::normalizePublicPath($data[$field]);
             }
+        }
+        foreach (['app_logo', 'app_cover'] as $field) {
+            $data[$field] = $this->branding->resolve($data[$field] ?? null);
         }
 
         return $data;

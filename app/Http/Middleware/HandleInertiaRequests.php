@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Helpers\Help;
 use App\Models\SystemConfig;
+use App\Services\SystemBrandingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tightenco\Ziggy\Ziggy;
@@ -49,11 +49,13 @@ class HandleInertiaRequests extends Middleware
             ->select(['app_logo', 'app_cover', 'first_title_ar'])
             ->first();
 
+        $brandingService = app(SystemBrandingService::class);
+
         return array_merge(parent::share($request), [
             'appName' => $branding?->first_title_ar ?: config('app.name'),
             'branding' => [
-                'logo' => Help::normalizePublicPath($branding?->app_logo),
-                'cover' => Help::normalizePublicPath($branding?->app_cover),
+                'logo' => $brandingService->resolve($branding?->app_logo),
+                'cover' => $brandingService->resolve($branding?->app_cover),
             ],
             'auth' => [
                 'user' => $user,

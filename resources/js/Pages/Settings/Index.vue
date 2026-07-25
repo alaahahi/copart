@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import TagChipList from "@/Components/TagChipList.vue";
-import { Head } from "@inertiajs/inertia-vue3";
+import { Head, usePage } from "@inertiajs/inertia-vue3";
 import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
@@ -10,6 +10,7 @@ import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
 
 const { t } = useI18n();
 const toast = useToast();
+const page = usePage();
 
 const props = defineProps({
   config: Object,
@@ -184,6 +185,11 @@ function brandingSrc(field) {
   return brandingPreviews.value[field] || resolvePublicAsset(brandingPaths.value[field]) || "";
 }
 
+function onBrandingImgError(field) {
+  if (brandingPreviews.value[field]) return;
+  brandingPaths.value[field] = "";
+}
+
 function clearBranding(field) {
   brandingFiles.value[field] = null;
   if (brandingPreviews.value[field]) {
@@ -230,6 +236,15 @@ async function save() {
       });
       brandingPaths.value.app_logo = data.config.app_logo || "";
       brandingPaths.value.app_cover = data.config.app_cover || "";
+      // Keep header / login branding in sync without a full reload.
+      if (!page.props.value.branding) {
+        page.props.value.branding = {};
+      }
+      page.props.value.branding.logo = data.config.app_logo || null;
+      page.props.value.branding.cover = data.config.app_cover || null;
+      if (data.config.first_title_ar) {
+        page.props.value.appName = data.config.first_title_ar;
+      }
       form.value.wa_enabled = !!data.config.wa_enabled;
       form.value.wa_base_host =
         data.config.wa_base_host || form.value.wa_base_host;
@@ -244,8 +259,13 @@ async function save() {
     logoFiles.value = {};
     logoPreviews.value = {};
     brandingFiles.value = {};
+    Object.values(brandingPreviews.value).forEach((url) => {
+      if (url) URL.revokeObjectURL(url);
+    });
     brandingPreviews.value = {};
     removeBranding.value = { app_logo: false, app_cover: false };
+    if (logoInput.value) logoInput.value.value = "";
+    if (coverInput.value) coverInput.value.value = "";
     successMsg.value = t("settingsSaved");
   } catch (e) {
     errorMsg.value =
@@ -314,6 +334,7 @@ function preview(type) {
                   :src="brandingSrc('app_logo')"
                   alt=""
                   class="max-h-20 max-w-full object-contain"
+                  @error="onBrandingImgError('app_logo')"
                 />
                 <span v-else class="text-sm text-slate-400">{{
                   $t("noImage")
@@ -360,6 +381,7 @@ function preview(type) {
                   :src="brandingSrc('app_cover')"
                   alt=""
                   class="w-full h-28 object-cover"
+                  @error="onBrandingImgError('app_cover')"
                 />
                 <span v-else class="text-sm text-slate-400 p-3">{{
                   $t("noImage")

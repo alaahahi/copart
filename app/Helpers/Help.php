@@ -51,7 +51,7 @@ class Help
      * Normalize a public web path for this deploy (docroot is often project root,
      * so static files live under /public/... — matching uploads elsewhere).
      *
-     * Accepts stored values like /img/receipt/x.png, /storage/branding/..., or full URLs.
+     * Accepts stored values like /img/receipt/x.png, /img/branding/..., /storage/..., or full URLs.
      */
     public static function normalizePublicPath(?string $path): ?string
     {
