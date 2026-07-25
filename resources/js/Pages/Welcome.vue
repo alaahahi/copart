@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link, usePage } from '@inertiajs/inertia-vue3';
 import { computed } from 'vue';
+import { resolvePublicAsset } from '@/utils/resolvePublicAsset';
 
 const props = defineProps({
     canLogin: Boolean,
@@ -13,7 +14,7 @@ const props = defineProps({
 const page = usePage();
 
 const heroSrc = computed(() => {
-  return (
+  return resolvePublicAsset(
     page.props.value.branding?.cover ||
     props.config?.app_cover ||
     page.props.value.branding?.logo ||

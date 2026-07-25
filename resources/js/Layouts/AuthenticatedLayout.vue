@@ -7,12 +7,16 @@ import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import { Link, usePage } from "@inertiajs/inertia-vue3";
 import { useI18n } from "vue-i18n";
 import DarkModeToggle from "@/Components/DarkToggle.vue";
+import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
 
 const showingNavigationDropdown = ref(false);
 const page = usePage();
 const i18n = useI18n();
 
 const user = computed(() => page.props.value.auth?.user ?? {});
+const brandingLogo = computed(() =>
+  resolvePublicAsset(page.props.value.branding?.logo || "")
+);
 
 const switchLocale = (locale) => {
   i18n.locale.value = locale;
@@ -60,8 +64,8 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
                 class="inline-flex min-h-[44px] items-center gap-2.5 rounded-2xl px-3 py-2 text-right transition hover:bg-slate-100 dark:hover:bg-slate-800/80"
               >
                 <img
-                  v-if="$page.props.branding?.logo"
-                  :src="$page.props.branding.logo"
+                  v-if="brandingLogo"
+                  :src="brandingLogo"
                   alt=""
                   class="h-9 w-9 rounded-lg object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                 />

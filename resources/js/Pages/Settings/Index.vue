@@ -6,6 +6,7 @@ import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
 import { useToast } from "vue-toastification";
+import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
 
 const { t } = useI18n();
 const toast = useToast();
@@ -163,22 +164,7 @@ function onLogoChange(field, event) {
   logoPreviews.value[field] = URL.createObjectURL(file);
 }
 
-/** Match ERP static paths under /public (legacy /img/... still works). */
-function resolvePublicAsset(path) {
-  if (!path) return "";
-  if (/^(https?:)?\/\//i.test(path) || path.startsWith("blob:") || path.startsWith("data:")) {
-    return path;
-  }
-  let p = path.startsWith("/") ? path : `/${path}`;
-  while (p.startsWith("/public/public/")) {
-    p = p.slice(7);
-  }
-  if (p.startsWith("/img/")) {
-    p = `/public${p}`;
-  }
-  return p;
-}
-
+/** Match ERP static paths under /public (legacy /img/... and /storage/... still work). */
 function logoSrc(field) {
   return logoPreviews.value[field] || resolvePublicAsset(logoPaths.value[field]) || "";
 }
@@ -195,7 +181,7 @@ function brandingSrc(field) {
   if (removeBranding.value[field] && !brandingPreviews.value[field]) {
     return "";
   }
-  return brandingPreviews.value[field] || brandingPaths.value[field] || "";
+  return brandingPreviews.value[field] || resolvePublicAsset(brandingPaths.value[field]) || "";
 }
 
 function clearBranding(field) {

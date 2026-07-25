@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Helpers\Help;
 use App\Models\SystemConfig;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -51,8 +52,8 @@ class HandleInertiaRequests extends Middleware
         return array_merge(parent::share($request), [
             'appName' => $branding?->first_title_ar ?: config('app.name'),
             'branding' => [
-                'logo' => $branding?->app_logo,
-                'cover' => $branding?->app_cover,
+                'logo' => Help::normalizePublicPath($branding?->app_logo),
+                'cover' => Help::normalizePublicPath($branding?->app_cover),
             ],
             'auth' => [
                 'user' => $user,

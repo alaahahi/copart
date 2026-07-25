@@ -1,12 +1,15 @@
 <script setup>
 import { usePage } from '@inertiajs/inertia-vue3';
 import { computed } from 'vue';
+import { resolvePublicAsset } from '@/utils/resolvePublicAsset';
 
 const page = usePage();
-const coverUrl = computed(
-  () => page.props.value.branding?.cover || '/img/logo-color.png'
+const coverUrl = computed(() =>
+  resolvePublicAsset(page.props.value.branding?.cover || '/img/logo-color.png')
 );
-const logoUrl = computed(() => page.props.value.branding?.logo || '');
+const logoUrl = computed(() =>
+  resolvePublicAsset(page.props.value.branding?.logo || '')
+);
 </script>
 
 <template>

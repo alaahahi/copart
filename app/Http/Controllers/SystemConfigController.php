@@ -173,12 +173,22 @@ class SystemConfigController extends Controller
             if ($request->hasFile($field)) {
                 $this->branding->delete($config->{$field});
                 $config->{$field} = $this->branding->store($request->file($field), $field);
+            } elseif (! empty($config->{$field})) {
+                // Persist /public/storage/... for legacy /storage/... (or absolute) values.
+                $normalized = Help::normalizePublicPath($config->{$field});
+                if ($normalized) {
+                    $pathOnly = parse_url($normalized, PHP_URL_PATH) ?: $normalized;
+                    $pathOnly = Help::normalizePublicPath($pathOnly);
+                    if ($pathOnly && $pathOnly !== $config->{$field}) {
+                        $config->{$field} = $pathOnly;
+                    }
+                }
             }
         }
     }
 
     /**
-     * Expose config to Inertia/JSON with receipt logo paths normalized for /public deploy.
+     * Expose config to Inertia/JSON with receipt/branding paths normalized for /public deploy.
      */
     protected function configForClient(?SystemConfig $config): array
     {
@@ -187,7 +197,7 @@ class SystemConfigController extends Controller
         }
 
         $data = $config->toArray();
-        foreach ($this->logoFields as $field) {
+        foreach (array_merge($this->logoFields, ['app_logo', 'app_cover']) as $field) {
             if (! empty($data[$field])) {
                 $data[$field] = Help::normalizePublicPath($data[$field]);
             }
