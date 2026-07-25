@@ -17,11 +17,15 @@ npx playwright install chromium
 Optional overrides:
 
 ```env
+QA_E2E_ENABLED=true
 E2E_BASE_URL=https://copart.test
 E2E_ADMIN_EMAIL=admin@admin.com
 E2E_ADMIN_PASSWORD=12345678
 QA_E2E_TIMEOUT=900
 ```
+
+> **Live / production:** keep `QA_E2E_ENABLED=false` (default). Routes `/qa/e2e*` return **404** until enabled.
+> **إعادة التفعيل محلياً:** ضع `QA_E2E_ENABLED=true` في `.env` ثم `php artisan config:clear`.
 
 ## Run locally / التشغيل محلياً
 

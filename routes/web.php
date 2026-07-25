@@ -175,7 +175,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
 
     Route::get('wallet',[AccountingController::class, 'wallet'])->name("wallet");
 
-    Route::middleware('admin')->prefix('qa')->group(function () {
+    Route::middleware(['qa.e2e', 'admin'])->prefix('qa')->group(function () {
         Route::get('e2e', [QaE2eController::class, 'index'])->name('qa.e2e');
         Route::get('e2e/last', [QaE2eController::class, 'last'])->name('qa.e2e.last');
         Route::post('e2e/run', [QaE2eController::class, 'run'])->name('qa.e2e.run');

@@ -6,7 +6,14 @@ return [
     |--------------------------------------------------------------------------
     | QA / Playwright monitoring
     |--------------------------------------------------------------------------
+    |
+    | HTTP panel + run APIs (/qa/e2e*) stay off unless explicitly enabled.
+    | Production/live: leave QA_E2E_ENABLED=false (or unset).
+    | Local re-enable: QA_E2E_ENABLED=true
+    |
     */
+
+    'enabled' => filter_var(env('QA_E2E_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     'admin_type_ids' => array_map('intval', array_filter(explode(',', env('QA_ADMIN_TYPE_IDS', '1')))),
 
