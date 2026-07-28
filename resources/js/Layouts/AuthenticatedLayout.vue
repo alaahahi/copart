@@ -292,7 +292,7 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
                   <ResponsiveNavLink
                     v-if="Number(user.type_id) === 1"
                     :href="route('settings')"
-                    :active="route().current('settings')"
+                    :active="route().current('settings') || route().current('settings.users')"
                   >
                     {{ $t("settings") }}
                   </ResponsiveNavLink>

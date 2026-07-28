@@ -17,6 +17,7 @@ use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\SystemConfigController;
+use App\Http\Controllers\Settings\UserManagementController;
 use App\Http\Controllers\QaE2eController;
 
 use App\Models\SystemConfig;
@@ -157,6 +158,14 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('settings',[SystemConfigController::class, 'index'])->name('settings');
     Route::get('settings/receipt-preview',[SystemConfigController::class, 'previewReceipt'])->name('settings.receipt_preview');
     Route::post('settings',[SystemConfigController::class, 'update'])->name('settings.update');
+
+    Route::middleware('admin')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('users', [UserManagementController::class, 'index'])->name('users');
+        Route::post('users', [UserManagementController::class, 'store'])->name('users.store');
+        Route::put('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
+        Route::put('users/{user}/password', [UserManagementController::class, 'resetPassword'])->name('users.password');
+        Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+    });
     Route::post('whatsapp/debt-notice',[SystemConfigController::class, 'queueDebtNotice'])->name('whatsapp.debt_notice');
     Route::get('sync-monitor', function () {
         return Inertia::render('SyncMonitor');

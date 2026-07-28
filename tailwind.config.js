@@ -21,6 +21,18 @@ module.exports = {
                 "vtd-primary": colors.sky, // Light mode Datepicker color
                 "vtd-secondary": colors.gray, // Dark mode Datepicker color
               },
+            keyframes: {
+                'pin-shake': {
+                    '0%, 100%': { transform: 'translateX(0)' },
+                    '20%': { transform: 'translateX(-6px)' },
+                    '40%': { transform: 'translateX(6px)' },
+                    '60%': { transform: 'translateX(-4px)' },
+                    '80%': { transform: 'translateX(4px)' },
+                },
+            },
+            animation: {
+                'pin-shake': 'pin-shake 0.4s ease-in-out',
+            },
         },
     },
 

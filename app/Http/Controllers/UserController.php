@@ -62,7 +62,12 @@ class UserController extends Controller
     {
         $owner_id=Auth::user()->owner_id;
         $q = request()->query('q');
-        $clients = User::with('wallet')->where('owner_id',$owner_id)->where('type_id', $this->userClient)->get();
+        // Real traders only — hide system / commission vaults (عمولة …) from account switcher
+        $clientsQuery = User::with('wallet')
+            ->where('owner_id', $owner_id)
+            ->where('type_id', $this->userClient);
+        SystemWalletService::scopeExcludeSystemVaults($clientsQuery);
+        $clients = $clientsQuery->orderBy('name')->get();
         $client= user::find($id);
         $auctions = \App\Models\Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
         return Inertia::render('Clients/Show', ['url'=>$this->url,'client'=>$client,'clients'=>$clients,'client_id'=>$id,'q'=>$q,'auctions'=>$auctions]);
@@ -145,10 +150,8 @@ class UserController extends Controller
             SystemWalletService::scopeSystemVaults($query, (int) $userAccount, (int) $userClient);
         } else {
             $query->where('users.type_id', $userClient);
-
-            if ($isTraders || $isTradersQasa) {
-                SystemWalletService::scopeExcludeSystemVaults($query);
-            }
+            // Merchant lists (all / traders / traders_qasa): never mix in system/commission vaults
+            SystemWalletService::scopeExcludeSystemVaults($query);
 
             if ($isTradersQasa) {
                 // تجار لديهم قاصة فقط (ليس قاصة نظام)

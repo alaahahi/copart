@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import TagChipList from "@/Components/TagChipList.vue";
-import { Head, usePage } from "@inertiajs/inertia-vue3";
+import { Head, Link, usePage } from "@inertiajs/inertia-vue3";
 import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
@@ -296,6 +296,26 @@ function preview(type) {
 
     <div class="py-8">
       <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div
+          v-if="Number($page.props.auth.user.type_id) === 1"
+          class="bg-slate-900 shadow rounded-xl p-5 border border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+        >
+          <div>
+            <h3 class="text-lg font-bold text-white">
+              {{ $t("userManagement") }}
+            </h3>
+            <p class="text-sm text-slate-300 mt-1">
+              {{ $t("userManagementHint") }}
+            </p>
+          </div>
+          <Link
+            :href="route('settings.users')"
+            class="inline-flex justify-center px-5 py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500"
+          >
+            {{ $t("manageUsers") }}
+          </Link>
+        </div>
+
         <div
           v-if="successMsg"
           class="rounded-lg bg-emerald-900/80 text-emerald-100 border border-emerald-600/50 px-4 py-3 text-sm font-semibold"

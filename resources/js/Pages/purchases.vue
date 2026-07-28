@@ -9,7 +9,7 @@ import ModalAddCarPayment from "@/Components/ModalAddCarPayment.vue";
 import ModalDelCar from "@/Components/ModalDelCar.vue";
 import { useToast } from "vue-toastification";
 import axios from 'axios';
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import show from "@/Components/icon/show.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
@@ -18,20 +18,77 @@ import "v3-infinite-loading/lib/style.css";
 import { erbilTransferSubtotal, ensureErbilFormFields } from "@/utils/carFields";
 import { asNumber, formatMoney } from "@/utils/formatMoney";
 import { carPaymentStatusMeta } from "@/utils/carPaymentStatus";
+import { carProfit } from "@/utils/carProfit";
 import debounce from 'lodash/debounce';
 import SearchInput from "@/Components/SearchInput.vue";
 import CarsGridView from "@/Components/CarsGridView.vue";
+import PinOtpInput from "@/Components/PinOtpInput.vue";
 
 defineProps({ client: Array, auctions: { type: Array, default: () => [] } });
 
 const toast = useToast();
 const money = (v) => formatMoney(v, "$");
 
-const PURCHASES_PIN = "12457";
+/** 6-digit frontend gate (was 12457 → padded); unlock expires after 30 minutes */
+const PURCHASES_PIN = "124570";
 const PIN_STORAGE_KEY = "purchases-pin-ok";
+const PIN_OK_AT_KEY = "purchases-pin-ok-at";
+const PIN_TTL_MS = 30 * 60 * 1000;
 const pinUnlocked = ref(false);
 const pinInput = ref("");
-const pinError = ref(false);
+const pinStatus = ref("idle"); // idle | error | success
+const pinOtpRef = ref(null);
+let pinUnlockTimer = null;
+let pinExpiryInterval = null;
+
+function clearPinStorage() {
+  try {
+    sessionStorage.removeItem(PIN_STORAGE_KEY);
+    sessionStorage.removeItem(PIN_OK_AT_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function lockPinGate() {
+  pinUnlocked.value = false;
+  pinStatus.value = "idle";
+  pinInput.value = "";
+  clearPinStorage();
+}
+
+function isPinUnlockValid() {
+  try {
+    const raw = sessionStorage.getItem(PIN_OK_AT_KEY);
+    const unlockedAt = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(unlockedAt) || unlockedAt <= 0) {
+      clearPinStorage();
+      return false;
+    }
+    if (Date.now() - unlockedAt >= PIN_TTL_MS) {
+      clearPinStorage();
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function refreshPinUnlockState() {
+  const ok = isPinUnlockValid();
+  if (!ok && pinUnlocked.value) {
+    lockPinGate();
+    return;
+  }
+  pinUnlocked.value = ok;
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    refreshPinUnlockState();
+  }
+}
 
 const CARS_VIEW_KEY = "purchases-cars-view";
 const carsViewMode = ref(
@@ -51,33 +108,47 @@ const setCarsViewMode = (mode) => {
 };
 
 onMounted(() => {
-  try {
-    pinUnlocked.value = sessionStorage.getItem(PIN_STORAGE_KEY) === "1";
-  } catch {
-    pinUnlocked.value = false;
-  }
+  refreshPinUnlockState();
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  pinExpiryInterval = setInterval(refreshPinUnlockState, 60 * 1000);
 });
 
-function submitPin() {
-  const entered = String(pinInput.value || "").trim();
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  if (pinExpiryInterval) clearInterval(pinExpiryInterval);
+  if (pinUnlockTimer) clearTimeout(pinUnlockTimer);
+});
+
+function onPinComplete(code) {
+  if (pinStatus.value === "success") return;
+  const entered = String(code || "").trim();
   if (entered === PURCHASES_PIN) {
-    pinUnlocked.value = true;
-    pinError.value = false;
-    pinInput.value = "";
-    try {
-      sessionStorage.setItem(PIN_STORAGE_KEY, "1");
-    } catch {
-      /* ignore quota / private mode */
-    }
+    pinStatus.value = "success";
+    if (pinUnlockTimer) clearTimeout(pinUnlockTimer);
+    pinUnlockTimer = setTimeout(() => {
+      const unlockedAt = Date.now();
+      pinUnlocked.value = true;
+      pinInput.value = "";
+      try {
+        sessionStorage.setItem(PIN_STORAGE_KEY, "1");
+        sessionStorage.setItem(PIN_OK_AT_KEY, String(unlockedAt));
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }, 320);
     return;
   }
-  pinError.value = true;
-  pinInput.value = "";
+  pinStatus.value = "error";
   toast.error("رمز غير صحيح", {
     timeout: 3000,
     position: "bottom-right",
     rtl: true,
   });
+  setTimeout(() => {
+    pinInput.value = "";
+    pinStatus.value = "idle";
+    pinOtpRef.value?.clearAndFocus();
+  }, 450);
 }
 
 const data = ref({});
@@ -263,7 +334,7 @@ function rowClass(row) {
 }
 
 function rowProfit(row) {
-  return asNumber(row.total_s) - asNumber(row.total);
+  return carProfit(row);
 }
 </script>
 
@@ -336,7 +407,7 @@ function rowProfit(row) {
   </ModalDelCar>
 
   <AuthenticatedLayout>
-    <!-- PIN unlock gate (frontend only, per-tab via sessionStorage) -->
+    <!-- PIN unlock gate (frontend only, per-tab; expires after 30 minutes) -->
     <section
       v-if="!pinUnlocked"
       class="flex min-h-[70vh] items-center justify-center px-4 py-10"
@@ -350,35 +421,32 @@ function rowProfit(row) {
         <p class="mb-6 text-center text-sm text-slate-200">
           أدخل رمز الدخول لعرض المشتريات
         </p>
-        <form class="space-y-4" @submit.prevent="submitPin">
+        <div class="space-y-4">
           <div>
-            <label for="purchases-pin" class="mb-1.5 block text-sm font-medium text-slate-200">
+            <p
+              id="purchases-pin-label"
+              class="mb-3 text-center text-sm font-medium text-slate-200"
+            >
               رمز الدخول
-            </label>
-            <input
-              id="purchases-pin"
+            </p>
+            <PinOtpInput
+              ref="pinOtpRef"
               v-model="pinInput"
-              type="password"
-              inputmode="numeric"
-              autocomplete="off"
-              maxlength="12"
-              autofocus
-              class="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-center text-lg tracking-[0.35em] text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-              :class="pinError ? 'border-rose-500' : ''"
-              placeholder="•••••"
-              @input="pinError = false"
+              :length="6"
+              :status="pinStatus"
+              :disabled="pinStatus === 'success'"
+              aria-label-prefix="خانة رمز الدخول"
+              @complete="onPinComplete"
             />
-            <p v-if="pinError" class="mt-2 text-center text-sm text-rose-300">
+            <p
+              v-if="pinStatus === 'error'"
+              class="mt-3 text-center text-sm text-rose-300"
+              role="alert"
+            >
               رمز غير صحيح
             </p>
           </div>
-          <button
-            type="submit"
-            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
-          >
-            فتح الصفحة
-          </button>
-        </form>
+        </div>
       </div>
     </section>
 
@@ -501,6 +569,9 @@ function rowProfit(row) {
                 >
                   {{ money(kpiProfit) }}
                 </div>
+                <div class="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                  {{ $t("profit_sales_only_hint") }}
+                </div>
               </div>
             </div>
           </div>
@@ -590,9 +661,16 @@ function rowProfit(row) {
                     <td class="px-1 py-2 tabular-nums text-emerald-700 dark:text-emerald-300">{{ money(row.paid) }}</td>
                     <td
                       class="px-1 py-2 font-semibold tabular-nums"
-                      :class="rowProfit(row) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'"
+                      :class="
+                        rowProfit(row) == null
+                          ? 'text-slate-500 dark:text-slate-400'
+                          : rowProfit(row) >= 0
+                            ? 'text-emerald-700 dark:text-emerald-300'
+                            : 'text-rose-700 dark:text-rose-300'
+                      "
                     >
-                      {{ money(rowProfit(row)) }}
+                      <template v-if="rowProfit(row) == null">{{ $t("profit_not_calculated") }}</template>
+                      <template v-else>{{ money(rowProfit(row)) }}</template>
                     </td>
                     <td class="whitespace-nowrap px-1 py-2">{{ row.date }}</td>
                     <td class="max-w-[140px] truncate px-1 py-2" :title="row.note">{{ row.note }}</td>

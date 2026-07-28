@@ -49,6 +49,28 @@ class CarService
     }
 
     /**
+     * Car is "in sales" when it has a sales total (total_s > 0).
+     * Purchase-only cars must not display cost as a negative "loss".
+     */
+    public function hasSalePricing(?float $totalS): bool
+    {
+        return (float) ($totalS ?? 0) > 0;
+    }
+
+    /**
+     * Profit = sales total − purchase total, only once sale pricing exists.
+     * Otherwise 0 (not yet calculated — not a realized deficit).
+     */
+    public function computeProfit(?float $totalS, ?float $total): float
+    {
+        if (! $this->hasSalePricing($totalS)) {
+            return 0.0;
+        }
+
+        return (float) $totalS - (float) ($total ?? 0);
+    }
+
+    /**
      * Soft-delete a car row and renumber the remaining (non-deleted) cars'
      * display sequence ("no"). The car row and its full history (payments,
      * transactions, expenses, images) are preserved — this NEVER
@@ -65,16 +87,31 @@ class CarService
         // SoftDeletes trait -> UPDATE ... SET deleted_at = now() (never a real DELETE).
         $car->delete();
 
-        DB::statement('SET @row_number = 0');
-        DB::table('car')
-            ->whereNull('deleted_at') // exclude soft-deleted cars from the sequence
-            ->orderBy('id')
-            ->update(['no' => DB::raw('(@row_number:=@row_number + 1)')]);
+        $this->renumberActiveCars();
 
         Log::info('Car soft-deleted', array_merge($snapshot, [
             'owner_id' => $ownerId,
             'deleted_by' => Auth::id(),
             'deleted_at' => now()->toDateTimeString(),
         ]));
+    }
+
+    /**
+     * Renumber display sequence ("no") for non-deleted cars.
+     * PHP-side loop works on both MySQL and SQLite — avoids MySQL-only
+     * user variables (SET @row_number / @row_number := …) that SQLite rejects.
+     */
+    public function renumberActiveCars(): void
+    {
+        $ids = DB::table('car')
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->pluck('id');
+
+        $no = 1;
+        foreach ($ids as $id) {
+            DB::table('car')->where('id', $id)->update(['no' => $no]);
+            $no++;
+        }
     }
 }

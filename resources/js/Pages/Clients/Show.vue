@@ -748,7 +748,10 @@ function checkClientBalance(_v) {
                   {{ Math.abs(asNumber(laravelData?.cars_paid)) }}
                 </div>
               </div>
-              <div class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-600 dark:bg-slate-800">
+              <div
+                v-if="asNumber(laravelData?.cars_discount) > 0"
+                class="rounded-xl border border-amber-400 bg-white px-4 py-3 shadow-sm dark:border-amber-600 dark:bg-slate-800"
+              >
                 <div class="text-xs font-semibold text-amber-800 dark:text-amber-300">{{ $t("total_discounts_usd") }}</div>
                 <div class="mt-1 font-mono text-lg font-bold text-amber-700 dark:text-amber-200">
                   {{ laravelData?.cars_discount ?? 0 }}

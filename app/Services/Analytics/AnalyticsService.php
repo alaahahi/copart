@@ -6,7 +6,9 @@ use App\Models\Car;
 use App\Models\CarExpenses;
 use App\Models\User;
 use App\Models\UserType;
+use App\Services\CarService;
 use App\Services\LedgerService;
+use App\Services\SystemWalletService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -70,9 +72,12 @@ class AnalyticsService
     {
         $clientTypeId = $this->clientTypeId();
 
-        return User::query()
+        $query = User::query()
             ->where('owner_id', $ownerId)
-            ->where('type_id', $clientTypeId)
+            ->where('type_id', $clientTypeId);
+        SystemWalletService::scopeExcludeSystemVaults($query);
+
+        return $query
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])
@@ -99,7 +104,12 @@ class AnalyticsService
         $cost = (float) $cars->sum('total');
         $paid = (float) $cars->sum('paid');
         $discount = (float) $cars->sum('discount');
-        $netProfit = (float) $cars->sum('profit');
+        // Profit only for cars with sale pricing — purchase-only cost is not a "loss".
+        $carService = app(CarService::class);
+        $netProfit = (float) $cars->sum(fn ($c) => $carService->computeProfit(
+            (float) ($c->total_s ?? 0),
+            (float) ($c->total ?? 0)
+        ));
         $margin = $sales > 0 ? round(($netProfit / $sales) * 100, 2) : 0.0;
 
         $periodExpenses = $this->periodExpensesTotal($ownerId, $from, $to, $currency);
@@ -131,7 +141,14 @@ class AnalyticsService
             'cars_count' => $cars->count(),
             'cars_unpaid' => $cars->where('results', 0)->count(),
             'cars_paid' => $cars->whereIn('results', [1, 2])->count(),
-            'loss_cars' => $cars->filter(fn ($c) => (float) $c->profit < 0)->count(),
+            'loss_cars' => $cars->filter(function ($c) use ($carService) {
+                $profit = $carService->computeProfit(
+                    (float) ($c->total_s ?? 0),
+                    (float) ($c->total ?? 0)
+                );
+
+                return (float) ($c->total_s ?? 0) > 0 && $profit < 0;
+            })->count(),
         ];
     }
 
@@ -152,7 +169,7 @@ class AnalyticsService
                 DB::raw('COUNT(*) as cars_count'),
                 DB::raw('COALESCE(SUM(total_s), 0) as sales'),
                 DB::raw('COALESCE(SUM(total), 0) as cost'),
-                DB::raw('COALESCE(SUM(profit), 0) as profit'),
+                DB::raw('COALESCE(SUM(CASE WHEN COALESCE(total_s, 0) > 0 THEN COALESCE(total_s, 0) - COALESCE(total, 0) ELSE 0 END), 0) as profit'),
                 DB::raw('COALESCE(SUM(paid), 0) as paid'),
                 DB::raw('COALESCE(SUM(discount), 0) as discount'),
             ])
@@ -211,7 +228,14 @@ class AnalyticsService
 
         $avgSale = $cars->avg('total_s') ?? 0;
         $avgCost = $cars->avg('total') ?? 0;
-        $avgProfit = $cars->avg('profit') ?? 0;
+        $carService = app(CarService::class);
+        $soldCars = $cars->filter(fn ($c) => (float) ($c->total_s ?? 0) > 0);
+        $avgProfit = $soldCars->isEmpty()
+            ? 0
+            : $soldCars->avg(fn ($c) => $carService->computeProfit(
+                (float) ($c->total_s ?? 0),
+                (float) ($c->total ?? 0)
+            ));
 
         $buckets = [
             'loss' => 0,
@@ -222,13 +246,11 @@ class AnalyticsService
 
         foreach ($cars as $car) {
             $sale = (float) $car->total_s;
-            $profit = (float) $car->profit;
             if ($sale <= 0) {
-                if ($profit < 0) {
-                    $buckets['loss']++;
-                }
+                // Purchase-only: not counted as loss until registered in sales.
                 continue;
             }
+            $profit = $carService->computeProfit($sale, (float) ($car->total ?? 0));
             $margin = ($profit / $sale) * 100;
             if ($margin < 0) {
                 $buckets['loss']++;
@@ -241,8 +263,9 @@ class AnalyticsService
             }
         }
 
-        $mapCar = function ($car) {
+        $mapCar = function ($car) use ($carService) {
             $sale = (float) $car->total_s;
+            $profit = $carService->computeProfit($sale, (float) ($car->total ?? 0));
 
             return [
                 'id' => $car->id,
@@ -250,13 +273,14 @@ class AnalyticsService
                 'vin' => $car->vin,
                 'sales' => round((float) $car->total_s, 2),
                 'cost' => round((float) $car->total, 2),
-                'profit' => round((float) $car->profit, 2),
-                'margin_pct' => $sale > 0 ? round(((float) $car->profit / $sale) * 100, 2) : 0.0,
+                'profit' => round($profit, 2),
+                'margin_pct' => $sale > 0 ? round(($profit / $sale) * 100, 2) : 0.0,
                 'date' => $car->date,
             ];
         };
 
-        [$top, $worst] = $this->splitTopAndWorstCars($cars, $mapCar, 10);
+        // Rank only cars that have sale pricing.
+        [$top, $worst] = $this->splitTopAndWorstCars($soldCars->values(), $mapCar, 10);
 
         return [
             'avg_sale' => round((float) $avgSale, 2),
@@ -291,24 +315,26 @@ class AnalyticsService
         if ($count === 1) {
             $car = $cars->first();
             $mapped = [$mapCar($car)];
+            $profit = (float) ($car->total_s ?? 0) - (float) ($car->total ?? 0);
 
-            return ((float) $car->profit >= 0)
+            return ($profit >= 0)
                 ? [$mapped, []]
                 : [[], $mapped];
         }
 
         // Cap each side so top and worst never share a car (e.g. 2 cars → 1 each).
         $perSide = min($limit, intdiv($count, 2));
+        $profitOf = fn ($car) => (float) ($car->total_s ?? 0) - (float) ($car->total ?? 0);
 
         $top = $cars
-            ->sortByDesc(fn ($car) => [(float) $car->profit, $car->id])
+            ->sortByDesc(fn ($car) => [$profitOf($car), $car->id])
             ->take($perSide)
             ->values()
             ->map($mapCar)
             ->all();
 
         $worst = $cars
-            ->sortBy(fn ($car) => [(float) $car->profit, $car->id])
+            ->sortBy(fn ($car) => [$profitOf($car), $car->id])
             ->take($perSide)
             ->values()
             ->map($mapCar)

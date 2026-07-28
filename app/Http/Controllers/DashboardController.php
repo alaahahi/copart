@@ -68,7 +68,12 @@ class DashboardController extends Controller
         $owner_id=Auth::user()->owner_id;
         $car = Car::all()->where('owner_id',$owner_id);
         $allCars = $car->count();
-        $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->get();
+        // Real traders only (include empty); exclude system / commission vaults
+        $clientQuery = User::query()
+            ->where('owner_id', $owner_id)
+            ->where('type_id', $this->userClient);
+        SystemWalletService::scopeExcludeSystemVaults($clientQuery);
+        $client = $clientQuery->orderBy('name')->get();
         $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('purchases', ['client'=>$client, 'auctions'=>$auctions]);   
@@ -135,8 +140,12 @@ class DashboardController extends Controller
         $merchantDebts = Car::clientsWithDebt((int) $owner_id, (int) $this->userClient);
         $sumDebit = round((float) $merchantDebts->sum('balance'), 2);
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
-        // Same formula as purchases table row: total_s − total (all cars, not only results=2).
-        $sumProfit = $car->sum(fn ($c) => (float) ($c->total_s ?? 0) - (float) ($c->total ?? 0));
+        // Profit only when sale pricing exists (total_s > 0) — purchase-only cars are 0, not a fake loss.
+        $carService = app(CarService::class);
+        $sumProfit = $car->sum(fn ($c) => $carService->computeProfit(
+            (float) ($c->total_s ?? 0),
+            (float) ($c->total ?? 0)
+        ));
 
         $ledger = app(LedgerService::class);
         $mainBoxDollar = 0.0;
@@ -387,7 +396,8 @@ class DashboardController extends Controller
             'client_id'=>$client_id,
             'results'=> $results,
             'owner_id'=>$owner_id,
-            'profit'=>($total_amount*-1)
+            // No sale pricing yet — do not store purchase cost as negative "profit".
+            'profit'=> $carService->computeProfit(0, $total_amount),
              ]);
                 if($total_amount){
                     $desc='اضافة سيارة من المشتريات رقم شانصى '.$request->vin;
@@ -474,8 +484,11 @@ class DashboardController extends Controller
 
             // If 'purchase_price' and 'paid_amount' are calculated separately, add them to $dataToUpdate
             $dataToUpdate['total']=$total;
-            // Auto-compute profit (same as table): sales total − purchase total.
-            $dataToUpdate['profit'] = (float) ($dataToUpdate['total_s'] ?? $car->total_s ?? 0) - (float) $total;
+            // Profit only when sale pricing (total_s) exists — else 0, not a fake loss.
+            $dataToUpdate['profit'] = $carService->computeProfit(
+                (float) ($dataToUpdate['total_s'] ?? $car->total_s ?? 0),
+                (float) $total
+            );
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
             if($total >$car->total){
@@ -537,7 +550,7 @@ class DashboardController extends Controller
             $dolar_price_s=$dolar_price_s;
         }
         $total_s = (($checkout_s+$shipping_dolar_s+ $coc_dolar_s+(int)($dinar_s / ($dolar_price_s))+$erbilTotalS) ??0);
-        $profit=$total_s-$car->total;
+        $profit = $carService->computeProfit((float) $total_s, (float) $car->total);
         $descClient = trans('text.editExpenses').' '.$total_s-$car->total_s.' '.trans('text.for_car').$car->car_type.' '.$car->vin;
         $this->accountingController->increaseWallet($total_s-$car->total_s, $descClient,$car->client_id,$car->id,'App\Models\User');
             // Extract the relevant fields from the $request object
@@ -642,7 +655,7 @@ class DashboardController extends Controller
             $data->where('client_id', $user_id);
         }
 
-        // Aggregates after all filters — profit matches table row: Σ(total_s − total).
+        // Aggregates after all filters — profit only for cars with sale pricing (total_s > 0).
         $resultsDinar = $data->sum('dinar');
         $resultsDollar = $data->sum('total');
         $resultsTotalS = $data->sum('total_s');
@@ -650,7 +663,7 @@ class DashboardController extends Controller
         $totalCars = $data->count();
         $resultsProfit = (float) (clone $data)->toBase()
             ->reorder()
-            ->selectRaw('COALESCE(SUM(COALESCE(total_s, 0) - COALESCE(total, 0)), 0) as profit_sum')
+            ->selectRaw('COALESCE(SUM(CASE WHEN COALESCE(total_s, 0) > 0 THEN COALESCE(total_s, 0) - COALESCE(total, 0) ELSE 0 END), 0) as profit_sum')
             ->value('profit_sum');
         // Alias kept for older clients; same as resultsProfit (no separate paid-only formula).
         $expectedProfit = $resultsProfit;
@@ -681,9 +694,14 @@ class DashboardController extends Controller
             $totalExpectedProfit = 0;
             $updatedCount = 0;
             
+            $carService = app(CarService::class);
+
             foreach ($cars as $car) {
-                // إعادة حساب الربح المتوقع: total_s - total
-                $newProfit = ($car->total_s ?? 0) - ($car->total ?? 0);
+                // إعادة حساب الربح المتوقع: total_s - total (فقط عند وجود تسعير مبيعات)
+                $newProfit = $carService->computeProfit(
+                    (float) ($car->total_s ?? 0),
+                    (float) ($car->total ?? 0)
+                );
                 
                 // تحديث الربح فقط - لا يتم تعديل أي حقل آخر
                 // استخدام DB::table للتأكد من تحديث حقل واحد فقط
@@ -746,16 +764,42 @@ class DashboardController extends Controller
 
         $this->authorize('delete', $car);
 
-        DB::transaction(function () use ($car, $owner_id, $carService) {
-            $desc=' مرتج حذف سيارة'.$car->total;
-            $wallet = Wallet::where('user_id',$car->client_id)->first();
-            $this->accountingController->increaseWallet($car->total, $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
-            if($car->results == 0 && $car->total_s!=0){
-                $trans = $this->accountingController->decreaseWallet($car->total_s , $desc,$car->client->id,$car->id,'App\Models\Car');
+        $mainAccount = $this->mainAccount->where('owner_id', $owner_id)->first();
+        if (!$mainAccount) {
+            return Response::json(['message' => 'حساب الصندوق الرئيسي غير موجود — لا يمكن حذف السيارة بأمان.'], 422);
+        }
+
+        DB::transaction(function () use ($car, $owner_id, $carService, $mainAccount) {
+            // Opposite wallet/ledger entries (never hard-delete journals).
+            // Soft-deleted cars are excluded from profit/AR via SoftDeletes.
+            $desc = 'مرتجع حذف سيارة #' . $car->id . ' | تكلفة ' . (int) $car->total;
+
+            $purchaseTotal = (int) ($car->total ?? 0);
+            if ($purchaseTotal > 0) {
+                $this->accountingController->increaseWallet(
+                    $purchaseTotal,
+                    $desc,
+                    $mainAccount->id,
+                    $car->id,
+                    'App\Models\Car'
+                );
             }
-            if($car->results == 1){
-                $trans = $this->accountingController->decreaseWallet($car->total_s-$car->paid , $desc,$car->client->id,$car->id,'App\Models\Car');
-                }
+
+            // Clear any remaining client AR for this car (unpaid / partial).
+            // Paid cash history stays; SoftDeletes keeps the car out of KPIs.
+            $remainingAr = max(
+                0,
+                (int) ($car->total_s ?? 0) - (int) ($car->paid ?? 0) - (int) ($car->discount ?? 0)
+            );
+            if ($remainingAr > 0 && $car->client_id) {
+                $this->accountingController->decreaseWallet(
+                    $remainingAr,
+                    $desc,
+                    $car->client_id,
+                    $car->id,
+                    'App\Models\Car'
+                );
+            }
 
             // Soft delete only (Car uses SoftDeletes) — row & history are kept,
             // never force-deleted. Renumbering + audit log happen here too,
@@ -765,5 +809,6 @@ class DashboardController extends Controller
 
         return Response::json('delete is done', 200);
     }
-    
+
 }
+

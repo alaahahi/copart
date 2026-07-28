@@ -8,6 +8,7 @@ import {
   carPaymentStatusMeta,
   carPaymentGridCardClass,
 } from "@/utils/carPaymentStatus";
+import { carProfit as profitOf } from "@/utils/carProfit";
 
 const props = defineProps({
   /** Cars to render */
@@ -57,7 +58,6 @@ const field = (car, salesKey, purchaseKey) =>
   isPurchase.value ? car?.[purchaseKey] : car?.[salesKey];
 
 const remainingOf = (car) => carRemaining(car, { totalKey: "total_s" });
-const profitOf = (car) => asNumber(car?.total_s) - asNumber(car?.total);
 const statusMeta = (car) => carPaymentStatusMeta(car, { totalKey: "total_s" });
 
 const brandLogoUrl = (car) =>
@@ -370,7 +370,7 @@ const copyVinToClipboard = async (vin) => {
               </dd>
             </div>
 
-            <!-- Purchase: profit -->
+            <!-- Purchase: profit (only when sale pricing exists) -->
             <div
               v-if="isPurchase"
               class="flex items-center justify-between gap-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800"
@@ -381,12 +381,15 @@ const copyVinToClipboard = async (vin) => {
               <dd
                 class="font-mono text-sm font-bold tabular-nums"
                 :class="
-                  profitOf(car) >= 0
-                    ? 'text-emerald-700 dark:text-emerald-300'
-                    : 'text-rose-700 dark:text-rose-300'
+                  profitOf(car) == null
+                    ? 'text-slate-500 dark:text-slate-400'
+                    : profitOf(car) >= 0
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-rose-700 dark:text-rose-300'
                 "
               >
-                {{ money(profitOf(car)) }}
+                <template v-if="profitOf(car) == null">{{ $t("profit_not_calculated") }}</template>
+                <template v-else>{{ money(profitOf(car)) }}</template>
               </dd>
             </div>
 
