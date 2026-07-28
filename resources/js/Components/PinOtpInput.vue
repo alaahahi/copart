@@ -143,6 +143,8 @@ defineExpose({ clearAndFocus, focusAt });
     :aria-label="ariaLabelPrefix"
     :class="{
       'animate-pin-shake': status === 'error',
+      'pin-otp--error': status === 'error',
+      'pin-otp--success': status === 'success',
     }"
   >
     <input
@@ -157,11 +159,8 @@ defineExpose({ clearAndFocus, focusAt });
       :disabled="disabled || status === 'success'"
       :aria-label="`${ariaLabelPrefix} ${index + 1} من ${length}`"
       :value="digits[index]"
-      class="h-12 w-10 rounded-lg border-2 !bg-white text-center text-xl font-bold !text-slate-900 shadow-sm outline-none transition focus:ring-2 sm:h-14 sm:w-11 sm:text-2xl"
+      class="pin-otp__digit h-12 w-10 rounded-lg text-center text-xl font-bold shadow-sm sm:h-14 sm:w-11 sm:text-2xl"
       :class="{
-        'border-slate-300 focus:border-sky-500 focus:ring-sky-500/30': status === 'idle',
-        'border-rose-500 focus:border-rose-500 focus:ring-rose-500/30': status === 'error',
-        'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/30': status === 'success',
         'cursor-not-allowed opacity-90': disabled || status === 'success',
       }"
       @input="onInput(index, $event)"
@@ -171,3 +170,63 @@ defineExpose({ clearAndFocus, focusAt });
     />
   </div>
 </template>
+
+<style scoped>
+/*
+ * Always light boxes + dark digits — beats html.dark main input { color: white; bg: navy }.
+ * Focus uses border/ring only (never dark-blue fill that hides digits in other states).
+ */
+.pin-otp__digit {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #ffffff !important;
+  border: 2px solid #94a3b8 !important;
+  color: #111111 !important;
+  -webkit-text-fill-color: #111111 !important;
+  caret-color: #111111 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pin-otp__digit:hover:not(:disabled) {
+  border-color: #64748b !important;
+}
+
+.pin-otp__digit:focus {
+  background-color: #ffffff !important;
+  border-color: #3b82f6 !important;
+  color: #111111 !important;
+  -webkit-text-fill-color: #111111 !important;
+  caret-color: #111111 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35) !important;
+}
+
+.pin-otp--error .pin-otp__digit,
+.pin-otp--error .pin-otp__digit:focus {
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.3) !important;
+}
+
+.pin-otp--success .pin-otp__digit,
+.pin-otp--success .pin-otp__digit:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important;
+}
+
+.pin-otp__digit:disabled {
+  background-color: #f8fafc !important;
+  color: #111111 !important;
+  -webkit-text-fill-color: #111111 !important;
+}
+
+/* Chrome/Safari autofill can force pale text on dark theme — lock contrast */
+.pin-otp__digit:-webkit-autofill,
+.pin-otp__digit:-webkit-autofill:hover,
+.pin-otp__digit:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111111 !important;
+  caret-color: #111111 !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+</style>

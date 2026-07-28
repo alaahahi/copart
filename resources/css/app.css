@@ -99,17 +99,18 @@
   /*
    * Inputs / selects: include teleported modals (outside main).
    * Never leave white inputs with light-gray labels on navy dialogs.
+   * Exclude .pin-otp__digit — PIN boxes stay light bg + dark text for contrast.
    */
-  html.dark main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.pin-otp__digit),
   html.dark main select,
   html.dark main textarea,
-  html.dark body > [role="dialog"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > [role="dialog"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.pin-otp__digit),
   html.dark body > [role="dialog"] select,
   html.dark body > [role="dialog"] textarea,
-  html.dark body > .modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > .modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.pin-otp__digit),
   html.dark body > .modal-mask select,
   html.dark body > .modal-mask textarea,
-  html.dark body > .erp-modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html.dark body > .erp-modal-mask input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.pin-otp__digit),
   html.dark body > .erp-modal-mask select,
   html.dark body > .erp-modal-mask textarea {
     background-color: #0f172a;
@@ -117,27 +118,27 @@
     color: #f3f4f6;
   }
 
-  html.dark main input::placeholder,
+  html.dark main input:not(.pin-otp__digit)::placeholder,
   html.dark main textarea::placeholder,
-  html.dark body > [role="dialog"] input::placeholder,
+  html.dark body > [role="dialog"] input:not(.pin-otp__digit)::placeholder,
   html.dark body > [role="dialog"] textarea::placeholder,
-  html.dark body > .modal-mask input::placeholder,
+  html.dark body > .modal-mask input:not(.pin-otp__digit)::placeholder,
   html.dark body > .modal-mask textarea::placeholder,
-  html.dark body > .erp-modal-mask input::placeholder,
+  html.dark body > .erp-modal-mask input:not(.pin-otp__digit)::placeholder,
   html.dark body > .erp-modal-mask textarea::placeholder {
     color: #9ca3af;
   }
 
-  html.dark main input:focus,
+  html.dark main input:not(.pin-otp__digit):focus,
   html.dark main select:focus,
   html.dark main textarea:focus,
-  html.dark body > [role="dialog"] input:focus,
+  html.dark body > [role="dialog"] input:not(.pin-otp__digit):focus,
   html.dark body > [role="dialog"] select:focus,
   html.dark body > [role="dialog"] textarea:focus,
-  html.dark body > .modal-mask input:focus,
+  html.dark body > .modal-mask input:not(.pin-otp__digit):focus,
   html.dark body > .modal-mask select:focus,
   html.dark body > .modal-mask textarea:focus,
-  html.dark body > .erp-modal-mask input:focus,
+  html.dark body > .erp-modal-mask input:not(.pin-otp__digit):focus,
   html.dark body > .erp-modal-mask select:focus,
   html.dark body > .erp-modal-mask textarea:focus {
     border-color: #60a5fa;
