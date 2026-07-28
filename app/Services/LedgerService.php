@@ -706,6 +706,15 @@ class LedgerService
         $clientTypeId = (int) (\Illuminate\Support\Facades\Cache::get('user_type_client')
             ?? \App\Models\UserType::where('name', 'client')->value('id'));
 
+        // Legacy commission / company expense rows were stored as client users — not traders.
+        if (SystemWalletService::isSystemVaultUser($user)) {
+            if (strcasecmp((string) $user->email, 'mainBox@account.com') === 0) {
+                return 'cash_box';
+            }
+
+            return 'system';
+        }
+
         if ($clientTypeId && (int) $user->type_id === $clientTypeId) {
             return 'client';
         }

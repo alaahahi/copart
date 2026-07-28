@@ -26,6 +26,7 @@ use App\Models\SystemConfig;
 use Carbon\Carbon;
 
 use Inertia\Inertia;
+use App\Services\SystemWalletService;
 
 class CarExpensesController extends Controller
 {
@@ -38,7 +39,9 @@ class CarExpensesController extends Controller
     public function index(Request $request)
     {
         $owner_id=Auth::user()->owner_id;
-        $client = User::where('type_id', $this->userClient)->where('owner_id',$owner_id)->get();
+        $clientQuery = User::where('type_id', $this->userClient)->where('owner_id',$owner_id);
+        SystemWalletService::scopeExcludeSystemVaults($clientQuery);
+        $client = $clientQuery->orderBy('name')->get();
         return Inertia::render('CarExpenses/index', ['client'=>$client ]);   
     }
 

@@ -166,105 +166,105 @@ class SystemWalletService
 
 
 
-    /**
-     * Legacy client-type rows used as company / commission vaults (not real merchants).
-     *
-     * @return list<string>
-     */
-    public static function legacyClientVaultNames(): array
-    {
-        return [
-            'مصاريف الشركة',
-            'Company Expenses',
-            'عمولة امريكا',
-            'عمولة كندا',
-        ];
-    }
-
-    /**
-     * True when the display name is a known or commission-style vault (e.g. «عمولة امريكا»).
-     */
-    public static function isLegacyClientVaultName(?string $name): bool
-    {
-        $name = trim((string) $name);
-        if ($name === '') {
-            return false;
-        }
-
-        if (in_array($name, self::legacyClientVaultNames(), true)) {
-            return true;
-        }
-
-        // Commission / قاصة عمولة boxes created as client users
-        return mb_strpos($name, 'عمولة') === 0;
-    }
-
-    /**
-     * True when the user is a system/cash vault — not a normal merchant.
-     * Covers type=account wallets + legacy client vaults like «مصاريف الشركة» / «عمولة …».
-     */
-    public static function isSystemVaultUser(?object $user, ?int $accountTypeId = null): bool
-    {
-        if (! $user) {
-            return false;
-        }
-
-        if ($accountTypeId !== null && (int) ($user->type_id ?? 0) === (int) $accountTypeId) {
-            return true;
-        }
-
-        $email = $user->email ?? null;
-
-        if (is_string($email) && $email !== '' && in_array($email, self::systemEmails(), true)) {
-            return true;
-        }
-
-        return self::isLegacyClientVaultName($user->name ?? null);
-    }
-
-    /**
-     * Restrict a users query to system vaults (account wallets + legacy client vaults).
-     *
-     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
-     */
-    public static function scopeSystemVaults($query, int $accountTypeId, int $clientTypeId): void
-    {
-        $emails = self::systemEmails();
-        $names = self::legacyClientVaultNames();
-
-        $query->where(function ($outer) use ($accountTypeId, $clientTypeId, $emails, $names) {
-            $outer->where('users.type_id', $accountTypeId)
-                ->orWhere(function ($legacy) use ($clientTypeId, $emails, $names) {
-                    $legacy->where('users.type_id', $clientTypeId)
-                        ->where(function ($inner) use ($emails, $names) {
-                            $inner->whereIn('users.email', $emails)
-                                ->orWhereIn('users.name', $names)
-                                ->orWhere('users.name', 'like', 'عمولة%');
-                        });
-                });
-        });
-    }
-
-    /**
-     * Exclude system vaults from a (usually client-type) users query.
-     *
-     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
-     */
-    public static function scopeExcludeSystemVaults($query): void
-    {
-        $emails = self::systemEmails();
-        $names = self::legacyClientVaultNames();
-
-        $query->where(function ($q) use ($emails) {
-            $q->whereNull('users.email')
-                ->orWhere('users.email', '')
-                ->orWhereNotIn('users.email', $emails);
-        })
-            ->whereNotIn('users.name', $names)
-            ->where('users.name', 'not like', 'عمولة%');
-    }
-
-
+    /**
+     * Legacy client-type rows used as company / commission vaults (not real merchants).
+     *
+     * @return list<string>
+     */
+    public static function legacyClientVaultNames(): array
+    {
+        return [
+            'مصاريف الشركة',
+            'Company Expenses',
+            'عمولة امريكا',
+            'عمولة كندا',
+        ];
+    }
+
+    /**
+     * True when the display name is a known or commission-style vault (e.g. «عمولة امريكا»).
+     */
+    public static function isLegacyClientVaultName(?string $name): bool
+    {
+        $name = trim((string) $name);
+        if ($name === '') {
+            return false;
+        }
+
+        if (in_array($name, self::legacyClientVaultNames(), true)) {
+            return true;
+        }
+
+        // Commission / قاصة عمولة boxes created as client users
+        return mb_strpos($name, 'عمولة') === 0;
+    }
+
+    /**
+     * True when the user is a system/cash vault — not a normal merchant.
+     * Covers type=account wallets + legacy client vaults like «مصاريف الشركة» / «عمولة …».
+     */
+    public static function isSystemVaultUser(?object $user, ?int $accountTypeId = null): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($accountTypeId !== null && (int) ($user->type_id ?? 0) === (int) $accountTypeId) {
+            return true;
+        }
+
+        $email = $user->email ?? null;
+
+        if (is_string($email) && $email !== '' && in_array($email, self::systemEmails(), true)) {
+            return true;
+        }
+
+        return self::isLegacyClientVaultName($user->name ?? null);
+    }
+
+    /**
+     * Restrict a users query to system vaults (account wallets + legacy client vaults).
+     *
+     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
+     */
+    public static function scopeSystemVaults($query, int $accountTypeId, int $clientTypeId): void
+    {
+        $emails = self::systemEmails();
+        $names = self::legacyClientVaultNames();
+
+        $query->where(function ($outer) use ($accountTypeId, $clientTypeId, $emails, $names) {
+            $outer->where('users.type_id', $accountTypeId)
+                ->orWhere(function ($legacy) use ($clientTypeId, $emails, $names) {
+                    $legacy->where('users.type_id', $clientTypeId)
+                        ->where(function ($inner) use ($emails, $names) {
+                            $inner->whereIn('users.email', $emails)
+                                ->orWhereIn('users.name', $names)
+                                ->orWhere('users.name', 'like', 'عمولة%');
+                        });
+                });
+        });
+    }
+
+    /**
+     * Exclude system vaults from a (usually client-type) users query.
+     *
+     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
+     */
+    public static function scopeExcludeSystemVaults($query): void
+    {
+        $emails = self::systemEmails();
+        $names = self::legacyClientVaultNames();
+
+        $query->where(function ($q) use ($emails) {
+            $q->whereNull('users.email')
+                ->orWhere('users.email', '')
+                ->orWhereNotIn('users.email', $emails);
+        })
+            ->whereNotIn('users.name', $names)
+            ->where('users.name', 'not like', 'عمولة%');
+    }
+
+
     /**
 
      * Idempotent: create missing system wallet users + wallets for an owner.
@@ -383,7 +383,14 @@ class SystemWalletService
 
 
 
-            $created[] = $user->load('wallet');
+            $user->load('wallet');
+
+            // Keep vaults table in sync (UI source of truth for قاصات النظام).
+            if (Schema::hasTable('vaults')) {
+                app(VaultService::class)->syncFromSystemUser($user);
+            }
+
+            $created[] = $user;
 
         }
 

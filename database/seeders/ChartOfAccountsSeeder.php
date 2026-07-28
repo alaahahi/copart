@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Services\LedgerService;
 use App\Services\SystemWalletService;
+use App\Services\VaultService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -27,13 +28,18 @@ class ChartOfAccountsSeeder extends Seeder
 
         $ledger = app(LedgerService::class);
         $wallets = app(SystemWalletService::class);
+        $vaults = app(VaultService::class);
         $ownerIds = $this->resolveOwnerIds();
 
         foreach ($ownerIds as $ownerId) {
             $ledger->seedSystemAccounts((int) $ownerId);
             // Seed all system vaults once (optional expense boxes included).
             $wallets->ensureForOwner((int) $ownerId, true);
-            $this->command?->info("System chart + wallets seeded for owner_id={$ownerId}");
+            // Sync dedicated vaults table (قاصات) from legacy wallet users + commission boxes.
+            if (Schema::hasTable('vaults')) {
+                $vaults->syncAllForOwner((int) $ownerId);
+            }
+            $this->command?->info("System chart + wallets + vaults seeded for owner_id={$ownerId}");
         }
     }
 

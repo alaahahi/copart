@@ -127,6 +127,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | System reset password (operational wipe)
+    |--------------------------------------------------------------------------
+    |
+    | Dedicated secret for POST /settings/reset. Must match SYSTEM_RESET_PASSWORD
+    | in .env. Never expose this value to the frontend.
+    |
+    */
+    'system_reset_password' => (string) env('SYSTEM_RESET_PASSWORD', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Maintenance Mode Driver
     |--------------------------------------------------------------------------
     |

@@ -37,6 +37,7 @@ use App\Services\AccountingCacheService;
 use App\Services\LedgerService;
 use App\Services\SystemWalletService;
 use App\Services\TransactionPaymentService;
+use App\Services\VaultService;
 use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
 use Illuminate\Support\Facades\Auth;
@@ -117,18 +118,14 @@ class AccountingController extends Controller
         $boxes = User::with('wallet')->where('owner_id',$owner_id)->where('email', 'mainBox@account.com')->get();
         $this->accounting->loadAccounts(Auth::user()->owner_id);
         
-        // جلب المحافظ المميزة للعرض في لوحة التحكم
-        $flaggedWallets = User::with('wallet')
-            ->where('owner_id', $owner_id)
-            ->where('show_in_dashboard', true)
-            ->whereHas('wallet')
-            ->get();
+        // قاصات النظام من جدول vaults — ليست تجاراً بعلم show_in_dashboard
+        $flaggedWallets = app(VaultService::class)->accountingShortcutUsers((int) $owner_id);
 
         $clientTypeId = $this->accounting->userClient();
-        $walletUsers = User::query()
+        $walletUsersQuery = User::query()
             ->where('owner_id', $owner_id)
-            // نفس علم الإخفاء المستخدم في صفحة العملاء (عرض بالمحاسبة / إخفاء من المحاسبة)،
-            // بحيث لا يظهر أي حساب/عميل تم إخفاؤه هناك في قائمة "إسناد إلى قاسة".
+            // Assign-to-vault picker: traders flagged for accounting visibility,
+            // never system/commission vault identities mixed as merchants.
             ->where('show_in_dashboard', true)
             ->where(function ($query) use ($clientTypeId) {
                 $query->where(function ($base) {
@@ -148,9 +145,9 @@ class AccountingController extends Controller
                             });
                     });
                 }
-            })
-            ->orderBy('name')
-            ->get(['id', 'name']);
+            });
+        SystemWalletService::scopeExcludeSystemVaults($walletUsersQuery);
+        $walletUsers = $walletUsersQuery->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Accounting/Index', [
             'boxes'=>$boxes,

@@ -654,7 +654,7 @@ async function saveDescription(tran) {
                   v-for="wallet in flaggedWallets"
                   :key="wallet.id"
                   :href="`/wallet?id=${wallet.id}`"
-                  class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-500/50 bg-orange-50 px-3.5 py-1.5 text-sm font-semibold text-orange-900 transition hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-950/60"
+                  class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-600 bg-orange-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-800 dark:border-orange-500 dark:bg-orange-800 dark:text-white dark:hover:bg-orange-700"
                 >
                   {{ wallet.name }}
                 </Link>

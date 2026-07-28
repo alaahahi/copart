@@ -65,11 +65,14 @@
   html.dark main .bg-rose-50,
   html.dark main .bg-sky-50,
   html.dark main .bg-amber-50,
+  html.dark main .bg-orange-50,
   html.dark main .bg-indigo-50,
   html.dark body > [role="dialog"] .bg-slate-50,
   html.dark body > [role="dialog"] .bg-emerald-50,
   html.dark body > [role="dialog"] .bg-rose-50,
-  html.dark body > [role="dialog"] .bg-sky-50 {
+  html.dark body > [role="dialog"] .bg-sky-50,
+  html.dark body > [role="dialog"] .bg-amber-50,
+  html.dark body > [role="dialog"] .bg-orange-50 {
     background-color: #1e293b !important;
   }
 

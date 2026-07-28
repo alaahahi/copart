@@ -2,7 +2,7 @@
 import { ref, watch, nextTick, onMounted } from 'vue';
 
 const props = defineProps({
-  length: { type: Number, default: 6 },
+  length: { type: Number, default: 5 },
   modelValue: { type: String, default: '' },
   /** idle | error | success */
   status: { type: String, default: 'idle' },

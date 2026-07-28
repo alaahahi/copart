@@ -6,9 +6,11 @@ namespace App\Providers;
 use App\Models\Car;
 use App\Models\SystemConfig;
 use App\Models\User;
+use App\Models\Vault;
 use App\Policies\CarPolicy;
 use App\Policies\SystemConfigPolicy;
 use App\Policies\UserPolicy;
+use App\Policies\VaultPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -22,6 +24,7 @@ class AuthServiceProvider extends ServiceProvider
         Car::class => CarPolicy::class,
         SystemConfig::class => SystemConfigPolicy::class,
         User::class => UserPolicy::class,
+        Vault::class => VaultPolicy::class,
     ];
 
     /**

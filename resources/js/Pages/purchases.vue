@@ -29,8 +29,8 @@ defineProps({ client: Array, auctions: { type: Array, default: () => [] } });
 const toast = useToast();
 const money = (v) => formatMoney(v, "$");
 
-/** 6-digit frontend gate (was 12457 → padded); unlock expires after 30 minutes */
-const PURCHASES_PIN = "124570";
+/** 5-digit frontend gate; unlock expires after 30 minutes */
+const PURCHASES_PIN = "12457";
 const PIN_STORAGE_KEY = "purchases-pin-ok";
 const PIN_OK_AT_KEY = "purchases-pin-ok-at";
 const PIN_TTL_MS = 30 * 60 * 1000;
@@ -432,7 +432,7 @@ function rowProfit(row) {
             <PinOtpInput
               ref="pinOtpRef"
               v-model="pinInput"
-              :length="6"
+              :length="5"
               :status="pinStatus"
               :disabled="pinStatus === 'success'"
               aria-label-prefix="خانة رمز الدخول"

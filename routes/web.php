@@ -165,6 +165,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
         Route::put('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
         Route::put('users/{user}/password', [UserManagementController::class, 'resetPassword'])->name('users.password');
         Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+        Route::post('reset', [SystemConfigController::class, 'reset'])->name('reset');
     });
     Route::post('whatsapp/debt-notice',[SystemConfigController::class, 'queueDebtNotice'])->name('whatsapp.debt_notice');
     Route::get('sync-monitor', function () {

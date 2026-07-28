@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\DB;
 use App\Services\ClientAccountService;
 use App\Services\LedgerService;
 use App\Services\SystemWalletService;
+use App\Services\VaultService;
 use App\Services\AccountingCacheService;
 use Illuminate\Support\Facades\Log;
 
@@ -104,6 +105,24 @@ class UserController extends Controller
         $isTraders = $q === 'traders';
         $useQasaBalance = $isTradersQasa || $isSystemQasa;
 
+        // قاصات النظام → dedicated vaults table (not fake trader users)
+        if ($isSystemQasa) {
+            if ((int) $page > 1 && (int) $print !== 1) {
+                return response()->json(['data' => []], 200);
+            }
+
+            $vaultRows = app(VaultService::class)->systemQasaClientRows((int) $owner_id);
+
+            if ((int) $print === 1) {
+                $config = SystemConfig::first();
+                $data = $vaultRows->toArray();
+
+                return view('reportClients', compact('data', 'config', 'owner_id'));
+            }
+
+            return response()->json(['data' => $vaultRows->values()], 200);
+        }
+
         $query = DB::table('users')
             ->select(
                 'users.id',
@@ -134,7 +153,7 @@ class UserController extends Controller
                     ->where('car.total_s', 0)
                     ->whereNull('car.deleted_at');
             }, 'car_total_un_pay')
-            // تجار بقاصة / قاصات النظام → رصيد الدفتر (أو المحفظة كاحتياطي)؛ الباقي → متبقي السيارات
+            // تجار بقاصة → رصيد الدفتر؛ الباقي → متبقي السيارات
             ->selectSub(
                 $useQasaBalance
                     ? LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$')
@@ -145,18 +164,13 @@ class UserController extends Controller
             ->whereNull('users.deleted_at')
             ->orderByDesc('balance');
 
-        if ($isSystemQasa) {
-            // قاصات النظام: نوع account + قاصات عميل قديمة (مثل مصاريف الشركة)
-            SystemWalletService::scopeSystemVaults($query, (int) $userAccount, (int) $userClient);
-        } else {
-            $query->where('users.type_id', $userClient);
-            // Merchant lists (all / traders / traders_qasa): never mix in system/commission vaults
-            SystemWalletService::scopeExcludeSystemVaults($query);
+        // Merchant lists (all / traders / traders_qasa): never mix in system/commission vaults
+        $query->where('users.type_id', $userClient);
+        SystemWalletService::scopeExcludeSystemVaults($query);
 
-            if ($isTradersQasa) {
-                // تجار لديهم قاصة فقط (ليس قاصة نظام)
-                $query->where('users.show_in_dashboard', true);
-            }
+        if ($isTradersQasa) {
+            // تجار بعرض محاسبة فقط (ليس قاصة نظام — القاصة في جدول vaults)
+            $query->where('users.show_in_dashboard', true);
         }
 
         // Free-text / category filters (not used by special tab keys)
@@ -219,7 +233,7 @@ class UserController extends Controller
             return view('reportClients', compact('data', 'config', 'owner_id'));
         }
 
-        $fullListKeys = ['debit', 'box_movement', 'traders_qasa', 'system_qasa', 'show_in_dashboard'];
+        $fullListKeys = ['debit', 'box_movement', 'traders_qasa', 'show_in_dashboard'];
         if (in_array($q, $fullListKeys, true)) {
             // page>1 returns [] so infinite-scroll clients list can stop after first fetch
             if ((int) $page === 1) {
@@ -317,12 +331,13 @@ class UserController extends Controller
             'year_date' => $year_date,
             'owner_id' => $owner_id,
             'created' => Carbon::now()->format('Y-m-d'),
-            // show_in_dashboard = قاصة (LedgerService::CLIENT_HAS_QASA_FLAG)
+            // show_in_dashboard = عرض بالمحاسبة (AR shortcuts) — ليس قاصة نظام
             'show_in_dashboard' => $request->boolean('show_in_dashboard'),
         ]);
 
         Wallet::create(['user_id' => $user->id]);
-        // Always AR 1200-{id}; if قاصة also 1210/1220 — linked via party_id.
+        // Always AR 1200-{id}; if show_in_dashboard also 1210/1220 — linked via party_id.
+        // System vaults live in `vaults` table — never auto-created for traders.
         $this->clientAccounts->provisionForClient($user);
 
         return Response::json($user, 200);

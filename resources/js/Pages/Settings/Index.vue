@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import TagChipList from "@/Components/TagChipList.vue";
+import ModalSystemReset from "@/Components/ModalSystemReset.vue";
 import { Head, Link, usePage } from "@inertiajs/inertia-vue3";
 import { ref, computed, onMounted } from "vue";
 import axios from "axios";
@@ -279,6 +280,29 @@ async function save() {
 
 function preview(type) {
   window.open(`${route("settings.receipt_preview")}?type=${type}`, "_blank");
+}
+
+const showSystemReset = ref(false);
+
+async function confirmSystemReset({ password, confirmation, done }) {
+  try {
+    const { data } = await axios.post(route("settings.reset"), {
+      password,
+      confirmation,
+    });
+    toast.success(data?.message || t("systemResetSuccess"));
+    showSystemReset.value = false;
+    window.setTimeout(() => window.location.reload(), 900);
+  } catch (e) {
+    const msg =
+      e.response?.data?.errors?.password?.[0] ||
+      e.response?.data?.errors?.confirmation?.[0] ||
+      e.response?.data?.message ||
+      t("systemResetFailed");
+    toast.error(msg);
+  } finally {
+    if (typeof done === "function") done();
+  }
 }
 </script>
 
@@ -771,7 +795,32 @@ function preview(type) {
             @remove="removeAuction"
           />
         </section>
+
+        <section
+          v-if="Number($page.props.auth.user.type_id) === 1"
+          class="bg-slate-900 shadow rounded-xl p-6 border border-rose-700/50"
+        >
+          <h3 class="text-lg font-bold mb-1 text-rose-300">
+            {{ $t("systemResetDangerZone") }}
+          </h3>
+          <p class="text-sm text-slate-300 mb-4 leading-relaxed">
+            {{ $t("systemResetDangerHint") }}
+          </p>
+          <button
+            type="button"
+            class="px-6 py-2.5 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-500"
+            @click="showSystemReset = true"
+          >
+            {{ $t("systemResetButton") }}
+          </button>
+        </section>
       </div>
     </div>
+
+    <ModalSystemReset
+      :show="showSystemReset"
+      @close="showSystemReset = false"
+      @confirm="confirmSystemReset"
+    />
   </AuthenticatedLayout>
 </template>

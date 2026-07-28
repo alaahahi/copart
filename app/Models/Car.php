@@ -245,12 +245,17 @@ class Car extends Model
      */
     public static function clientsRemainingBaseQuery(int $ownerId, int $clientTypeId): \Illuminate\Database\Query\Builder
     {
-        return \Illuminate\Support\Facades\DB::table('users')
+        $query = \Illuminate\Support\Facades\DB::table('users')
             ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
             ->selectSub(self::clientRemainingBalanceSqlSubquery(), 'balance')
             ->where('users.owner_id', $ownerId)
             ->where('users.type_id', $clientTypeId)
             ->whereNull('users.deleted_at');
+
+        // Debt KPIs / merchant lists must never treat commission/system vaults as traders.
+        \App\Services\SystemWalletService::scopeExcludeSystemVaults($query);
+
+        return $query;
     }
 
     /**

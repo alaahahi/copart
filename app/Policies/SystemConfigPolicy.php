@@ -22,4 +22,12 @@ class SystemConfigPolicy
     {
         return (int) $user->type_id === 1;
     }
+
+    /**
+     * Operational wipe (cars / traders / wallets / payments) — admin only.
+     */
+    public function reset(User $user, ?SystemConfig $config = null): bool
+    {
+        return (int) $user->type_id === 1;
+    }
 }

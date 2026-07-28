@@ -95,8 +95,8 @@ const close = () => emit('close');
 
           <div class="erp-toggle-row">
             <div class="erp-toggle-text">
-              <span class="erp-toggle-title">عرض بالمحاسبة (قاصة)</span>
-              <span class="erp-toggle-hint">عند التفعيل تُنشأ حسابات القاصة إن لم تكن موجودة. إيقاف القاصة لا يحذف الحسابات التاريخية.</span>
+              <span class="erp-toggle-title">عرض بالمحاسبة</span>
+              <span class="erp-toggle-hint">يُنشئ حسابات ذمم إضافية للتاجر ويظهره في قوائم المحاسبة — ليس قاصة نظام. إيقاف العرض لا يحذف الحسابات التاريخية.</span>
             </div>
             <label class="erp-switch" :title="form.show_in_dashboard ? 'معروض في المحاسبة' : 'مخفي عن المحاسبة'">
               <input type="checkbox" role="switch" v-model="form.show_in_dashboard" />

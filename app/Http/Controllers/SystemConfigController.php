@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Helpers\Help;
 use App\Http\Requests\QueueDebtNoticeRequest;
+use App\Http\Requests\ResetSystemRequest;
 use App\Http\Requests\UpdateSystemConfigRequest;
 use App\Models\SystemConfig;
 use App\Models\User;
 use App\Services\SystemBrandingService;
+use App\Services\SystemResetService;
 use App\Services\WhatsAppQueueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -161,6 +163,21 @@ class SystemConfigController extends Controller
             $this->sampleVoucherData($type),
             ['config' => $config ? $this->configForClient($config) : []]
         ));
+    }
+
+    /**
+     * Admin-only operational wipe (cars, traders, wallets, payments, journals).
+     */
+    public function reset(ResetSystemRequest $request, SystemResetService $reset)
+    {
+        $this->authorize('reset', SystemConfig::class);
+
+        $stats = $reset->wipe($request->user());
+
+        return Response::json([
+            'message' => 'تم تصفير بيانات التشغيل بنجاح. سيتم إعادة تحميل الصفحة.',
+            'stats' => $stats,
+        ]);
     }
 
     protected function applyBrandingUploads(UpdateSystemConfigRequest $request, SystemConfig $config): void

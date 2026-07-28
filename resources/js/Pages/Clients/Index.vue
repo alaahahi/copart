@@ -379,7 +379,11 @@ function unpaidCars(user) {
                       <td>{{ user.car_count_completed ?? 0 }}</td>
                       <td class="cell-balance" dir="ltr">{{ formatBalance(user.balance) }}</td>
                       <td>
-                        <label class="clients-switch" :title="user.show_in_dashboard ? 'معروض في المحاسبة' : 'إخفاء من المحاسبة'">
+                        <label
+                          v-if="!user.is_vault"
+                          class="clients-switch"
+                          :title="user.show_in_dashboard ? 'معروض في المحاسبة' : 'إخفاء من المحاسبة'"
+                        >
                           <input
                             type="checkbox"
                             role="switch"
@@ -392,22 +396,29 @@ function unpaidCars(user) {
                           </span>
                           <span class="sr-only">{{ $t('show_in_accounting') }}</span>
                         </label>
+                        <span v-else class="text-xs text-slate-500 dark:text-slate-300" :title="$t('tab_system_qasa_hint')">قاصة</span>
                       </td>
                       <td>
                         <div class="clients-actions">
                           <Link
-                            v-if="user.car_count"
+                            v-if="user.car_count && !user.is_vault"
                             class="action-btn action-view"
                             :href="route('showClients', user.id)"
                             title="عرض"
                           >
                             <show />
                           </Link>
-                          <button type="button" class="action-btn action-edit" title="تعديل" @click="openModalEditClient(user)">
+                          <button
+                            v-if="!user.is_vault"
+                            type="button"
+                            class="action-btn action-edit"
+                            title="تعديل"
+                            @click="openModalEditClient(user)"
+                          >
                             <edit />
                           </button>
                           <button
-                            v-if="user.can_delete"
+                            v-if="user.can_delete && !user.is_vault"
                             type="button"
                             class="action-btn action-del"
                             title="حذف"
@@ -418,7 +429,7 @@ function unpaidCars(user) {
                           <Link
                             class="action-btn action-wallet"
                             :href="route('wallet', { id: user.id })"
-                            title="المحفظة"
+                            :title="user.is_vault ? 'قاصة' : 'المحفظة'"
                           >
                             <wallet />
                           </Link>
