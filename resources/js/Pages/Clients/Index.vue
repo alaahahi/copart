@@ -35,8 +35,8 @@ let page = 1;
 let json = ref({});
 let controller = new AbortController();
 const togglingIds = ref([]);
-/** Active list tab: all | traders | merchants-with-qasa | system vaults. */
-const activeTab = ref('all');
+/** Active list tab: traders | merchants-with-qasa | system vaults. */
+const activeTab = ref('traders');
 
 const refresh = () => {
   page = 1;
@@ -48,19 +48,20 @@ const refresh = () => {
 const isLockedFilterTab = () => ['traders_qasa', 'system_qasa'].includes(activeTab.value);
 
 const effectiveQ = () => {
-  if (activeTab.value === 'traders') {
-    return 'traders';
-  }
   if (activeTab.value === 'traders_qasa') {
     return 'traders_qasa';
   }
   if (activeTab.value === 'system_qasa') {
     return 'system_qasa';
   }
+  // التجار: free-text / category when set (same merchant list as former «الكل»)
   if (category.value && category.value !== '0') {
     return category.value;
   }
-  return q.value;
+  if (q.value) {
+    return q.value;
+  }
+  return 'traders';
 };
 
 const getResultsCar = async ($state) => {
@@ -242,18 +243,8 @@ function unpaidCars(user) {
       <div class="mx-auto sm:px-6 lg:px-8">
         <div class="clients-card overflow-hidden shadow-sm sm:rounded-xl">
           <div class="p-4 sm:p-6">
-            <!-- Tabs: الكل | التجار | تجار لديهم قاصة | قاصات النظام | قاصة الشركة -->
+            <!-- Tabs: التجار | تجار بعرض محاسبة | قاصات النظام -->
             <div class="clients-tabs mb-5" role="tablist" :aria-label="$t('clients')">
-              <button
-                type="button"
-                role="tab"
-                :aria-selected="activeTab === 'all'"
-                class="clients-tab"
-                :class="{ 'is-active': activeTab === 'all' }"
-                @click="setTab('all')"
-              >
-                {{ $t('tab_all') }}
-              </button>
               <button
                 type="button"
                 role="tab"
@@ -287,13 +278,6 @@ function unpaidCars(user) {
               >
                 {{ $t('tab_system_qasa') }}
               </button>
-              <Link
-                :href="route('company_treasury')"
-                class="clients-tab clients-tab-link"
-                :title="$t('CompanyTreasury')"
-              >
-                {{ $t('CompanyTreasury') }}
-              </Link>
             </div>
 
             <!-- Filters -->
@@ -514,16 +498,6 @@ function unpaidCars(user) {
 .clients-tab.is-active {
   background: var(--c-accent);
   color: #fff;
-}
-
-.clients-tab-link {
-  border: 1px solid var(--c-border);
-  background: transparent;
-}
-
-.clients-tab-link:hover {
-  border-color: var(--c-accent-2);
-  color: var(--c-accent-2);
 }
 
 .clients-input {

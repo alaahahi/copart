@@ -10,6 +10,8 @@ use App\Models\User;
 
 use App\Models\UserType;
 
+use App\Models\Vault;
+
 use App\Models\Wallet;
 
 use Carbon\Carbon;
@@ -522,6 +524,100 @@ class SystemWalletService
         }
 
         return in_array($id, self::idsWithMovements([$id]), true);
+    }
+
+    /**
+     * Emails of vaults required for core ERP (car purchase / payment journals).
+     *
+     * @return list<string>
+     */
+    public static function essentialEmails(): array
+    {
+        return array_keys(self::requiredCore());
+    }
+
+    /**
+     * Soft-delete optional / legacy system vaults for an owner.
+     * Keeps requiredCore only (mainBox / الصندوق الرئيسي).
+     * Soft-deleted vaults are never auto-recreated by ensureForOwner.
+     *
+     * @return array{users:int,vaults:int}
+     */
+    public function softDeleteNonEssentialForOwner(int $ownerId): array
+    {
+        $deletedUsers = 0;
+        $deletedVaults = 0;
+        $essentialEmails = self::essentialEmails();
+
+        $mainBoxIds = User::query()
+            ->where('owner_id', $ownerId)
+            ->whereIn('email', $essentialEmails)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $legacyIdsFromRemovedVaults = [];
+
+        if (Schema::hasTable('vaults')) {
+            $vaults = Vault::query()
+                ->where('owner_id', $ownerId)
+                ->whereNull('deleted_at')
+                ->get();
+
+            foreach ($vaults as $vault) {
+                $legacyId = (int) ($vault->legacy_user_id ?? 0);
+                $keep = ($legacyId > 0 && in_array($legacyId, $mainBoxIds, true))
+                    || strcasecmp((string) $vault->code, 'mainBox') === 0;
+
+                if ($keep) {
+                    continue;
+                }
+
+                if ($vault->is_active) {
+                    $vault->forceFill(['is_active' => false])->save();
+                }
+                $vault->delete();
+                $deletedVaults++;
+
+                if ($legacyId > 0) {
+                    $legacyIdsFromRemovedVaults[$legacyId] = true;
+                }
+            }
+        }
+
+        $optionalEmails = array_keys(self::optionalVaults());
+        $legacyNames = self::legacyClientVaultNames();
+
+        $candidates = User::query()
+            ->where('owner_id', $ownerId)
+            ->where(function ($q) use ($optionalEmails, $legacyNames, $legacyIdsFromRemovedVaults) {
+                $q->whereIn('email', $optionalEmails)
+                    ->orWhereIn('name', $legacyNames)
+                    ->orWhere('name', 'like', 'عمولة%');
+                $ids = array_keys($legacyIdsFromRemovedVaults);
+                if ($ids !== []) {
+                    $q->orWhereIn('id', $ids);
+                }
+            })
+            ->get();
+
+        foreach ($candidates as $user) {
+            $email = (string) ($user->email ?? '');
+            if ($email !== '' && in_array($email, $essentialEmails, true)) {
+                continue;
+            }
+            if (in_array((int) $user->id, $mainBoxIds, true)) {
+                continue;
+            }
+
+            $user->delete();
+            $deletedUsers++;
+        }
+
+        return [
+            'users' => $deletedUsers,
+            'vaults' => $deletedVaults,
+        ];
     }
 
 }

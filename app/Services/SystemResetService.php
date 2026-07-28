@@ -19,8 +19,10 @@ use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
- * Admin-only operational wipe: cars, traders, payments, journals, wallet balances.
- * Preserves admins, system config/branding/WA, chart of accounts, and system vault users.
+ * Admin-only operational wipe: cars, traders, payments, journals, wallet balances,
+ * and non-essential system vaults (commission / expense boxes).
+ *
+ * Preserves admins, system config/branding/WA, chart of accounts, and mainBox only.
  */
 class SystemResetService
 {
@@ -32,7 +34,7 @@ class SystemResetService
     }
 
     /**
-     * @return array{cars:int,expenses:int,transactions:int,journals:int,traders:int,transfers:int,treasury:int,profits:int,wallets_reset:int}
+     * @return array{cars:int,expenses:int,transactions:int,journals:int,traders:int,transfers:int,treasury:int,profits:int,wallets_reset:int,vault_users_removed:int,vaults_removed:int}
      */
     public function wipe(User $actor): array
     {
@@ -61,6 +63,8 @@ class SystemResetService
             'treasury' => 0,
             'profits' => 0,
             'wallets_reset' => 0,
+            'vault_users_removed' => 0,
+            'vaults_removed' => 0,
         ];
 
         DB::transaction(function () use (
@@ -161,7 +165,8 @@ class SystemResetService
                     ->update(['deleted_at' => now(), 'updated_at' => now()]);
             }
 
-            // 8) Soft-delete traders/clients (never admin, never current user, never system vaults)
+            // 8) Soft-delete traders/clients (never admin, never current user, never system vaults —
+            //    non-essential vaults are removed in step 9)
             $traders = User::query()
                 ->where('type_id', $clientTypeId)
                 ->where(function ($q) use ($ownerId) {
@@ -181,10 +186,25 @@ class SystemResetService
                 $stats['traders']++;
             }
 
-            // 9) Zero all wallets for this owner's users (system vaults kept; balances cleared)
-            if ($ownerUserIds !== []) {
+            // 9) Soft-delete non-essential system vaults (عمولة / مصاريف / optional boxes).
+            //    Keep mainBox only — soft-deleted vaults are never auto-recreated.
+            $vaultWipe = $this->systemWallets->softDeleteNonEssentialForOwner($ownerId);
+            $stats['vault_users_removed'] = $vaultWipe['users'];
+            $stats['vaults_removed'] = $vaultWipe['vaults'];
+
+            // 10) Zero remaining wallets for this owner's users (mainBox kept; balances cleared)
+            $survivingUserIds = User::withTrashed()
+                ->where(function ($q) use ($ownerId) {
+                    $q->where('owner_id', $ownerId)->orWhere('id', $ownerId);
+                })
+                ->whereNull('deleted_at')
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($survivingUserIds !== []) {
                 $stats['wallets_reset'] = Wallet::query()
-                    ->whereIn('user_id', $ownerUserIds)
+                    ->whereIn('user_id', $survivingUserIds)
                     ->update([
                         'balance' => 0,
                         'balance_dinar' => 0,
@@ -193,8 +213,8 @@ class SystemResetService
                     ]);
             }
 
-            // 10) Re-ensure system vaults + ledger chart (never soft-deleted vaults above)
-            $this->systemWallets->ensureForOwner($ownerId, true);
+            // 11) Re-ensure essential vault only (mainBox) + ledger chart
+            $this->systemWallets->ensureForOwner($ownerId, false);
             $this->ledger->ensureSystemAccounts($ownerId);
         });
 
