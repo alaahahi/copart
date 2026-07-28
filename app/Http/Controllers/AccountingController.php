@@ -38,6 +38,8 @@ use App\Services\LedgerService;
 use App\Services\SystemWalletService;
 use App\Services\TransactionPaymentService;
 use App\Services\VaultService;
+use App\Models\Vault;
+use Illuminate\Support\Facades\Schema;
 use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
 use Illuminate\Support\Facades\Auth;
@@ -121,33 +123,23 @@ class AccountingController extends Controller
         // قاصات النظام من جدول vaults — ليست تجاراً بعلم show_in_dashboard
         $flaggedWallets = app(VaultService::class)->accountingShortcutUsers((int) $owner_id);
 
-        $clientTypeId = $this->accounting->userClient();
-        $walletUsersQuery = User::query()
-            ->where('owner_id', $owner_id)
-            // Assign-to-vault picker: traders flagged for accounting visibility,
-            // never system/commission vault identities mixed as merchants.
-            ->where('show_in_dashboard', true)
-            ->where(function ($query) use ($clientTypeId) {
-                $query->where(function ($base) {
-                    $base->where('email', '!=', 'mainBox@account.com')
-                        ->whereHas('wallet');
-                });
-                if ($clientTypeId) {
-                    $query->orWhere(function ($traders) use ($clientTypeId) {
-                        $traders->where('type_id', $clientTypeId)
-                            ->whereExists(function ($subQuery) {
-                                $subQuery->select(DB::raw(1))
-                                    ->from('transactions')
-                                    ->whereColumn('transactions.morphed_id', 'users.id')
-                                    ->where('transactions.morphed_type', User::class)
-                                    ->whereIn('transactions.type', ['inUserBox', 'outUserBox'])
-                                    ->whereNull('transactions.deleted_at');
-                            });
-                    });
-                }
-            });
-        SystemWalletService::scopeExcludeSystemVaults($walletUsersQuery);
-        $walletUsers = $walletUsersQuery->orderBy('name')->get(['id', 'name']);
+        // إسناد السحب إلى قاصة → قائمة القاصات فقط (legacy_user_id للتوافق مع API)
+        $vaultService = app(VaultService::class);
+        $mainBoxId = (int) ($boxes->first()?->id ?? 0);
+        $walletUsers = $vaultService->listForOwner((int) $owner_id)
+            ->filter(function ($vault) use ($mainBoxId) {
+                $legacyId = (int) ($vault->legacy_user_id ?? 0);
+
+                return $legacyId > 0 && $legacyId !== $mainBoxId;
+            })
+            ->map(fn ($vault) => (object) [
+                'id' => (int) $vault->legacy_user_id,
+                'name' => $vault->name,
+                'vault_id' => (int) $vault->id,
+                'vault_type' => $vault->type,
+                'is_vault' => true,
+            ])
+            ->values();
 
         return Inertia::render('Accounting/Index', [
             'boxes'=>$boxes,
@@ -1007,8 +999,9 @@ class AccountingController extends Controller
 
         $wallet = Wallet::where('user_id',$car->client_id)->first();
         $desc=trans('text.addPayment').' '.$amount.' '.$car->car_type.' رقم الشانص'.' '.$car->vin.' '.$note;
-        // Parent (mainBox) posts ONE journal: Dr Cash / Cr AR. Child legs are UI mirrors only.
-        $tran=$this->increaseWallet($amount,$desc,$this->accounting->mainBox()->id,$car->client_id,'App\Models\User',0,$discount??0,'$',0,0,'in',$details);
+        // Parent posts ONE journal: Dr receipts-vault cash / Cr AR. Child legs are UI mirrors only.
+        $receiptsUserId = app(\App\Services\VaultService::class)->receiptsCashUserId((int) $owner_id);
+        $tran=$this->increaseWallet($amount,$desc,$receiptsUserId,$car->client_id,'App\Models\User',0,$discount??0,'$',0,0,'in',$details);
         $this->increaseWallet($amount, $desc,$this->accounting->mainAccount()->id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'in',$details);
         $transaction=$this->decreaseWallet($amount+$discount, $desc,$car->client_id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'out',$details);
 
@@ -1063,8 +1056,10 @@ class AccountingController extends Controller
         if ($amount_o) {
             $desc = trans('text.addPayment').' '.$amount_o.' '.$note;
 
-            // Parent (mainBox) posts ONE journal: Dr Cash / Cr AR. Child legs are UI mirrors only.
-            $tran = $this->increaseWallet($amount_o, $desc, $this->accounting->mainBox()->id, $client_id, 'App\Models\User', 0, $discount, '$');
+            // Parent posts ONE journal against قاصة استلام دفعات الزبائن.
+            $ownerId = (int) Auth::user()->owner_id;
+            $receiptsUserId = app(\App\Services\VaultService::class)->receiptsCashUserId($ownerId);
+            $tran = $this->increaseWallet($amount_o, $desc, $receiptsUserId, $client_id, 'App\Models\User', 0, $discount, '$');
 
             $this->increaseWallet($amount_o, $desc, $this->accounting->mainAccount()->id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
 
@@ -1288,7 +1283,7 @@ class AccountingController extends Controller
         }
 
         if (Transactions::where('parent_id', $transaction->id)->where('type', 'outUser')->exists()) {
-            return Response::json(['message' => 'الحركة مرتبطة مسبقاً بقاسة'], 422);
+            return Response::json(['message' => 'الحركة مرتبطة مسبقاً بقاصة'], 422);
         }
 
         $targetUser = User::with('wallet')
@@ -1297,7 +1292,19 @@ class AccountingController extends Controller
             ->first();
 
         if (!$targetUser) {
-            return Response::json(['message' => 'القاسة المحددة غير موجودة'], 404);
+            return Response::json(['message' => 'القاصة المحددة غير موجودة'], 404);
+        }
+
+        // Target must be a system vault (vaults.legacy_user_id), never a trader.
+        if (Schema::hasTable('vaults')) {
+            $isVault = Vault::query()
+                ->where('owner_id', Auth::user()->owner_id)
+                ->where('legacy_user_id', (int) $targetUser->id)
+                ->where('is_active', true)
+                ->exists();
+            if (! $isVault) {
+                return Response::json(['message' => 'الهدف يجب أن يكون قاصة نظام — اختر من قائمة القاصات'], 422);
+            }
         }
 
         if ((int) $targetUser->id === (int) $mainBox->id) {
@@ -1331,7 +1338,7 @@ class AccountingController extends Controller
             if (preg_match('/سحب\s+دفعة\s*(.*)/u', $noteSuffix, $matches)) {
                 $noteSuffix = trim($matches[1]);
             }
-            $description = 'وصل سحب مباشر'.' '.'قاسه'.' '.$targetUser->name.($noteSuffix !== '' ? ' '.$noteSuffix : '');
+            $description = 'وصل سحب مباشر'.' '.'قاصة'.' '.$targetUser->name.($noteSuffix !== '' ? ' '.$noteSuffix : '');
             $morphedId = $targetUser->id;
             $childDetails = $existingDetails;
         }
@@ -1621,11 +1628,21 @@ class AccountingController extends Controller
             $absAmount = abs((float) $amount);
             $disc = abs((float) ($discount ?? 0));
 
-            // Client payment into الصندوق: Dr Cash / Cr AR (not Cash/Revenue).
+            // Client payment into قاصة استلام الدفعات: Dr Cash(or vault ledger) / Cr AR.
             // Distinguish from قاصة deposits (type inUserBox) which stay Cash/Revenue.
-            $isClientPaymentOnCashBox = $ledger->walletPostingKind((int) $ownerId, (int) $user_id) === 'cash_box'
-                && $type === 'in'
-                && $this->isClientMorphed($morphed_id, $morphed_type);
+            $receiptsCashUserId = null;
+            try {
+                $receiptsCashUserId = app(\App\Services\VaultService::class)->receiptsCashUserId((int) $ownerId);
+            } catch (\Throwable $e) {
+                $receiptsCashUserId = null;
+            }
+            $isReceiptsVault = $receiptsCashUserId && (int) $user_id === (int) $receiptsCashUserId;
+            $isClientPaymentOnCashBox = $type === 'in'
+                && $this->isClientMorphed($morphed_id, $morphed_type)
+                && (
+                    $isReceiptsVault
+                    || $ledger->walletPostingKind((int) $ownerId, (int) $user_id) === 'cash_box'
+                );
 
             if ($isClientPaymentOnCashBox) {
                 $journal = $ledger->postClientPayment(
@@ -1635,7 +1652,8 @@ class AccountingController extends Controller
                     $currencyNorm,
                     (string) $desc,
                     $transaction,
-                    $disc
+                    $disc,
+                    (int) $user_id
                 );
             } else {
                 $journal = $ledger->postWalletIncrease(

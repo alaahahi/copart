@@ -68,6 +68,17 @@ class AccountingCacheService
         // and must not be recreated after an explicit soft-delete.
         app(SystemWalletService::class)->ensureForOwner($ownerId, false);
         app(LedgerService::class)->ensureSystemAccounts($ownerId);
+        // الصندوق الأساسي always exists as a vault (قاصة) in vaults table.
+        if (\Illuminate\Support\Facades\Schema::hasTable('vaults')) {
+            try {
+                app(\App\Services\VaultService::class)->ensureMainBoxVault($ownerId);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('ensureMainBoxVault failed', [
+                    'owner_id' => $ownerId,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
 
         foreach ($this->accountEmailMap() as $key => $email) {
             $cacheKey = "account_{$ownerId}_$key";

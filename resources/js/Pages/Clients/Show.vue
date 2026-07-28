@@ -824,7 +824,7 @@ function checkClientBalance(_v) {
             <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
               دفعات الزبائن تُسجَّل تلقائياً في
               <span class="font-semibold text-slate-700 dark:text-slate-200">صندوق الدولار</span>
-              (حساب 1100). قاصة الشركة منفصلة من قائمة قاصة الشركة، وقاسات التجار من «عرض بالمحاسبة».
+              (حساب 1100). قاصة الشركة منفصلة من قائمة قاصة الشركة، وقاصات النظام من تبويب «قاصات النظام». تجار «عرض بالمحاسبة» ليسوا قاصات.
             </p>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div v-if="false">

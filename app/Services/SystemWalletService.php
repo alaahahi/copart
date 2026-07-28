@@ -221,6 +221,11 @@ class SystemWalletService
             return true;
         }
 
+        // Technical users created by VaultService::create (hidden from trader lists).
+        if (is_string($email) && str_ends_with($email, '@vault.local')) {
+            return true;
+        }
+
         return self::isLegacyClientVaultName($user->name ?? null);
     }
 

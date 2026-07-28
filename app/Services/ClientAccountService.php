@@ -7,12 +7,13 @@ use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Provisions ledger accounts when a client (تاجر) is created or قاصة is toggled.
+ * Provisions ledger accounts when a trader (تاجر) is created or accounting visibility is toggled.
  *
  * Rules (see LedgerService constants):
  * - Always: AR / car payments account 1200-{clientId}
- * - If users.show_in_dashboard (قاصة): also 1210-{id} USD + 1220-{id} IQD
- * - Turning قاصة off never deletes historical accounts
+ * - If users.show_in_dashboard (عرض بالمحاسبة): also 1210-{id} USD + 1220-{id} IQD custody
+ * - This is NOT a system vault (قاصة) — vaults live in the vaults table
+ * - Turning visibility off never deletes historical accounts
  */
 class ClientAccountService
 {
@@ -35,20 +36,20 @@ class ClientAccountService
             $withQasa
         );
 
-        Log::info('Client ledger accounts provisioned', [
+        Log::info('Trader ledger accounts provisioned', [
             'client_id' => $client->id,
             'owner_id' => $ownerId,
-            'has_qasa' => $withQasa,
+            'show_in_accounting' => $withQasa,
             'ar_code' => $accounts['ar']->code,
-            'qasa_usd_code' => $accounts['qasa_usd']?->code,
-            'qasa_iqd_code' => $accounts['qasa_iqd']?->code,
+            'custody_usd_code' => $accounts['qasa_usd']?->code,
+            'custody_iqd_code' => $accounts['qasa_iqd']?->code,
         ]);
 
         return $accounts;
     }
 
     /**
-     * When قاصة flag is enabled on edit/toggle — create any missing قاصة accounts.
+     * When عرض بالمحاسبة is enabled on edit/toggle — create any missing custody accounts.
      * When disabled — leave existing accounts intact.
      *
      * @return array{ar:LedgerAccount,qasa_usd:?LedgerAccount,qasa_iqd:?LedgerAccount}

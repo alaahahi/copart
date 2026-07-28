@@ -20,7 +20,7 @@ class AccountTransferController extends Controller
     }
 
     /**
-     * List of "account" wallet users eligible as From/To for a transfer.
+     * List of vaults eligible as From/To for a transfer (from vaults table).
      */
     public function accounts(AccountTransferService $transfers)
     {

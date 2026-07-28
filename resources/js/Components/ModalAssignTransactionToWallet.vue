@@ -28,7 +28,7 @@ watch(
 
 async function save() {
   if (!selectedUserId.value) {
-    error.value = 'اختر القاسة';
+    error.value = 'اختر القاصة';
     return;
   }
   saving.value = true;
@@ -62,8 +62,8 @@ async function save() {
         <header class="erp-modal-header erp-modal-header--assign">
           <div class="erp-modal-header-text">
             <p class="erp-modal-eyebrow">المحاسبة</p>
-            <h2 id="assign-wallet-title" class="erp-modal-title">إسناد السحب إلى قاسة</h2>
-            <p class="erp-modal-subtitle">تحويل حركة السحب من الصندوق لتصبح سحباً من قاسة محددة</p>
+            <h2 id="assign-wallet-title" class="erp-modal-title">إسناد السحب إلى قاصة</h2>
+            <p class="erp-modal-subtitle">تحويل حركة السحب من الصندوق لتصبح سحباً من قاصة نظام (جدول القاصات) — ليس تاجراً</p>
           </div>
           <button
             type="button"
@@ -91,10 +91,10 @@ async function save() {
           </div>
 
           <section class="erp-field-group">
-            <h3 class="erp-section-label">القاسة المستهدفة</h3>
+            <h3 class="erp-section-label">القاصة المستهدفة</h3>
             <div class="erp-field">
               <label class="erp-label" for="wallet_user_id">
-                إسناد إلى قاسة
+                إسناد إلى قاصة
                 <span class="erp-badge erp-badge--out">سحب</span>
               </label>
               <div class="erp-select-wrap">
@@ -104,14 +104,14 @@ async function save() {
                   :list="walletUsers"
                   option-value="id"
                   option-text="name"
-                  placeholder="ابحث عن القاسة..."
+                  placeholder="ابحث عن القاصة..."
                 />
               </div>
             </div>
           </section>
 
           <p class="erp-hint">
-            ستُحوَّل الحركة لتظهر كسحب من القاسة المختارة (مثل وصل الصرف من القاسة) مع بقاء خصم الصندوق كما هو.
+            ستُحوَّل الحركة لتظهر كسحب من القاصة المختارة مع بقاء خصم الصندوق كما هو. القائمة من قاصات النظام فقط.
           </p>
 
           <p v-if="error" class="erp-alert" role="alert">{{ error }}</p>

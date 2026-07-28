@@ -22,9 +22,9 @@ class LedgerService
     public const CODE_TREASURY_USD = '1120';
     public const CODE_TREASURY_IQD = '1130';
     public const CODE_CLIENT_AR_PREFIX = '1200';
-    /** Per-client قاصة USD custody: 1210-{clientId} */
+    /** Per-trader accounting-visibility USD custody: 1210-{clientId} (not a system vault) */
     public const CODE_CLIENT_QASA_USD_PREFIX = '1210';
-    /** Per-client قاصة IQD custody: 1220-{clientId} */
+    /** Per-trader accounting-visibility IQD custody: 1220-{clientId} (not a system vault) */
     public const CODE_CLIENT_QASA_IQD_PREFIX = '1220';
     public const CODE_REVENUE = '4100';
     public const CODE_EXPENSE = '5100';
@@ -134,7 +134,8 @@ class LedgerService
     }
 
     /**
-     * Per-client قاصة custody account (USD or IQD): 1210-{id} / 1220-{id}.
+     * Per-trader accounting-visibility custody (USD or IQD): 1210-{id} / 1220-{id}.
+     * Not a system vault (قاصة) — those live in the vaults table.
      */
     public function clientQasaAccount(int $ownerId, int $clientId, string $currency): LedgerAccount
     {
@@ -147,8 +148,8 @@ class LedgerService
         return LedgerAccount::firstOrCreate(
             ['owner_id' => $ownerId, 'code' => $code],
             [
-                'name' => ($isIqd ? 'Client Qasa IQD #' : 'Client Qasa USD #') . $clientId,
-                'name_ar' => ($isIqd ? 'قاصة دينار: ' : 'قاصة دولار: ') . $label,
+                'name' => ($isIqd ? 'Trader custody IQD #' : 'Trader custody USD #') . $clientId,
+                'name_ar' => ($isIqd ? 'عهدة محاسبة دينار: ' : 'عهدة محاسبة دولار: ') . $label,
                 'type' => 'asset',
                 'currency' => $isIqd ? 'IQD' : '$',
                 'party_type' => User::class,
@@ -160,10 +161,10 @@ class LedgerService
     }
 
     /**
-     * Provision ledger accounts for a client.
+     * Provision ledger accounts for a trader.
      * Always: AR (ذمم / دفعات السيارات).
-     * If $withQasa (or client.show_in_dashboard): also قاصة دولار + قاصة دينار.
-     * Never deletes accounts when قاصة is turned off.
+     * If $withQasa (or client.show_in_dashboard): also custody USD + IQD (عرض بالمحاسبة).
+     * Never deletes accounts when accounting visibility is turned off.
      *
      * @return array{ar:LedgerAccount,qasa_usd:?LedgerAccount,qasa_iqd:?LedgerAccount}
      */
@@ -590,11 +591,15 @@ class LedgerService
         string $currency,
         string $memo,
         $reference = null,
-        float $discount = 0
+        float $discount = 0,
+        ?int $cashUserId = null
     ): JournalEntry {
         $amount = abs($amount);
         $discount = abs($discount);
-        $cash = $this->cashAccount($ownerId, $currency);
+        // Prefer the configured receipts vault ledger (mainBox → 1100/1110; other vaults → party mirror).
+        $cash = $cashUserId
+            ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
+            : $this->cashAccount($ownerId, $currency);
         $ar = $this->clientReceivableAccount($ownerId, $clientId);
 
         $lines = [

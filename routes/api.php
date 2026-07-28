@@ -25,6 +25,7 @@ use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\AccountTransferController;
 use App\Http\Controllers\TraderProfitController;
 use App\Http\Controllers\AuctionController;
+use App\Http\Controllers\VaultController;
 
 
 use App\Models\SystemConfig;
@@ -210,9 +211,17 @@ Route::get('ledgerJournals',[LedgerController::class, 'recentJournals'])->name('
 Route::post('ledgerAccountStore',[LedgerController::class, 'storeAccount'])->name('ledgerAccountStore');
 Route::post('ledgerAccountUpdate',[LedgerController::class, 'updateAccount'])->name('ledgerAccountUpdate');
 Route::post('ledgerAccountDeactivate',[LedgerController::class, 'deactivateAccount'])->name('ledgerAccountDeactivate');
+Route::get('ledgerReceiptsVault',[LedgerController::class, 'receiptsVault'])->name('ledgerReceiptsVault');
+Route::post('ledgerReceiptsVault',[LedgerController::class, 'updateReceiptsVault'])->name('ledgerReceiptsVault.update');
 
 Route::get('accountTransfer/accounts',[AccountTransferController::class, 'accounts'])->name('accountTransfer.accounts');
 Route::post('accountTransfer',[AccountTransferController::class, 'store'])->name('accountTransfer.store');
+
+Route::get('vaults',[VaultController::class, 'index'])->name('vaults.index');
+Route::post('vaults',[VaultController::class, 'store'])->name('vaults.store');
+Route::post('vaults/{vault}',[VaultController::class, 'update'])->name('vaults.update');
+Route::post('vaults/{vault}/delete',[VaultController::class, 'destroy'])->name('vaults.destroy');
+Route::post('vaults/{vault}/toggleAccounting',[VaultController::class, 'toggleAccounting'])->name('vaults.toggleAccounting');
 
 Route::get('traderProfits/summary',[TraderProfitController::class, 'summary'])->name('traderProfits.summary');
 Route::post('traderProfits/post',[TraderProfitController::class, 'post'])->name('traderProfits.post');

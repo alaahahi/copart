@@ -34,6 +34,12 @@ const editingAccount = ref(null);
 const savingAccount = ref(false);
 const deactivatingId = ref(null);
 
+/** قاصة استلام دفعات الزبائن (from vaults table) */
+const receiptsVaultId = ref("");
+const receiptsVaultOptions = ref([]);
+const receiptsVaultSaving = ref(false);
+const receiptsVaultLabel = ref("");
+
 const TREE_COLLAPSE_KEY = "ledger_tree_collapsed_groups";
 const collapsedGroups = ref(loadCollapsedGroups());
 
@@ -482,6 +488,37 @@ async function deactivateAccount(acc, e) {
   }
 }
 
+async function loadReceiptsVault() {
+  try {
+    const { data } = await axios.get("/api/ledgerReceiptsVault");
+    receiptsVaultOptions.value = data.vaults || [];
+    receiptsVaultId.value = data.default_receipts_vault_id
+      ? String(data.default_receipts_vault_id)
+      : "";
+    receiptsVaultLabel.value = data.vault?.name || "";
+  } catch (e) {
+    // Non-fatal — payment binding UI is admin convenience.
+    console.warn("ledgerReceiptsVault", e);
+  }
+}
+
+async function saveReceiptsVault() {
+  if (!receiptsVaultId.value) return;
+  receiptsVaultSaving.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.post("/api/ledgerReceiptsVault", {
+      default_receipts_vault_id: Number(receiptsVaultId.value),
+    });
+    receiptsVaultLabel.value = data.vault?.name || "";
+    flashSuccess(data.message || "تم حفظ قاصة استلام الدفعات");
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر حفظ قاصة استلام الدفعات";
+  } finally {
+    receiptsVaultSaving.value = false;
+  }
+}
+
 async function refresh() {
   if (tab.value === "tree") await loadTree();
   else if (tab.value === "trial") await loadTrial();
@@ -508,7 +545,10 @@ watch([() => postForm.value.period_from, () => postForm.value.period_to, () => p
   if (tab.value === "profits") loadTraderRows();
 });
 
-onMounted(() => refresh());
+onMounted(() => {
+  refresh();
+  loadReceiptsVault();
+});
 </script>
 
 <template>
@@ -554,7 +594,7 @@ onMounted(() => refresh());
                   :class="tab === 'transfer' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
                   @click="tab = 'transfer'"
                 >
-                  حركة بين الحسابات
+                  حركة بين القاصات
                 </button>
                 <button
                   type="button"
@@ -600,6 +640,46 @@ onMounted(() => refresh());
                   @keyup.enter="refresh"
                 />
               </div>
+            </div>
+
+            <!-- قاصة استلام دفعات الزبائن -->
+            <div
+              v-if="tab === 'tree' && $page.props.auth.user.type_id == 1"
+              class="mt-4 rounded-xl border border-emerald-700/50 bg-slate-900 p-4 text-slate-100"
+            >
+              <div class="flex flex-wrap items-end gap-3">
+                <div class="min-w-[16rem] flex-1">
+                  <label class="mb-1 block text-xs font-semibold text-slate-200">
+                    قاصة استلام دفعات الزبائن
+                  </label>
+                  <p class="mb-2 text-xs text-slate-400">
+                    كل دفعات التجار/السيارات تُرحَّل إلى هذه القاصة (افتراضي: الصندوق). ليست تاجراً.
+                  </p>
+                  <select
+                    v-model="receiptsVaultId"
+                    class="w-full rounded-lg border border-slate-600 bg-slate-950 text-white"
+                  >
+                    <option
+                      v-for="v in receiptsVaultOptions"
+                      :key="v.id"
+                      :value="String(v.id)"
+                    >
+                      {{ v.name }}{{ v.is_main_box ? ' (الصندوق)' : '' }}
+                    </option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  class="min-h-[2.5rem] rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  :disabled="receiptsVaultSaving || !receiptsVaultId"
+                  @click="saveReceiptsVault"
+                >
+                  {{ receiptsVaultSaving ? 'جاري الحفظ...' : 'حفظ الربط' }}
+                </button>
+              </div>
+              <p v-if="receiptsVaultLabel" class="mt-2 text-xs text-emerald-300">
+                الحالي: {{ receiptsVaultLabel }}
+              </p>
             </div>
 
             <div v-if="errorMsg" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
@@ -876,10 +956,10 @@ onMounted(() => refresh());
             <template v-else-if="tab === 'transfer'">
               <div class="mx-auto max-w-3xl space-y-6">
                 <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل بين الحسابات</h2>
+                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل بين القاصات</h2>
                   <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitTransfer">
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من حساب</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من قاصة</label>
                       <select
                         v-model="transferForm.from_user_id"
                         class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
@@ -894,7 +974,7 @@ onMounted(() => refresh());
                       </p>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى حساب</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى قاصة</label>
                       <select
                         v-model="transferForm.to_user_id"
                         class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
@@ -960,7 +1040,7 @@ onMounted(() => refresh());
 
                 <div class="rounded-xl border border-slate-200 dark:border-slate-700">
                   <div class="border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                    <span class="text-sm font-bold text-slate-900 dark:text-white">أرصدة الحسابات الحالية</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">أرصدة القاصات الحالية</span>
                   </div>
                   <div v-if="transferLoading" class="py-6 text-center text-slate-500">جاري التحميل...</div>
                   <table v-else class="w-full text-center text-sm">

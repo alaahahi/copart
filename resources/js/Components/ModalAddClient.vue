@@ -11,7 +11,7 @@ const emit = defineEmits(['close', 'a']);
 const defaultForm = () => ({
   name: '',
   phone: '',
-  // عرض بالمحاسبة (قاسة) — hidden from accounting by default until explicitly enabled.
+  // عرض بالمحاسبة — NOT a system vault; hidden from accounting until enabled.
   show_in_dashboard: false,
 });
 
@@ -95,7 +95,7 @@ const close = () => emit('close');
           <div class="erp-toggle-row">
             <div class="erp-toggle-text">
               <span class="erp-toggle-title">عرض بالمحاسبة</span>
-              <span class="erp-toggle-hint">يُنشئ حسابات ذمم إضافية للتاجر ويظهره في قوائم المحاسبة — ليس قاصة نظام. قاصات النظام في جدول منفصل.</span>
+              <span class="erp-toggle-hint">يُظهر التاجر في اختصارات المحاسبة ويُنشئ حسابات ذمم إضافية — هذا ليس قاصة. لإضافة قاصة استخدم تبويب «قاصات النظام».</span>
             </div>
             <label class="erp-switch" :title="form.show_in_dashboard ? 'معروض في المحاسبة' : 'مخفي عن المحاسبة'">
               <input type="checkbox" role="switch" v-model="form.show_in_dashboard" />

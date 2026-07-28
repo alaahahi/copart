@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import ModalAddClient from "@/Components/ModalAddClient.vue";
 import ModalEditClient from "@/Components/ModalEditClient.vue";
+import ModalAddVault from "@/Components/ModalAddVault.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from 'axios';
@@ -21,6 +22,9 @@ import SearchInput from "@/Components/SearchInput.vue";
 let showModalEditClient = ref(false);
 let showModalAddClient = ref(false);
 let showModalDelClient = ref(false);
+let showModalVault = ref(false);
+let vaultModalMode = ref('create');
+const vaultModalRef = ref(null);
 
 const laravelData = ref([]);
 let formData = ref({});
@@ -35,7 +39,7 @@ let page = 1;
 let json = ref({});
 let controller = new AbortController();
 const togglingIds = ref([]);
-/** Active list tab: traders | merchants-with-qasa | system vaults. */
+/** Active list tab: traders | merchants-with-accounting | system vaults. */
 const activeTab = ref('traders');
 
 const refresh = () => {
@@ -54,7 +58,6 @@ const effectiveQ = () => {
   if (activeTab.value === 'system_qasa') {
     return 'system_qasa';
   }
-  // التجار: free-text / category when set (same merchant list as former «الكل»)
   if (category.value && category.value !== '0') {
     return category.value;
   }
@@ -127,13 +130,29 @@ function setTab(tab) {
 }
 
 function openModalAddClient() {
-  // show_in_dashboard defaults to false for every newly added merchant.
   formData.value = { name: '', phone: '', show_in_dashboard: false };
   showModalAddClient.value = true;
 }
 function openModalEditClient(form = {}) {
   formData.value = form;
   showModalEditClient.value = true;
+}
+function openModalAddVault() {
+  vaultModalMode.value = 'create';
+  formData.value = { name: '', type: 'system', show_in_accounting: true, notes: '' };
+  showModalVault.value = true;
+}
+function openModalEditVault(row = {}) {
+  vaultModalMode.value = 'edit';
+  formData.value = {
+    vault_id: row.vault_id,
+    name: row.name,
+    type: row.vault_type || 'system',
+    code: row.vault_code || '',
+    show_in_accounting: row.show_in_accounting ?? row.show_in_dashboard ?? true,
+    notes: row.notes || '',
+  };
+  showModalVault.value = true;
 }
 function confirmAddClient(V) {
   axios.post('/api/clientsStore', V)
@@ -153,29 +172,91 @@ function confirmEditClient(V) {
       console.error(error);
     });
 }
+async function confirmVaultSave(V) {
+  vaultModalRef.value?.setSaving?.(true);
+  vaultModalRef.value?.setError?.('');
+  try {
+    if (vaultModalMode.value === 'edit' && V.vault_id) {
+      await axios.post(`/api/vaults/${V.vault_id}`, V);
+    } else {
+      await axios.post('/api/vaults', V);
+    }
+    showModalVault.value = false;
+    if (activeTab.value !== 'system_qasa') {
+      activeTab.value = 'system_qasa';
+    } else {
+      refresh();
+    }
+  } catch (error) {
+    const msg = error?.response?.data?.message
+      || error?.response?.data?.errors?.name?.[0]
+      || 'تعذر حفظ القاصة';
+    vaultModalRef.value?.setError?.(msg);
+    console.error(error);
+  } finally {
+    vaultModalRef.value?.setSaving?.(false);
+  }
+}
 function openModalDelClient(form = {}) {
   formData.value = form;
   showModalDelClient.value = true;
 }
 function confirmDelClient(V) {
+  if (V?.is_vault && V?.vault_id) {
+    axios.post(`/api/vaults/${V.vault_id}/delete`)
+      .then(() => {
+        showModalDelClient.value = false;
+        refresh();
+      })
+      .catch((error) => {
+        const msg = error?.response?.data?.message || 'تعذر حذف القاصة';
+        alert(msg);
+        console.error(error);
+      });
+    return;
+  }
   axios.post('/api/delClient', V)
     .then(() => {
       showModalDelClient.value = false;
       refresh();
     })
     .catch((error) => {
-      const msg = error?.response?.data?.message || 'تعذر حذف القاصة';
+      const msg = error?.response?.data?.message || 'تعذر حذف التاجر';
       alert(msg);
       console.error(error);
     });
 }
 
 /**
- * Toggle show_in_dashboard — used by Accounting page to list client "قاسة" wallets.
- * Field name is historical; UI label is "عرض بالمحاسبة".
+ * Toggle accounting visibility.
+ * Traders → users.show_in_dashboard (عرض بالمحاسبة).
+ * Vaults → vaults.show_in_accounting (اختصارات المحاسبة).
  */
 async function toggleShowInDashboardQuick(user) {
   if (togglingIds.value.includes(user.id)) return;
+
+  if (user.is_vault && user.vault_id) {
+    const next = !(user.show_in_accounting ?? user.show_in_dashboard ?? false);
+    const prev = user.show_in_accounting ?? user.show_in_dashboard ?? false;
+    togglingIds.value.push(user.id);
+    user.show_in_accounting = next;
+    user.show_in_dashboard = next;
+    try {
+      const response = await axios.post(`/api/vaults/${user.vault_id}/toggleAccounting`, {
+        show_in_accounting: next,
+      });
+      user.show_in_accounting = response.data.show_in_accounting;
+      user.show_in_dashboard = response.data.show_in_accounting;
+    } catch (error) {
+      user.show_in_accounting = prev;
+      user.show_in_dashboard = prev;
+      console.error(error);
+    } finally {
+      togglingIds.value = togglingIds.value.filter((id) => id !== user.id);
+    }
+    return;
+  }
+
   const next = !(user.show_in_dashboard || false);
   const prev = user.show_in_dashboard || false;
   togglingIds.value.push(user.id);
@@ -186,7 +267,6 @@ async function toggleShowInDashboardQuick(user) {
       show_in_dashboard: next,
     });
     user.show_in_dashboard = response.data.show_in_dashboard;
-    // If viewing «تجار لديهم قاصة» and user turned off, drop from current list
     if (activeTab.value === 'traders_qasa' && !user.show_in_dashboard) {
       laravelData.value = laravelData.value.filter((u) => u.id !== user.id);
     }
@@ -205,6 +285,19 @@ function formatBalance(balance) {
 function unpaidCars(user) {
   return (Number(user.car_count) || 0) - (Number(user.car_count_completed) || 0);
 }
+
+function vaultTypeLabel(type) {
+  const map = {
+    cash: 'نقد',
+    system: 'نظام',
+    commission: 'عمولة',
+    company: 'شركة',
+    expense: 'مصاريف',
+    supplier: 'مورد',
+    contracts: 'عقود',
+  };
+  return map[type] || type || '—';
+}
 </script>
 
 <template>
@@ -217,6 +310,15 @@ function unpaidCars(user) {
       @close="showModalAddClient = false"
     />
 
+    <ModalAddVault
+      ref="vaultModalRef"
+      :show="showModalVault"
+      :formData="formData"
+      :mode="vaultModalMode"
+      @a="confirmVaultSave($event)"
+      @close="showModalVault = false"
+    />
+
     <ModalDelClient
       :show="showModalDelClient ? true : false"
       :formData="formData"
@@ -225,7 +327,8 @@ function unpaidCars(user) {
     >
       <template #header>
         <h2 class="mb-5 dark:text-white text-center">
-          هل متأكد من حذف التاجر
+          هل متأكد من حذف
+          {{ formData.is_vault ? 'القاصة' : 'التاجر' }}
           {{ formData.name }}
           ؟
         </h2>
@@ -243,7 +346,6 @@ function unpaidCars(user) {
       <div class="mx-auto sm:px-6 lg:px-8">
         <div class="clients-card overflow-hidden shadow-sm sm:rounded-xl">
           <div class="p-4 sm:p-6">
-            <!-- Tabs: التجار | تجار بعرض محاسبة | قاصات النظام -->
             <div class="clients-tabs mb-5" role="tablist" :aria-label="$t('clients')">
               <button
                 type="button"
@@ -280,7 +382,6 @@ function unpaidCars(user) {
               </button>
             </div>
 
-            <!-- Filters -->
             <div class="clients-filters grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
               <div class="lg:col-span-2">
                 <InputLabel for="simple-search" :value="$t('search')" class="mb-1" />
@@ -319,7 +420,20 @@ function unpaidCars(user) {
               </div>
 
               <div class="flex flex-wrap items-end gap-2">
-                <button type="button" class="clients-btn clients-btn-primary flex-1 min-w-[7rem]" @click="openModalAddClient()">
+                <button
+                  v-if="activeTab === 'system_qasa'"
+                  type="button"
+                  class="clients-btn clients-btn-vault flex-1 min-w-[7rem]"
+                  @click="openModalAddVault()"
+                >
+                  إضافة قاصة
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="clients-btn clients-btn-primary flex-1 min-w-[7rem]"
+                  @click="openModalAddClient()"
+                >
                   {{ $t('addCustomer') }}
                 </button>
                 <a
@@ -332,46 +446,55 @@ function unpaidCars(user) {
               </div>
             </div>
 
-            <!-- Table -->
             <div class="clients-table-wrap relative overflow-x-auto rounded-lg">
               <table class="clients-table w-full text-sm text-center">
                 <thead>
                   <tr>
                     <th>#</th>
                     <th>{{ $t('name') }}</th>
-                    <th>{{ $t('phoneNumber') }}</th>
-                    <th>{{ $t('cars') }}</th>
-                    <th>{{ $t('unpaid') }}</th>
-                    <th>{{ $t('paid') }}</th>
-                    <th>{{ $t('debt') }}</th>
-                    <th :title="$t('show_in_accounting')">{{ $t('show_in_accounting') }}</th>
+                    <th v-if="activeTab === 'system_qasa'">النوع</th>
+                    <th v-else>{{ $t('phoneNumber') }}</th>
+                    <th v-if="activeTab !== 'system_qasa'">{{ $t('cars') }}</th>
+                    <th v-if="activeTab !== 'system_qasa'">{{ $t('unpaid') }}</th>
+                    <th v-if="activeTab !== 'system_qasa'">{{ $t('paid') }}</th>
+                    <th>{{ activeTab === 'system_qasa' ? 'الرصيد' : $t('debt') }}</th>
+                    <th :title="activeTab === 'system_qasa' ? 'عرض اختصار القاصة في المحاسبة' : $t('show_in_accounting')">
+                      {{ activeTab === 'system_qasa' ? 'في المحاسبة' : $t('show_in_accounting') }}
+                    </th>
                     <th>{{ $t('execute') }}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
                     v-for="(user, i) in laravelData"
-                    :key="user?.id || i"
+                    :key="user?.vault_id || user?.id || i"
                     :class="Number(user.balance) <= 0 ? 'row-credit' : 'row-debit'"
                   >
-                    <template v-if="user?.id">
+                    <template v-if="user?.id || user?.vault_id">
                       <td>{{ i + 1 }}</td>
-                      <td class="cell-name">{{ user.name }}</td>
-                      <td dir="ltr">{{ user.phone || '—' }}</td>
-                      <td>{{ user.car_count ?? 0 }}</td>
-                      <td>{{ unpaidCars(user) }}</td>
-                      <td>{{ user.car_count_completed ?? 0 }}</td>
+                      <td class="cell-name">
+                        {{ user.name }}
+                        <span v-if="user.is_vault" class="vault-badge">قاصة</span>
+                      </td>
+                      <td v-if="activeTab === 'system_qasa'">{{ vaultTypeLabel(user.vault_type) }}</td>
+                      <td v-else dir="ltr">{{ user.phone || '—' }}</td>
+                      <template v-if="activeTab !== 'system_qasa'">
+                        <td>{{ user.car_count ?? 0 }}</td>
+                        <td>{{ unpaidCars(user) }}</td>
+                        <td>{{ user.car_count_completed ?? 0 }}</td>
+                      </template>
                       <td class="cell-balance" dir="ltr">{{ formatBalance(user.balance) }}</td>
                       <td>
                         <label
-                          v-if="!user.is_vault"
                           class="clients-switch"
-                          :title="user.show_in_dashboard ? 'معروض في المحاسبة' : 'إخفاء من المحاسبة'"
+                          :title="(user.show_in_accounting ?? user.show_in_dashboard)
+                            ? (user.is_vault ? 'معروضة في المحاسبة' : 'معروض في المحاسبة')
+                            : (user.is_vault ? 'مخفية عن اختصارات المحاسبة' : 'إخفاء من المحاسبة')"
                         >
                           <input
                             type="checkbox"
                             role="switch"
-                            :checked="!!user.show_in_dashboard"
+                            :checked="!!(user.show_in_accounting ?? user.show_in_dashboard)"
                             :disabled="togglingIds.includes(user.id)"
                             @change="toggleShowInDashboardQuick(user)"
                           />
@@ -380,7 +503,6 @@ function unpaidCars(user) {
                           </span>
                           <span class="sr-only">{{ $t('show_in_accounting') }}</span>
                         </label>
-                        <span v-else class="text-xs text-slate-500 dark:text-slate-300" :title="$t('tab_system_qasa_hint')">قاصة</span>
                       </td>
                       <td>
                         <div class="clients-actions">
@@ -393,7 +515,16 @@ function unpaidCars(user) {
                             <show />
                           </Link>
                           <button
-                            v-if="!user.is_vault"
+                            v-if="user.is_vault"
+                            type="button"
+                            class="action-btn action-edit"
+                            title="تعديل القاصة"
+                            @click="openModalEditVault(user)"
+                          >
+                            <edit />
+                          </button>
+                          <button
+                            v-else
                             type="button"
                             class="action-btn action-edit"
                             title="تعديل"
@@ -402,18 +533,19 @@ function unpaidCars(user) {
                             <edit />
                           </button>
                           <button
-                            v-if="user.can_delete && !user.is_vault"
+                            v-if="user.can_delete"
                             type="button"
                             class="action-btn action-del"
-                            title="حذف"
+                            :title="user.is_vault ? 'حذف القاصة' : 'حذف'"
                             @click="openModalDelClient(user)"
                           >
                             <trash />
                           </button>
                           <Link
+                            v-if="user.id"
                             class="action-btn action-wallet"
                             :href="route('wallet', { id: user.id })"
-                            :title="user.is_vault ? 'قاصة' : 'المحفظة'"
+                            :title="user.is_vault ? 'دفتر القاصة' : 'محفظة التاجر'"
                           >
                             <wallet />
                           </Link>
@@ -506,7 +638,6 @@ function unpaidCars(user) {
   color: #0f172a;
   font-size: 0.875rem;
   border-radius: 0.5rem;
-  /* Logical padding so icon+text never collide in RTL/LTR (shorthand was killing pl/ps). */
   padding-block: 0.55rem;
   padding-inline-end: 0.75rem;
   padding-inline-start: 0.75rem;
@@ -558,6 +689,14 @@ function unpaidCars(user) {
 
 .clients-btn-primary:hover {
   background: #b91c1c;
+}
+
+.clients-btn-vault {
+  background: #059669;
+}
+
+.clients-btn-vault:hover {
+  background: #047857;
 }
 
 .clients-btn-print {
@@ -622,6 +761,18 @@ function unpaidCars(user) {
 .cell-name {
   font-weight: 700;
   font-size: 0.95rem;
+}
+
+.vault-badge {
+  display: inline-block;
+  margin-inline-start: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #0f766e;
+  color: #ecfdf5;
+  vertical-align: middle;
 }
 
 .cell-balance {

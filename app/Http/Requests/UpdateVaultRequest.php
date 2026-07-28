@@ -17,6 +17,16 @@ class UpdateVaultRequest extends FormRequest
             && ($this->user()?->can('update', $vault) ?? false);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('code') && is_string($this->code)) {
+            $this->merge(['code' => trim($this->code)]);
+        }
+        if ($this->has('name') && is_string($this->name)) {
+            $this->merge(['name' => trim($this->name)]);
+        }
+    }
+
     public function rules(): array
     {
         /** @var Vault|null $vault */
@@ -28,12 +38,12 @@ class UpdateVaultRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'code' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'string',
                 'max:64',
                 'regex:/^[a-zA-Z0-9_\-]+$/',
                 Rule::unique('vaults', 'code')
-                    ->where(fn ($q) => $q->where('owner_id', $ownerId)->whereNull('deleted_at'))
+                    ->where(fn ($q) => $q->where('owner_id', $ownerId))
                     ->ignore($vaultId),
             ],
             'type' => ['sometimes', 'string', Rule::in([
@@ -43,6 +53,16 @@ class UpdateVaultRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'show_in_accounting' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'اسم القاصة مطلوب.',
+            'type.in' => 'نوع القاصة غير صالح.',
+            'code.unique' => 'رمز القاصة مستخدم مسبقاً.',
+            'code.regex' => 'رمز القاصة يجب أن يحتوي أحرفاً وأرقاماً و _ و - فقط.',
         ];
     }
 }

@@ -652,9 +652,10 @@ async function saveDescription(tran) {
                 <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
                 <Link
                   v-for="wallet in flaggedWallets"
-                  :key="wallet.id"
+                  :key="wallet.vault_id || wallet.id"
                   :href="`/wallet?id=${wallet.id}`"
                   class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-600 bg-orange-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-800 dark:border-orange-500 dark:bg-orange-800 dark:text-white dark:hover:bg-orange-700"
+                  :title="wallet.vault_code ? `قاصة — ${wallet.name}` : `قاصة — ${wallet.name}`"
                 >
                   {{ wallet.name }}
                 </Link>

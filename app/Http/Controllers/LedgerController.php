@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\DeactivateLedgerAccountRequest;
 use App\Http\Requests\StoreLedgerAccountRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
+use App\Http\Requests\UpdateReceiptsVaultRequest;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
+use App\Models\Vault;
 use App\Services\LedgerService;
+use App\Services\VaultService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
@@ -461,5 +464,73 @@ class LedgerController extends Controller
         }
 
         return $ordered->unique('id')->values();
+    }
+
+    /**
+     * Current «قاصة استلام دفعات الزبائن» + list of vaults for the dropdown.
+     */
+    public function receiptsVault(VaultService $vaults)
+    {
+        $this->authorizeLedger();
+
+        $ownerId = (int) Auth::user()->owner_id;
+        $current = $vaults->resolveReceiptsVault($ownerId);
+        $options = $vaults->listForOwner($ownerId)
+            ->filter(fn (Vault $v) => (int) ($v->legacy_user_id ?? 0) > 0)
+            ->map(fn (Vault $v) => [
+                'id' => (int) $v->id,
+                'name' => $v->name,
+                'code' => $v->code,
+                'type' => $v->type,
+                'legacy_user_id' => (int) $v->legacy_user_id,
+                'is_main_box' => $vaults->isEssentialMainBox($v),
+            ])
+            ->values();
+
+        return Response::json([
+            'default_receipts_vault_id' => (int) $current->id,
+            'vault' => [
+                'id' => (int) $current->id,
+                'name' => $current->name,
+                'code' => $current->code,
+                'type' => $current->type,
+                'legacy_user_id' => (int) $current->legacy_user_id,
+            ],
+            'vaults' => $options,
+        ], 200);
+    }
+
+    /**
+     * Bind client payment receipts to a vault (admin only via Form Request).
+     */
+    public function updateReceiptsVault(UpdateReceiptsVaultRequest $request, VaultService $vaults)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $vaultId = $request->validated('default_receipts_vault_id');
+
+        try {
+            $vault = $vaults->setDefaultReceiptsVaultId(
+                $ownerId,
+                $vaultId !== null ? (int) $vaultId : null
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر حفظ قاصة استلام الدفعات'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم ربط دفعات الزبائن بالقاصة: '.$vault->name,
+            'default_receipts_vault_id' => (int) $vault->id,
+            'vault' => [
+                'id' => (int) $vault->id,
+                'name' => $vault->name,
+                'code' => $vault->code,
+                'type' => $vault->type,
+                'legacy_user_id' => (int) $vault->legacy_user_id,
+            ],
+        ], 200);
     }
 }

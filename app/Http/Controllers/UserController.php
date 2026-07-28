@@ -97,8 +97,8 @@ class UserController extends Controller
 
         // Tab filter keys (Clients Index)
         // traders          → التجار (clients excluding system vaults)
-        // traders_qasa     → تجار لديهم قاصة (CLIENT_HAS_QASA_FLAG, not system vault)
-        // system_qasa      → قاصات النظام (account wallets + legacy client vaults)
+        // traders_qasa     → تجار بعرض محاسبة (CLIENT_HAS_QASA_FLAG, not system vault)
+        // system_qasa      → قاصات النظام (vaults table)
         // show_in_dashboard→ legacy alias for traders_qasa
         $isTradersQasa = in_array($q, ['traders_qasa', 'show_in_dashboard'], true);
         $isSystemQasa = $q === 'system_qasa';
@@ -358,11 +358,11 @@ class UserController extends Controller
         $client->update([
             'name' => $validated['name'],
             'phone' => $validated['phone'] ?? null,
-            // show_in_dashboard = قاصة (LedgerService::CLIENT_HAS_QASA_FLAG)
+            // show_in_dashboard = عرض بالمحاسبة (LedgerService custody) — ليس قاصة نظام
             'show_in_dashboard' => $request->boolean('show_in_dashboard'),
         ]);
 
-        // If قاصة turned on: create missing قاصة accounts. Off: keep history (no delete).
+        // If عرض بالمحاسبة turned on: create missing custody accounts. Off: keep history (no delete).
         $this->clientAccounts->syncQasaFlag($client->fresh());
 
         return Response::json($client, 200);
@@ -382,10 +382,10 @@ class UserController extends Controller
         $client->show_in_dashboard = $validated['show_in_dashboard'];
         $client->save();
 
-        // قاصة on → ensure 1210/1220 exist; off → do not delete ledger history
+        // عرض بالمحاسبة on → ensure 1210/1220 custody exist; off → do not delete ledger history
         $this->clientAccounts->syncQasaFlag($client);
 
-        // show_in_dashboard controls visibility on Accounting page (عرض بالمحاسبة / قاصة)
+        // show_in_dashboard = عرض بالمحاسبة للتاجر — قاصات النظام في جدول vaults
         return response()->json([
             'message' => 'تم تحديث عرض التاجر في صفحة المحاسبة',
             'show_in_dashboard' => (bool) $client->show_in_dashboard,

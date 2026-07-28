@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Transactions;
 use App\Models\User;
+use App\Models\Vault;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -130,13 +131,44 @@ class AccountTransferService
     }
 
     /**
-     * List of "account" wallet users eligible for transfer (cash box, Dubai,
-     * Iran, border, howler, main/in/out/debt accounts, ...). Client AR
-     * accounts are intentionally excluded — client debt/payment already has
-     * its own dedicated flow (سند قبض/دفع).
+     * List of system vaults eligible for transfer (cash box, Dubai, Iran, …).
+     * Sourced from `vaults` (not traders). id remains legacy_user_id so existing
+     * transfer APIs keep working. Client AR wallets are excluded.
      */
     public function transferableAccounts(int $ownerId): \Illuminate\Support\Collection
     {
+        if (Schema::hasTable('vaults')) {
+            $rows = Vault::query()
+                ->with(['wallet', 'legacyUser.wallet'])
+                ->forOwner($ownerId)
+                ->active()
+                ->whereNotNull('legacy_user_id')
+                ->orderBy('name')
+                ->get()
+                ->filter(fn (Vault $vault) => (int) $vault->legacy_user_id > 0)
+                ->map(function (Vault $vault) {
+                    $wallet = $vault->wallet ?? $vault->legacyUser?->wallet;
+
+                    return [
+                        'id' => (int) $vault->legacy_user_id,
+                        'vault_id' => (int) $vault->id,
+                        'name' => $vault->name,
+                        'email' => $vault->legacyUser?->email,
+                        'vault_type' => $vault->type,
+                        'vault_code' => $vault->code,
+                        'is_vault' => true,
+                        'balance' => (float) ($wallet->balance ?? 0),
+                        'balance_dinar' => (float) ($wallet->balance_dinar ?? 0),
+                    ];
+                })
+                ->values();
+
+            if ($rows->isNotEmpty()) {
+                return $rows;
+            }
+        }
+
+        // Fallback when vaults table empty / missing — legacy account-type users only.
         $accountTypeId = Cache::get('user_type_account')
             ?? \App\Models\UserType::where('name', 'account')->value('id');
 
@@ -150,6 +182,7 @@ class AccountTransferService
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_vault' => true,
                 'balance' => (float) ($user->wallet->balance ?? 0),
                 'balance_dinar' => (float) ($user->wallet->balance_dinar ?? 0),
             ])
