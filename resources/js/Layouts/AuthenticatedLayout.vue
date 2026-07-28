@@ -46,6 +46,7 @@ const primaryItems = computed(() => [
   { key: "purchases", label: "purchases", href: route("purchases"), active: route().current("purchases"), show: hasRole(1, 6) },
   { key: "sales", label: "sales", href: route("sales"), active: route().current("sales"), show: true },
   { key: "clients", label: "clients", href: route("clients"), active: route().current("clients"), show: hasRole(1, 6) },
+  { key: "vaults", label: "vaults", href: route("vaults"), active: route().current("vaults"), show: hasRole(1, 6) },
   { key: "accounting", label: "accounting", href: route("accounting"), active: route().current("accounting"), show: hasRole(1, 6) },
   { key: "analytics", label: "Analytics", href: route("analytics"), active: route().current("analytics"), show: hasRole(1, 6) },
 ]);

@@ -19,6 +19,7 @@ use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\SystemConfigController;
 use App\Http\Controllers\Settings\UserManagementController;
 use App\Http\Controllers\QaE2eController;
+use App\Http\Controllers\VaultController;
 
 use App\Models\SystemConfig;
 
@@ -58,6 +59,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('ban/{id}',[UserController::class, 'ban'])->name("ban");
     Route::get('sentToCourt/{id}',[FormRegistrationController::class, 'sentToCourt'])->name("sentToCourt");
     Route::get('clients',[UserController::class, 'clients'])->name('clients');
+    Route::get('vaults',[VaultController::class, 'page'])->name('vaults');
     Route::get('showClients/{id}',[UserController::class, 'showClients'])->name('showClients');
 
     

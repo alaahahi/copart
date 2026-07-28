@@ -9,17 +9,36 @@ use App\Services\VaultService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Response;
+use Inertia\Inertia;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
 class VaultController extends Controller
 {
+    /**
+     * Inertia page: dedicated vaults management (قاصات النظام).
+     */
+    public function page()
+    {
+        $this->authorize('viewAny', Vault::class);
+
+        return Inertia::render('Vaults/Index');
+    }
+
     public function index(Request $request, VaultService $vaults)
     {
         $this->authorize('viewAny', Vault::class);
 
         $ownerId = (int) Auth::user()->owner_id;
+
+        // Rich rows for Vaults Index UI (balance, can_delete, legacy wallet id).
+        if ($request->boolean('for_ui')) {
+            return Response::json([
+                'data' => $vaults->systemQasaClientRows($ownerId)->values(),
+            ], 200);
+        }
+
         $activeOnly = ! $request->boolean('include_inactive');
 
         $list = $vaults->listForOwner($ownerId, $activeOnly)->map(fn (Vault $v) => $this->serialize($v));

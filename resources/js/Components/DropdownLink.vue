@@ -28,8 +28,8 @@ defineProps({
     :as="as"
     class="block w-full px-4 py-2.5 text-left text-sm leading-5 transition duration-150 ease-in-out focus:outline-none"
     :class="active
-      ? 'bg-indigo-50 font-bold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200'
-      : 'text-gray-700 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800'"
+      ? 'bg-indigo-50 font-bold text-indigo-700 dark:bg-indigo-600 dark:text-white dark:hover:bg-indigo-500'
+      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-700 dark:hover:text-white'"
   >
     <slot />
   </Link>

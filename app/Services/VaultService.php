@@ -580,7 +580,7 @@ class VaultService
     }
 
     /**
-     * Rows for Clients tab «قاصات النظام» — compatible with existing table UI.
+     * Rows for Vaults Index page «القاصات» — compatible with table UI.
      * id = legacy_user_id so /wallet?id=… keeps working.
      *
      * @return \Illuminate\Support\Collection<int, object>
