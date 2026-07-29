@@ -95,6 +95,19 @@ async function confirmDisburse(payload) {
 function formatBal(v) {
   return `${formatMoney(v, currency.value === 'IQD' ? 'IQD' : '$')} ${currency.value === 'IQD' ? 'د.ع' : '$'}`;
 }
+
+const currencyLabel = computed(() => (currency.value === 'IQD' ? 'دينار' : 'دولار'));
+
+const totalDebit = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.debit) || 0), 0)
+);
+const totalCredit = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.credit) || 0), 0)
+);
+
+function printLedger() {
+  window.print();
+}
 </script>
 
 <template>
@@ -115,7 +128,7 @@ function formatBal(v) {
           <div class="p-4 sm:p-6">
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <Link :href="route('vaults')" class="exp-back">← العودة للقاصات / المصاريف</Link>
+                <Link :href="route('vaults')" class="exp-back print:hidden">← العودة للقاصات / المصاريف</Link>
                 <h1 class="mt-2 text-xl font-bold text-slate-900 dark:text-white">
                   {{ account.name }}
                   <span class="exp-code" dir="ltr">{{ account.code }}</span>
@@ -126,12 +139,24 @@ function formatBal(v) {
                   <template v-else>(إيراد/عمولة)</template>
                   — الرصيد من قيود اليومية
                 </p>
+                <p class="exp-print-meta mt-1 hidden text-xs text-slate-600 print:block" dir="rtl">
+                  العملة: {{ currencyLabel }}
+                  · عدد الحركات: {{ rows.length }}
+                </p>
               </div>
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2 print:hidden">
                 <select v-model="currency" class="exp-select" @change="loadLedger">
                   <option value="$">دولار</option>
                   <option value="IQD">دينار</option>
                 </select>
+                <button
+                  type="button"
+                  class="exp-btn exp-btn-print"
+                  :title="$t('print')"
+                  @click="printLedger"
+                >
+                  {{ $t('print') }}
+                </button>
                 <button
                   v-if="canDisburse"
                   type="button"
@@ -156,13 +181,13 @@ function formatBal(v) {
               </div>
             </div>
 
-            <p v-if="flash" class="mb-4 text-sm font-semibold text-emerald-600 dark:text-emerald-300">
+            <p v-if="flash" class="mb-4 text-sm font-semibold text-emerald-600 dark:text-emerald-300 print:hidden">
               {{ flash }}
             </p>
-            <p v-if="loadError" class="mb-4 text-sm font-semibold text-rose-600 dark:text-rose-300">
+            <p v-if="loadError" class="mb-4 text-sm font-semibold text-rose-600 dark:text-rose-300 print:hidden">
               {{ loadError }}
             </p>
-            <p v-else-if="loading" class="mb-4 text-sm text-slate-500 dark:text-slate-300">
+            <p v-else-if="loading" class="mb-4 text-sm text-slate-500 dark:text-slate-300 print:hidden">
               جاري التحميل…
             </p>
 
@@ -193,10 +218,18 @@ function formatBal(v) {
                     </td>
                   </tr>
                 </tbody>
+                <tfoot v-if="rows.length" class="exp-print-totals hidden print:table-footer-group">
+                  <tr>
+                    <td colspan="3" class="text-start font-bold">المجموع</td>
+                    <td class="font-bold" dir="ltr">{{ formatMoney(totalDebit) }}</td>
+                    <td class="font-bold" dir="ltr">{{ formatMoney(totalCredit) }}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
-            <p v-if="canDisburse" class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            <p v-if="canDisburse" class="mt-4 text-xs text-slate-500 dark:text-slate-400 print:hidden">
               صرف مصروف = اختيار قاصة نقدية + مبلغ ← قيد: مدين هذا الحساب · دائن القاصة. لا يوجد تحويل بين حسابات المصاريف.
             </p>
           </div>
@@ -286,6 +319,14 @@ function formatBal(v) {
   background: #047857;
 }
 
+.exp-btn-print {
+  background: #ea580c;
+}
+
+.exp-btn-print:hover {
+  background: #c2410c;
+}
+
 .exp-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
@@ -344,5 +385,68 @@ function formatBal(v) {
   padding: 0.6rem 0.5rem;
   border-bottom: 1px solid var(--c-border);
   vertical-align: middle;
+}
+
+.exp-table tfoot td {
+  padding: 0.65rem 0.5rem;
+  border-top: 2px solid var(--c-border);
+  background: var(--c-head);
+  vertical-align: middle;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  .exp-page {
+    --c-bg: #ffffff;
+    --c-border: #cbd5e1;
+    --c-head: #f1f5f9;
+    --c-text: #0f172a;
+    --c-muted: #475569;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+
+  .exp-card {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  .exp-kpi {
+    background: #fff !important;
+    border-color: #94a3b8 !important;
+    break-inside: avoid;
+  }
+
+  .exp-kpi-value {
+    color: #047857 !important;
+  }
+
+  .exp-kpi-value.muted {
+    color: #334155 !important;
+  }
+
+  .exp-table thead th {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .exp-table tbody td,
+  .exp-table tfoot td {
+    color: #0f172a !important;
+  }
+
+  .exp-table-wrap {
+    overflow: visible !important;
+    border-color: #94a3b8 !important;
+  }
 }
 </style>
