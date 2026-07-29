@@ -6,6 +6,8 @@ use App\Models\Car;
 use App\Models\CarExpenses;
 use App\Models\CompanyTreasuryEntry;
 use App\Models\JournalEntry;
+use App\Models\JournalLine;
+use App\Models\LedgerAccount;
 use App\Models\TraderProfitEntry;
 use App\Models\Transactions;
 use App\Models\Transfers;
@@ -18,22 +20,24 @@ use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
- * Admin-only operational wipe: cars, traders, payments, journals, wallet balances,
- * and non-essential system vaults (commission / expense boxes).
+ * Admin-only operational wipe: cars, traders, payments, journals, ledger accounts,
+ * wallet balances, and non-essential system vaults (commission / expense boxes).
  *
- * Preserves admins, system config/branding/WA, chart of accounts, and mainBox only.
+ * Preserves admins, system config/branding/WA, and mainBox only.
+ * After wipe, re-seeds minimal system COA + mainBox cash link.
  */
 class SystemResetService
 {
     public function __construct(
         protected SystemWalletService $systemWallets,
         protected LedgerService $ledger,
+        protected VaultService $vaults,
         protected AccountingCacheService $accountingCache,
     ) {
     }
 
     /**
-     * @return array{cars:int,expenses:int,transactions:int,journals:int,traders:int,transfers:int,treasury:int,profits:int,wallets_reset:int,vault_users_removed:int,vaults_removed:int}
+     * @return array{cars:int,expenses:int,transactions:int,journals:int,journal_lines:int,accounts:int,traders:int,transfers:int,treasury:int,profits:int,wallets_reset:int,vault_users_removed:int,vaults_removed:int}
      */
     public function wipe(User $actor): array
     {
@@ -57,6 +61,8 @@ class SystemResetService
             'expenses' => 0,
             'transactions' => 0,
             'journals' => 0,
+            'journal_lines' => 0,
+            'accounts' => 0,
             'traders' => 0,
             'transfers' => 0,
             'treasury' => 0,
@@ -145,11 +151,26 @@ class SystemResetService
                 'updated_at' => now(),
             ]);
 
-            // 4) Journal entries (SoftDeletes — lines stay but balances ignore trashed entries)
+            // 4) Journal entries (SoftDeletes) — must run before account wipe
             $stats['journals'] = JournalEntry::query()
                 ->where('owner_id', $ownerId)
                 ->whereNull('deleted_at')
                 ->update(['deleted_at' => now(), 'updated_at' => now()]);
+
+            // 4b) Hard-delete journal lines (no SoftDeletes; FK restrictOnDelete blocks account wipe)
+            if (Schema::hasTable('journal_lines') && Schema::hasTable('journal_entries')) {
+                $entryIds = JournalEntry::withTrashed()
+                    ->where('owner_id', $ownerId)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+
+                if ($entryIds !== []) {
+                    $stats['journal_lines'] = JournalLine::query()
+                        ->whereIn('journal_entry_id', $entryIds)
+                        ->delete();
+                }
+            }
 
             // 5) Trader profits
             if (Schema::hasTable('trader_profit_entries')) {
@@ -230,9 +251,35 @@ class SystemResetService
                 }
             }
 
-            // 11) Re-ensure essential vault only (mainBox) + ledger chart
+            // 11) Wipe chart of accounts (LedgerAccount has no SoftDeletes — hard delete after lines gone)
+            if (Schema::hasTable('ledger_accounts')) {
+                if (Schema::hasTable('vaults') && Schema::hasColumn('vaults', 'ledger_account_id')) {
+                    DB::table('vaults')
+                        ->where('owner_id', $ownerId)
+                        ->whereNotNull('ledger_account_id')
+                        ->update([
+                            'ledger_account_id' => null,
+                            'updated_at' => now(),
+                        ]);
+                }
+
+                if (Schema::hasColumn('ledger_accounts', 'parent_id')) {
+                    LedgerAccount::query()
+                        ->where('owner_id', $ownerId)
+                        ->update(['parent_id' => null]);
+                }
+
+                $stats['accounts'] = LedgerAccount::query()
+                    ->where('owner_id', $ownerId)
+                    ->delete();
+            }
+
+            // 12) Re-ensure essential vault (mainBox) + minimal system COA + cash link
             $this->systemWallets->ensureForOwner($ownerId, false);
             $this->ledger->ensureSystemAccounts($ownerId);
+            if (Schema::hasTable('vaults')) {
+                $this->vaults->ensureMainBoxVault($ownerId);
+            }
         });
 
         $this->accountingCache->forgetOwnerAccounts($ownerId);

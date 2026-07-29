@@ -106,7 +106,7 @@ defineExpose({
             <p class="erp-modal-subtitle">
               {{ isEdit
                 ? 'تحديث بيانات القاصة النقدية وربطها بدليل الحسابات'
-                : 'بدون محفظة — حساب نقدي في دليل الحسابات' }}
+                : 'قاصة نقدية فقط (نقد/بنك/خزنة) — حساب أصل نقدي في دليل الحسابات' }}
             </p>
           </div>
           <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
@@ -125,7 +125,7 @@ defineExpose({
               id="vault-name"
               v-model="form.name"
               type="text"
-              placeholder="مثال: مصاريف الحدود"
+              placeholder="مثال: قاصة الحدود"
               class="erp-input"
               @keyup.enter="submit"
             />

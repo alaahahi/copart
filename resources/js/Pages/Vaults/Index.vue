@@ -2,22 +2,31 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import ModalAddVault from "@/Components/ModalAddVault.vue";
+import ModalAddExpenseAccount from "@/Components/ModalAddExpenseAccount.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import axios from 'axios';
 import ModalDelClient from "@/Components/ModalDelCar.vue";
 import wallet from "@/Components/icon/wallet.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { formatMoney } from "@/utils/formatMoney";
 import SearchInput from "@/Components/SearchInput.vue";
+
+const activeTab = ref('cash'); // cash | expenses
 
 const showModalVault = ref(false);
 const vaultModalMode = ref('create');
 const vaultModalRef = ref(null);
 const showModalDel = ref(false);
+const showModalExpenseAccount = ref(false);
+const expenseAccountModalRef = ref(null);
 
 const vaults = ref([]);
+const expenseAccounts = ref([]);
+const suggestExpenseCode = ref('5101');
+const suggestCommissionCode = ref('5201');
+const expenseParentId = ref(null);
 const formData = ref({});
 const q = ref('');
 const loading = ref(false);
@@ -35,6 +44,16 @@ const filteredVaults = computed(() => {
   });
 });
 
+const filteredExpenseAccounts = computed(() => {
+  const term = String(q.value || '').trim().toLowerCase();
+  if (!term) return expenseAccounts.value;
+  return expenseAccounts.value.filter((a) => {
+    const name = String(a.name || '').toLowerCase();
+    const code = String(a.code || '').toLowerCase();
+    return name.includes(term) || code.includes(term);
+  });
+});
+
 async function loadVaults() {
   loading.value = true;
   loadError.value = '';
@@ -49,11 +68,40 @@ async function loadVaults() {
   }
 }
 
-onMounted(loadVaults);
+async function loadExpenseAccounts() {
+  loading.value = true;
+  loadError.value = '';
+  try {
+    const { data } = await axios.get('/api/ledgerExpenseAccounts');
+    expenseAccounts.value = data.accounts || [];
+    suggestExpenseCode.value = data.suggest_expense_code || '5101';
+    suggestCommissionCode.value = data.suggest_commission_code || '5201';
+    expenseParentId.value = data.expense_parent_id || null;
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || 'تعذر تحميل حسابات المصاريف';
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadActiveTab() {
+  if (activeTab.value === 'cash') {
+    await loadVaults();
+  } else {
+    await loadExpenseAccounts();
+  }
+}
+
+onMounted(loadActiveTab);
+watch(activeTab, () => {
+  q.value = '';
+  loadActiveTab();
+});
 
 function openModalAddVault() {
   vaultModalMode.value = 'create';
-  formData.value = { name: '', type: 'system', show_in_accounting: true, notes: '' };
+  formData.value = { name: '', type: 'cash', show_in_accounting: true, notes: '' };
   showModalVault.value = true;
 }
 
@@ -62,7 +110,7 @@ function openModalEditVault(row = {}) {
   formData.value = {
     vault_id: row.vault_id || row.id,
     name: row.name,
-    type: row.vault_type || row.type || 'system',
+    type: row.vault_type || row.type || 'cash',
     code: row.vault_code || row.code || '',
     show_in_accounting: row.show_in_accounting ?? row.show_in_dashboard ?? true,
     notes: row.notes || '',
@@ -136,6 +184,30 @@ async function toggleAccounting(row) {
   }
 }
 
+function openModalAddExpenseAccount() {
+  showModalExpenseAccount.value = true;
+}
+
+async function confirmExpenseAccountSave(payload) {
+  expenseAccountModalRef.value?.setSaving?.(true);
+  expenseAccountModalRef.value?.setError?.('');
+  try {
+    await axios.post('/api/ledgerAccountStore', payload);
+    showModalExpenseAccount.value = false;
+    await loadExpenseAccounts();
+  } catch (error) {
+    const errors = error?.response?.data?.errors || {};
+    const msg = error?.response?.data?.message
+      || errors.code?.[0]
+      || errors.name_ar?.[0]
+      || 'تعذر إنشاء حساب المصروف';
+    expenseAccountModalRef.value?.setError?.(msg);
+    console.error(error);
+  } finally {
+    expenseAccountModalRef.value?.setSaving?.(false);
+  }
+}
+
 function formatBalance(balance) {
   return `${formatMoney(balance, "$")} $`;
 }
@@ -146,13 +218,13 @@ function vaultTypeLabel(type) {
     bank: 'بنك',
     safe: 'خزنة',
     system: 'نظام',
-    commission: 'عمولة',
-    company: 'شركة',
-    expense: 'مصاريف',
-    supplier: 'مورد',
-    contracts: 'عقود',
   };
   return map[type] || type || '—';
+}
+
+function accountKindLabel(row) {
+  if (row.kind === 'commission' || row.type === 'income') return 'عمولة';
+  return 'مصروف';
 }
 
 function walletUserId(row) {
@@ -170,6 +242,16 @@ function walletUserId(row) {
       :mode="vaultModalMode"
       @a="confirmVaultSave($event)"
       @close="showModalVault = false"
+    />
+
+    <ModalAddExpenseAccount
+      ref="expenseAccountModalRef"
+      :show="showModalExpenseAccount"
+      :suggest-expense-code="suggestExpenseCode"
+      :suggest-commission-code="suggestCommissionCode"
+      :expense-parent-id="expenseParentId"
+      @save="confirmExpenseAccountSave"
+      @close="showModalExpenseAccount = false"
     />
 
     <ModalDelClient
@@ -193,15 +275,43 @@ function walletUserId(row) {
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">{{ $t('vaults') }}</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                  صناديق ومصاريف النظام — ليست تجاراً
+                  القاصات = نقد فقط · المصاريف والعمولات = حسابات في دليل الحسابات
                 </p>
               </div>
               <button
+                v-if="activeTab === 'cash'"
                 type="button"
                 class="vaults-btn vaults-btn-primary"
                 @click="openModalAddVault()"
               >
-                إضافة قاصة
+                إضافة قاصة نقدية
+              </button>
+              <button
+                v-else
+                type="button"
+                class="vaults-btn vaults-btn-primary"
+                @click="openModalAddExpenseAccount()"
+              >
+                إضافة حساب مصروف/عمولة
+              </button>
+            </div>
+
+            <div class="mb-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="vaults-tab"
+                :class="{ active: activeTab === 'cash' }"
+                @click="activeTab = 'cash'"
+              >
+                نقد / قاصات
+              </button>
+              <button
+                type="button"
+                class="vaults-tab"
+                :class="{ active: activeTab === 'expenses' }"
+                @click="activeTab = 'expenses'"
+              >
+                مصاريف وعمولات
               </button>
             </div>
 
@@ -212,7 +322,7 @@ function walletUserId(row) {
                 v-model="q"
                 type="text"
                 input-class="vaults-input"
-                placeholder="بحث بالاسم / الرمز / النوع"
+                :placeholder="activeTab === 'cash' ? 'بحث بالاسم / الرمز / النوع' : 'بحث بالاسم / رمز الحساب'"
               />
             </div>
 
@@ -223,7 +333,8 @@ function walletUserId(row) {
               جاري التحميل…
             </p>
 
-            <div class="vaults-table-wrap relative overflow-x-auto rounded-lg">
+            <!-- Cash vaults -->
+            <div v-if="activeTab === 'cash'" class="vaults-table-wrap relative overflow-x-auto rounded-lg">
               <table class="vaults-table w-full text-sm text-center">
                 <thead>
                   <tr>
@@ -244,7 +355,7 @@ function walletUserId(row) {
                     <td>{{ i + 1 }}</td>
                     <td class="cell-name">
                       {{ row.name }}
-                      <span class="vault-badge">قاصة</span>
+                      <span class="vault-badge">قاصة نقدية</span>
                     </td>
                     <td>{{ vaultTypeLabel(row.vault_type || row.type) }}</td>
                     <td class="cell-balance" dir="ltr">{{ formatBalance(row.balance) }}</td>
@@ -291,7 +402,7 @@ function walletUserId(row) {
                           v-if="walletUserId(row)"
                           class="action-btn action-wallet"
                           :href="route('wallet', { id: walletUserId(row) })"
-                          title="دفتر القاصة"
+                          title="حركة القاصة النقدية"
                         >
                           <wallet />
                         </Link>
@@ -300,7 +411,58 @@ function walletUserId(row) {
                   </tr>
                   <tr v-if="!loading && !filteredVaults.length">
                     <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
-                      لا توجد قاصات
+                      لا توجد قاصات نقدية
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Expense / commission COA -->
+            <div v-else class="vaults-table-wrap relative overflow-x-auto rounded-lg">
+              <p class="coa-hint">
+                أرصدة من قيود اليومية · الصرف يتم من قاصة نقدية (مدين مصروف / دائن نقد)
+              </p>
+              <table class="vaults-table w-full text-sm text-center">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>الرمز</th>
+                    <th>{{ $t('name') }}</th>
+                    <th>التصنيف</th>
+                    <th>الرصيد</th>
+                    <th>{{ $t('execute') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(row, i) in filteredExpenseAccounts"
+                    :key="row.id || i"
+                    :class="Number(row.balance) <= 0 ? 'row-credit' : 'row-debit'"
+                  >
+                    <td>{{ i + 1 }}</td>
+                    <td class="cell-code" dir="ltr">{{ row.code }}</td>
+                    <td class="cell-name">
+                      {{ row.name }}
+                      <span class="vault-badge badge-coa">حساب COA</span>
+                    </td>
+                    <td>{{ accountKindLabel(row) }}</td>
+                    <td class="cell-balance" dir="ltr">{{ formatBalance(row.balance) }}</td>
+                    <td>
+                      <div class="vaults-actions">
+                        <Link
+                          class="action-btn action-wallet"
+                          :href="route('expenseAccount', { id: row.id })"
+                          :title="row.can_disburse ? 'دفتر المصروف / صرف' : 'دفتر الحساب'"
+                        >
+                          <wallet />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="!loading && !filteredExpenseAccounts.length">
+                    <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
+                      لا توجد حسابات مصاريف/عمولات — أضف حساباً من الزر أعلاه
                     </td>
                   </tr>
                 </tbody>
@@ -335,6 +497,42 @@ function walletUserId(row) {
   background: var(--c-bg);
   color: var(--c-text);
   border: 1px solid var(--c-border);
+}
+
+.vaults-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--c-border);
+  background: #f1f5f9;
+  color: #334155;
+  cursor: pointer;
+  min-height: 2.35rem;
+}
+
+.dark .vaults-tab {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+.vaults-tab.active {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.coa-hint {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-head);
 }
 
 .vaults-input {
@@ -439,6 +637,11 @@ function walletUserId(row) {
   font-size: 0.95rem;
 }
 
+.cell-code {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .vault-badge {
   display: inline-block;
   margin-inline-start: 0.35rem;
@@ -449,6 +652,11 @@ function walletUserId(row) {
   background: #0f766e;
   color: #ecfdf5;
   vertical-align: middle;
+}
+
+.badge-coa {
+  background: #7c2d12;
+  color: #ffedd5;
 }
 
 .cell-balance {

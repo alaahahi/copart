@@ -166,7 +166,7 @@ class SystemConfigController extends Controller
     }
 
     /**
-     * Admin-only operational wipe (cars, traders, wallets, payments, journals).
+     * Admin-only operational wipe (cars, traders, wallets, payments, journals, COA).
      */
     public function reset(ResetSystemRequest $request, SystemResetService $reset)
     {
@@ -175,7 +175,7 @@ class SystemConfigController extends Controller
         $stats = $reset->wipe($request->user());
 
         return Response::json([
-            'message' => 'تم تصفير بيانات التشغيل بنجاح. سيتم إعادة تحميل الصفحة.',
+            'message' => 'تم تصفير بيانات التشغيل والحسابات بنجاح. سيتم إعادة تحميل الصفحة.',
             'stats' => $stats,
         ]);
     }

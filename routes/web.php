@@ -60,6 +60,7 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('sentToCourt/{id}',[FormRegistrationController::class, 'sentToCourt'])->name("sentToCourt");
     Route::get('clients',[UserController::class, 'clients'])->name('clients');
     Route::get('vaults',[VaultController::class, 'page'])->name('vaults');
+    Route::get('expense-account',[LedgerController::class, 'expenseAccountPage'])->name('expenseAccount');
     Route::get('showClients/{id}',[UserController::class, 'showClients'])->name('showClients');
 
     

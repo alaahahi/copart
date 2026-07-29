@@ -47,7 +47,7 @@ class UpdateVaultRequest extends FormRequest
                     ->ignore($vaultId),
             ],
             'type' => ['sometimes', 'string', Rule::in([
-                'cash', 'system', 'commission', 'company', 'expense', 'supplier', 'contracts',
+                'cash', 'bank', 'safe',
             ])],
             'currency_default' => ['nullable', 'string', 'max:10'],
             'is_active' => ['sometimes', 'boolean'],

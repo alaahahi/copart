@@ -956,10 +956,13 @@ onMounted(() => {
             <template v-else-if="tab === 'transfer'">
               <div class="mx-auto max-w-3xl space-y-6">
                 <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل نقدي</h2>
+                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل نقدي بين القاصات</h2>
+                  <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                    تحويل نقد فقط بين قاصات نقدية (نقد/بنك/خزنة) — ليس بين حسابات مصاريف.
+                  </p>
                   <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitTransfer">
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من قاصة</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من قاصة نقدية</label>
                       <select
                         v-model="transferForm.from_user_id"
                         class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
@@ -974,7 +977,7 @@ onMounted(() => {
                       </p>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى قاصة</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى قاصة نقدية</label>
                       <select
                         v-model="transferForm.to_user_id"
                         class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"

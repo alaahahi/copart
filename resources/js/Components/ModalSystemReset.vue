@@ -91,6 +91,7 @@ function submit() {
               <li>{{ $t("systemResetClearsWallets") }}</li>
               <li>{{ $t("systemResetClearsVaults") }}</li>
               <li>{{ $t("systemResetClearsPayments") }}</li>
+              <li>{{ $t("systemResetClearsAccounts") }}</li>
             </ul>
             <p class="text-sm text-emerald-300">
               {{ $t("systemResetKeeps") }}

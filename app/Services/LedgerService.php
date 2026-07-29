@@ -653,17 +653,26 @@ class LedgerService
     /**
      * Cash-box payment (وصل سحب): Debit Expense / Credit Cash.
      * Optional $cashUserId routes to that user's cash vault ledger.
+     * Optional $expenseAccountId posts to a specific expense COA (else system 5100).
      */
-    public function postCashDisbursement(int $ownerId, float $amount, string $currency, string $memo, $reference = null, ?int $cashUserId = null): JournalEntry
-    {
+    public function postCashDisbursement(
+        int $ownerId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?int $cashUserId = null,
+        ?int $expenseAccountId = null,
+        ?string $entryDate = null
+    ): JournalEntry {
         $cash = $cashUserId
             ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
             : $this->cashAccount($ownerId, $currency);
-        $expense = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+        $expense = $this->resolveExpenseAccount($ownerId, $expenseAccountId);
 
         return $this->post([
             'owner_id' => $ownerId,
-            'entry_date' => now()->toDateString(),
+            'entry_date' => $entryDate ?: now()->toDateString(),
             'memo' => $memo,
             'source' => 'cash_box',
             'currency' => $currency,
@@ -673,6 +682,129 @@ class LedgerService
             ['account_id' => $expense->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
             ['account_id' => $cash->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
         ]);
+    }
+
+    /**
+     * Resolve an owner expense COA, or fall back to system General Expenses (5100).
+     */
+    public function resolveExpenseAccount(int $ownerId, ?int $expenseAccountId = null): LedgerAccount
+    {
+        if ($expenseAccountId) {
+            $account = LedgerAccount::query()
+                ->where('owner_id', $ownerId)
+                ->where('id', $expenseAccountId)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $account) {
+                throw new InvalidArgumentException('حساب المصروف غير موجود.');
+            }
+            if ($account->type !== 'expense') {
+                throw new InvalidArgumentException('الحساب المحدد ليس حساب مصروف في دليل الحسابات.');
+            }
+
+            return $account;
+        }
+
+        return $this->systemAccount($ownerId, self::CODE_EXPENSE);
+    }
+
+    /**
+     * Expense (+ optional commission-like income) COA rows for the Vaults «مصاريف وعمولات» tab.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public function listExpenseCommissionAccounts(int $ownerId, string $currency = '$'): \Illuminate\Support\Collection
+    {
+        $this->ensureSystemAccounts($ownerId);
+        $currency = $currency === 'IQD' ? 'IQD' : '$';
+
+        $accounts = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('type', 'expense')
+                    ->orWhere(function ($inner) {
+                        $inner->where('type', 'income')
+                            ->where('is_system', false)
+                            ->where(function ($n) {
+                                $n->where('name_ar', 'like', '%عمول%')
+                                    ->orWhere('name', 'like', '%commission%')
+                                    ->orWhere('name', 'like', '%Commission%')
+                                    ->orWhere('code', 'like', '42%');
+                            });
+                    });
+            })
+            ->withCount('lines')
+            ->orderBy('code')
+            ->get();
+
+        return $accounts->map(function (LedgerAccount $account) use ($currency) {
+            $hasMovements = ((int) ($account->lines_count ?? 0)) > 0;
+            $label = $account->name_ar ?: $account->name;
+            $kind = $account->type === 'income' ? 'commission' : 'expense';
+            if ($account->type === 'expense' && (
+                str_contains((string) $account->name_ar, 'عمول')
+                || stripos((string) $account->name, 'commission') !== false
+            )) {
+                $kind = 'commission';
+            }
+
+            return [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $label,
+                'name_ar' => $account->name_ar,
+                'type' => $account->type,
+                'kind' => $kind,
+                'is_system' => (bool) $account->is_system,
+                'has_movements' => $hasMovements,
+                'can_disburse' => $account->type === 'expense',
+                'balance' => $account->balance($currency),
+                'balance_dinar' => $account->balance('IQD'),
+                'currency' => $currency,
+            ];
+        })->values();
+    }
+
+    /**
+     * Suggest next free expense code under 51xx (or 52xx for commission).
+     */
+    public function suggestExpenseAccountCode(int $ownerId, string $kind = 'expense'): string
+    {
+        $this->ensureSystemAccounts($ownerId);
+        $prefix = $kind === 'commission' ? '52' : '51';
+        $existing = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('code', 'like', $prefix.'%')
+            ->pluck('code');
+
+        $max = 0;
+        foreach ($existing as $code) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', (string) $code, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+
+        // 5100 → suffix 00; next free child becomes 5101, etc.
+        $next = $max + 1;
+        if ($next < 1) {
+            $next = 1;
+        }
+
+        $candidate = $prefix.str_pad((string) $next, 2, '0', STR_PAD_LEFT);
+        $guard = 0;
+        while (
+            LedgerAccount::query()->where('owner_id', $ownerId)->where('code', $candidate)->exists()
+            && $guard++ < 500
+        ) {
+            $next++;
+            $candidate = strlen((string) $next) <= 2
+                ? $prefix.str_pad((string) $next, 2, '0', STR_PAD_LEFT)
+                : $prefix.$next;
+        }
+
+        return $candidate;
     }
 
     /**

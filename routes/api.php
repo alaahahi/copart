@@ -213,6 +213,8 @@ Route::post('ledgerAccountUpdate',[LedgerController::class, 'updateAccount'])->n
 Route::post('ledgerAccountDeactivate',[LedgerController::class, 'deactivateAccount'])->name('ledgerAccountDeactivate');
 Route::get('ledgerReceiptsVault',[LedgerController::class, 'receiptsVault'])->name('ledgerReceiptsVault');
 Route::post('ledgerReceiptsVault',[LedgerController::class, 'updateReceiptsVault'])->name('ledgerReceiptsVault.update');
+Route::get('ledgerExpenseAccounts',[LedgerController::class, 'expenseCommissionAccounts'])->name('ledgerExpenseAccounts');
+Route::post('ledgerExpenseDisburse',[LedgerController::class, 'disburseExpense'])->name('ledgerExpenseDisburse');
 
 Route::get('accountTransfer/accounts',[AccountTransferController::class, 'accounts'])->name('accountTransfer.accounts');
 Route::post('accountTransfer',[AccountTransferController::class, 'store'])->name('accountTransfer.store');

@@ -36,7 +36,7 @@ class StoreVaultRequest extends FormRequest
                 Rule::unique('vaults', 'code')->where(fn ($q) => $q->where('owner_id', $ownerId)),
             ],
             'type' => ['required', 'string', Rule::in([
-                'cash', 'system', 'commission', 'company', 'expense', 'supplier', 'contracts',
+                'cash', 'bank', 'safe',
             ])],
             'currency_default' => ['nullable', 'string', 'max:10'],
             'is_active' => ['sometimes', 'boolean'],
