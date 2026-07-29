@@ -15,17 +15,24 @@ use Illuminate\Validation\ValidationException;
 class UserManagementService
 {
     /**
-     * Staff / login users managed from Settings (exclude client traders).
+     * Settings → User Management: real login staff only (مدير / admin).
+     * Legacy vault shells (حساب / account + vaults.legacy_user_id) stay in DB
+     * for accounting but are never listed or assignable here.
      */
     public function paginate(?string $search = null, int $perPage = 15): LengthAwarePaginator
     {
-        $clientTypeId = (int) (UserType::query()->where('name', 'client')->value('id') ?? 0);
+        $staffTypeIds = $this->staffTypeIds();
 
         $query = User::query()
             ->with('userType:id,name')
             ->whereNotNull('email')
             ->where('email', '!=', '')
-            ->when($clientTypeId > 0, fn ($q) => $q->where('type_id', '!=', $clientTypeId))
+            ->whereIn('type_id', $staffTypeIds ?: [0])
+            ->whereNotExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('vaults')
+                    ->whereColumn('vaults.legacy_user_id', 'users.id');
+            })
             ->orderByDesc('id');
 
         if ($search !== null && trim($search) !== '') {
@@ -41,16 +48,28 @@ class UserManagementService
     }
 
     /**
-     * Roles assignable in Settings (exclude client traders).
+     * Roles assignable in Settings — مدير (admin) only, never حساب/محاسبة.
      *
      * @return \Illuminate\Support\Collection<int, UserType>
      */
     public function assignableTypes()
     {
         return UserType::query()
-            ->where('name', '!=', 'client')
+            ->where('name', 'admin')
             ->orderBy('id')
             ->get(['id', 'name']);
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function staffTypeIds(): array
+    {
+        return $this->assignableTypes()
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     /**
@@ -91,6 +110,7 @@ class UserManagementService
      */
     public function update(User $user, array $data): User
     {
+        $this->assertSettingsManageable($user);
         $this->assertAssignableType((int) $data['type_id']);
         $this->assertCanChangeType($user, (int) $data['type_id']);
 
@@ -130,6 +150,8 @@ class UserManagementService
 
     public function resetPassword(User $user, string $password): void
     {
+        $this->assertSettingsManageable($user);
+
         $user->password = Hash::make($password);
         $user->save();
 
@@ -146,6 +168,8 @@ class UserManagementService
                 'user' => 'لا يمكنك حذف حسابك الحالي.',
             ]);
         }
+
+        $this->assertSettingsManageable($user);
 
         if ($this->isProtectedSystemVault($user)) {
             throw ValidationException::withMessages([
@@ -170,7 +194,7 @@ class UserManagementService
     }
 
     /**
-     * System cash vaults (mainBox, etc.) — email-based so staff "account" users stay manageable.
+     * System cash vault emails (mainBox, etc.) — never deletable from Settings.
      */
     public function isProtectedSystemVault(User $user): bool
     {
@@ -179,13 +203,41 @@ class UserManagementService
         return $email !== '' && in_array($email, SystemWalletService::systemEmails(), true);
     }
 
+    /**
+     * Whether this user may appear / be edited under Settings → User Management.
+     */
+    public function isSettingsManageable(User $user): bool
+    {
+        if (! in_array((int) $user->type_id, $this->staffTypeIds(), true)) {
+            return false;
+        }
+
+        return ! $this->isVaultLegacyShell($user);
+    }
+
+    protected function isVaultLegacyShell(User $user): bool
+    {
+        return DB::table('vaults')
+            ->where('legacy_user_id', (int) $user->id)
+            ->exists();
+    }
+
+    protected function assertSettingsManageable(User $user): void
+    {
+        if (! $this->isSettingsManageable($user)) {
+            throw ValidationException::withMessages([
+                'user' => 'هذا المستخدم غير قابل للإدارة من إدارة المستخدمين (قاصة / حساب محاسبة).',
+            ]);
+        }
+    }
+
     protected function assertAssignableType(int $typeId): void
     {
-        $allowed = $this->assignableTypes()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $allowed = $this->staffTypeIds();
 
         if (! in_array($typeId, $allowed, true)) {
             throw ValidationException::withMessages([
-                'type_id' => 'نوع المستخدم غير مسموح.',
+                'type_id' => 'يُسمح فقط بصلاحية مدير من هذه الصفحة.',
             ]);
         }
     }
