@@ -17,19 +17,15 @@ const emit = defineEmits(['close', 'a']);
 
 const vaultTypes = [
   { value: 'cash', label: 'نقد / صندوق' },
-  { value: 'system', label: 'نظام' },
-  { value: 'commission', label: 'عمولة' },
-  { value: 'company', label: 'شركة' },
-  { value: 'expense', label: 'مصاريف' },
-  { value: 'supplier', label: 'مورد' },
-  { value: 'contracts', label: 'عقود' },
+  { value: 'bank', label: 'بنك' },
+  { value: 'safe', label: 'خزنة' },
 ];
 
 const defaultForm = () => ({
   vault_id: null,
   name: '',
   code: '',
-  type: 'system',
+  type: 'cash',
   show_in_accounting: true,
   notes: '',
 });
@@ -49,7 +45,7 @@ watch(
       form.value = {
         ...defaultForm(),
         ...(props.formData || {}),
-        type: (props.formData && props.formData.type) || (props.formData && props.formData.vault_type) || 'system',
+        type: (props.formData && props.formData.type) || (props.formData && props.formData.vault_type) || 'cash',
         show_in_accounting: props.formData && props.formData.show_in_accounting !== undefined
           ? !!props.formData.show_in_accounting
           : true,
@@ -69,7 +65,7 @@ const submit = () => {
   errorMsg.value = '';
   const payload = {
     name: form.value.name.trim(),
-    type: form.value.type || 'system',
+    type: form.value.type || 'cash',
     show_in_accounting: !!form.value.show_in_accounting,
     notes: form.value.notes ? String(form.value.notes).trim() : null,
   };
@@ -109,8 +105,8 @@ defineExpose({
             </h2>
             <p class="erp-modal-subtitle">
               {{ isEdit
-                ? 'تحديث بيانات القاصة وربطها بالمحاسبة'
-                : 'إنشاء قاصة جديدة مع محفظة وحساب محاسبي تلقائياً — ليست تاجراً' }}
+                ? 'تحديث بيانات القاصة النقدية وربطها بدليل الحسابات'
+                : 'بدون محفظة — حساب نقدي في دليل الحسابات' }}
             </p>
           </div>
           <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
@@ -135,26 +131,28 @@ defineExpose({
             />
           </div>
 
-          <div class="erp-field">
-            <label class="erp-label" for="vault-type">النوع</label>
-            <select id="vault-type" v-model="form.type" class="erp-input">
-              <option v-for="t in vaultTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
-            </select>
-          </div>
+          <div class="erp-field-grid">
+            <div class="erp-field">
+              <label class="erp-label" for="vault-type">النوع</label>
+              <select id="vault-type" v-model="form.type" class="erp-input">
+                <option v-for="t in vaultTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+              </select>
+            </div>
 
-          <div class="erp-field">
-            <label class="erp-label" for="vault-code">
-              الرمز <span class="erp-optional">(اختياري — يُولَّد تلقائياً)</span>
-            </label>
-            <input
-              id="vault-code"
-              v-model="form.code"
-              type="text"
-              dir="ltr"
-              placeholder="border-expenses"
-              class="erp-input"
-              :disabled="isEdit && form.code === 'mainBox'"
-            />
+            <div class="erp-field">
+              <label class="erp-label" for="vault-code">
+                الرمز <span class="erp-optional">(اختياري — يُولَّد تلقائياً)</span>
+              </label>
+              <input
+                id="vault-code"
+                v-model="form.code"
+                type="text"
+                dir="ltr"
+                placeholder="border-expenses"
+                class="erp-input"
+                :disabled="isEdit && form.code === 'mainBox'"
+              />
+            </div>
           </div>
 
           <div class="erp-toggle-row">
@@ -207,8 +205,8 @@ defineExpose({
 }
 
 .erp-modal-panel {
-  width: min(100%, 28rem);
-  max-height: min(90vh, 42rem);
+  width: min(100%, 42rem); /* ~672px — max-w-2xl */
+  max-height: min(92vh, 40rem);
   overflow: auto;
   background: #0f172a;
   color: #f8fafc;
@@ -222,7 +220,7 @@ defineExpose({
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem 1.25rem 1rem;
+  padding: 1rem 1.25rem 0.85rem;
   border-bottom: 1px solid #1e293b;
   background: linear-gradient(180deg, #1e3a5f 0%, #0f172a 100%);
 }
@@ -244,10 +242,10 @@ defineExpose({
 }
 
 .erp-modal-subtitle {
-  margin: 0.35rem 0 0;
-  font-size: 0.875rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
   color: #cbd5e1;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .erp-modal-close {
@@ -270,15 +268,15 @@ defineExpose({
 }
 
 .erp-modal-body {
-  padding: 1.25rem;
+  padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .erp-error {
   margin: 0;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.9rem;
   border-radius: 0.75rem;
   background: #450a0a;
   border: 1px solid #9f1239;
@@ -286,10 +284,23 @@ defineExpose({
   font-size: 0.875rem;
 }
 
+.erp-field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .erp-field-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem 1rem;
+  }
+}
+
 .erp-field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .erp-label {
@@ -306,18 +317,18 @@ defineExpose({
 
 .erp-input {
   width: 100%;
-  min-height: 2.75rem;
-  padding: 0.65rem 0.85rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.8rem;
   border-radius: 0.75rem;
   border: 1px solid #475569;
   background: #020617;
   color: #f8fafc;
-  font-size: 1rem;
+  font-size: 0.95rem;
   transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .erp-textarea {
-  min-height: 4rem;
+  min-height: 3.25rem;
   resize: vertical;
 }
 
@@ -337,7 +348,7 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.9rem;
   border-radius: 0.875rem;
   background: #1e293b;
   border: 1px solid #334155;
@@ -408,11 +419,10 @@ defineExpose({
 
 .erp-modal-footer {
   display: grid;
-  grid-columns: 1fr 1fr;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   width: 100%;
-  padding: 1rem 1.25rem 1.25rem;
+  padding: 0.85rem 1.25rem 1.1rem;
   border-top: 1px solid #1e293b;
   background: #020617;
 }

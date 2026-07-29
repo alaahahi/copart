@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\App;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Models\Wallet;
 use App\Models\User;
  use App\Models\Car;
 use App\Models\SystemConfig;
@@ -64,11 +63,19 @@ class UserController extends Controller
         $owner_id=Auth::user()->owner_id;
         $q = request()->query('q');
         // Real traders only — hide system / commission vaults (عمولة …) from account switcher
-        $clientsQuery = User::with('wallet')
+        $clientsQuery = User::query()
             ->where('owner_id', $owner_id)
             ->where('type_id', $this->userClient);
         SystemWalletService::scopeExcludeSystemVaults($clientsQuery);
         $clients = $clientsQuery->orderBy('name')->get();
+        $ledger = app(LedgerService::class);
+        foreach ($clients as $c) {
+            try {
+                $c->setAttribute('balance', $ledger->walletLedgerAccount((int) $owner_id, (int) $c->id, '$')->balance('$'));
+            } catch (\Throwable $e) {
+                $c->setAttribute('balance', 0);
+            }
+        }
         $client= user::find($id);
         $auctions = \App\Models\Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
         return Inertia::render('Clients/Show', ['url'=>$this->url,'client'=>$client,'clients'=>$clients,'client_id'=>$id,'q'=>$q,'auctions'=>$auctions]);
@@ -312,8 +319,6 @@ class UserController extends Controller
                     'password' => Hash::make($request->password),
                     'phone' => $request->phone
                 ]);
-  
-                Wallet::create(['user_id' => $user->id]);
      
         return Inertia::render('Users/Index', ['url'=>$this->url]);
     }
@@ -335,7 +340,6 @@ class UserController extends Controller
             'show_in_dashboard' => $request->boolean('show_in_dashboard'),
         ]);
 
-        Wallet::create(['user_id' => $user->id]);
         // Always AR 1200-{id}; if show_in_dashboard also 1210/1220 — linked via party_id.
         // System vaults live in `vaults` table — never auto-created for traders.
         $this->clientAccounts->provisionForClient($user);
@@ -424,9 +428,20 @@ class UserController extends Controller
         DB::transaction(function () use ($client, $isSystemVault, $ownerId, $snapshot) {
             // Merchants: soft-delete related cars/transactions. System vaults keep ledger history.
             if (! $isSystemVault) {
-                if ($client->wallet) {
-                    Transactions::where('wallet_id', $client->wallet->id)->get()->each->delete();
-                }
+                $vaultId = app(VaultService::class)->resolveVaultIdForLegacyUser((int) $client->id);
+                Transactions::query()
+                    ->where(function ($q) use ($client, $vaultId) {
+                        if ($vaultId) {
+                            $q->orWhere('vault_id', $vaultId);
+                        }
+                        $q->orWhere(function ($inner) use ($client) {
+                            $inner->whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                                ->where('morphed_id', $client->id);
+                        });
+                    })
+                    ->get()
+                    ->each
+                    ->delete();
                 Car::where('client_id', $client->id)->get()->each->delete();
             }
 

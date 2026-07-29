@@ -5,9 +5,7 @@ namespace App\Services;
 use App\Models\Transactions;
 use App\Models\User;
 use App\Models\Vault;
-use App\Models\Wallet;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -15,14 +13,10 @@ use InvalidArgumentException;
 use RuntimeException;
 
 /**
- * حركة بين الحسابات (Transfer between accounts).
+ * تحويل نقدي بين القاصات النقدية فقط (Cash transfer between cash boxes).
  *
- * Moves money between the ERP's "account" wallet users (cash box / mainBox,
- * Dubai, Iran, border, howler, main/in/out accounts, ...) using ONE balanced
- * ledger journal (LedgerService::postAccountTransfer — Dr destination / Cr
- * source). Wallet balances are never written directly: they are re-synced
- * from the ledger after posting, and mirrored into `transactions` so the
- * existing per-account "Wallet" screens keep showing full history.
+ * ONE balanced ledger journal (Dr destination / Cr source). Balances come from
+ * ledger accounts — never from wallets.balance.
  */
 class AccountTransferService
 {
@@ -52,15 +46,17 @@ class AccountTransferService
         }
 
         return DB::transaction(function () use ($ownerId, $fromUserId, $toUserId, $amount, $currency, $memo, $entryDate) {
-            $fromUser = User::with('wallet')->where('owner_id', $ownerId)->findOrFail($fromUserId);
-            $toUser = User::with('wallet')->where('owner_id', $ownerId)->findOrFail($toUserId);
+            $vaultService = app(VaultService::class);
 
-            if (!$fromUser->wallet) {
-                throw new RuntimeException('الحساب المرسل لا يملك محفظة بعد.');
+            $fromVault = $vaultService->findCashVaultByLegacyUser($ownerId, $fromUserId);
+            $toVault = $vaultService->findCashVaultByLegacyUser($ownerId, $toUserId);
+
+            if (! $fromVault || ! $toVault) {
+                throw new InvalidArgumentException('التحويل النقدي مسموح فقط بين القاصات النقدية (صندوق/بنك/خزنة).');
             }
-            if (!$toUser->wallet) {
-                $toUser->setRelation('wallet', Wallet::create(['user_id' => $toUser->id, 'balance' => 0, 'balance_dinar' => 0]));
-            }
+
+            $fromUser = User::query()->where('owner_id', $ownerId)->findOrFail($fromUserId);
+            $toUser = User::query()->where('owner_id', $ownerId)->findOrFail($toUserId);
 
             $fromAccount = $this->ledger->walletLedgerAccount($ownerId, $fromUserId, $currency);
             $available = $fromAccount->balance($currency);
@@ -68,7 +64,7 @@ class AccountTransferService
                 throw new RuntimeException('الرصيد غير كافٍ في الحساب المرسل لإتمام التحويل.');
             }
 
-            $memoText = $memo ?: sprintf('تحويل من %s إلى %s', $fromUser->name, $toUser->name);
+            $memoText = $memo ?: sprintf('تحويل نقدي من %s إلى %s', $fromUser->name, $toUser->name);
             $entryDate = $entryDate ?: now()->toDateString();
 
             $journal = $this->ledger->postAccountTransfer(
@@ -83,9 +79,9 @@ class AccountTransferService
             );
 
             $hasJournalColumn = Schema::hasColumn('transactions', 'journal_entry_id');
+            $hasVaultColumn = Schema::hasColumn('transactions', 'vault_id');
 
-            $outTransaction = Transactions::create(array_filter([
-                'wallet_id' => $fromUser->wallet->id,
+            $outPayload = [
                 'type' => 'transfer_out',
                 'description' => $memoText,
                 'amount' => $amount * -1,
@@ -93,11 +89,20 @@ class AccountTransferService
                 'created' => $entryDate,
                 'is_pay' => 0,
                 'discount' => 0,
+                'wallet_id' => null,
                 'journal_entry_id' => $hasJournalColumn ? $journal->id : null,
-            ], fn ($v) => $v !== null));
+            ];
+            if ($hasVaultColumn) {
+                $outPayload['vault_id'] = (int) $fromVault->id;
+            }
+            // Legacy wallet_id only while column/table still used for history joins.
+            if (Schema::hasTable('wallets') && Schema::hasColumn('vaults', 'wallet_id') && $fromVault->wallet_id) {
+                $outPayload['wallet_id'] = (int) $fromVault->wallet_id;
+            }
 
-            $inTransaction = Transactions::create(array_filter([
-                'wallet_id' => $toUser->wallet->id,
+            $outTransaction = Transactions::create(array_filter($outPayload, fn ($v) => $v !== null));
+
+            $inPayload = [
                 'type' => 'transfer_in',
                 'description' => $memoText,
                 'amount' => $amount,
@@ -106,16 +111,24 @@ class AccountTransferService
                 'is_pay' => 0,
                 'discount' => 0,
                 'parent_id' => $outTransaction->id,
+                'wallet_id' => null,
                 'journal_entry_id' => $hasJournalColumn ? $journal->id : null,
-            ], fn ($v) => $v !== null));
+            ];
+            if ($hasVaultColumn) {
+                $inPayload['vault_id'] = (int) $toVault->id;
+            }
+            if (Schema::hasTable('wallets') && Schema::hasColumn('vaults', 'wallet_id') && $toVault->wallet_id) {
+                $inPayload['wallet_id'] = (int) $toVault->wallet_id;
+            }
 
-            $this->ledger->syncWalletFromLedger($ownerId, $fromUserId);
-            $this->ledger->syncWalletFromLedger($ownerId, $toUserId);
+            $inTransaction = Transactions::create(array_filter($inPayload, fn ($v) => $v !== null));
 
-            Log::info('Account transfer posted', [
+            Log::info('Cash vault transfer posted', [
                 'owner_id' => $ownerId,
                 'from_user_id' => $fromUserId,
                 'to_user_id' => $toUserId,
+                'from_vault_id' => $fromVault->id,
+                'to_vault_id' => $toVault->id,
                 'amount' => $amount,
                 'currency' => $currency,
                 'journal_entry_id' => $journal->id,
@@ -131,61 +144,39 @@ class AccountTransferService
     }
 
     /**
-     * List of system vaults eligible for transfer (cash box, Dubai, Iran, …).
-     * Sourced from `vaults` (not traders). id remains legacy_user_id so existing
-     * transfer APIs keep working. Client AR wallets are excluded.
+     * Cash-box vaults only. Balances from ledger (not wallet.balance).
+     * id remains legacy_user_id so existing transfer APIs keep working.
      */
     public function transferableAccounts(int $ownerId): \Illuminate\Support\Collection
     {
-        if (Schema::hasTable('vaults')) {
-            $rows = Vault::query()
-                ->with(['wallet', 'legacyUser.wallet'])
-                ->forOwner($ownerId)
-                ->active()
-                ->whereNotNull('legacy_user_id')
-                ->orderBy('name')
-                ->get()
-                ->filter(fn (Vault $vault) => (int) $vault->legacy_user_id > 0)
-                ->map(function (Vault $vault) {
-                    $wallet = $vault->wallet ?? $vault->legacyUser?->wallet;
-
-                    return [
-                        'id' => (int) $vault->legacy_user_id,
-                        'vault_id' => (int) $vault->id,
-                        'name' => $vault->name,
-                        'email' => $vault->legacyUser?->email,
-                        'vault_type' => $vault->type,
-                        'vault_code' => $vault->code,
-                        'is_vault' => true,
-                        'balance' => (float) ($wallet->balance ?? 0),
-                        'balance_dinar' => (float) ($wallet->balance_dinar ?? 0),
-                    ];
-                })
-                ->values();
-
-            if ($rows->isNotEmpty()) {
-                return $rows;
-            }
+        if (! Schema::hasTable('vaults')) {
+            return collect();
         }
 
-        // Fallback when vaults table empty / missing — legacy account-type users only.
-        $accountTypeId = Cache::get('user_type_account')
-            ?? \App\Models\UserType::where('name', 'account')->value('id');
+        $vaultService = app(VaultService::class);
 
-        return User::with('wallet')
-            ->where('owner_id', $ownerId)
-            ->where('type_id', $accountTypeId)
-            ->whereHas('wallet')
+        return Vault::query()
+            ->with(['legacyUser', 'ledgerAccount'])
+            ->forOwner($ownerId)
+            ->active()
+            ->cashBoxes()
+            ->whereNotNull('legacy_user_id')
             ->orderBy('name')
             ->get()
-            ->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'is_vault' => true,
-                'balance' => (float) ($user->wallet->balance ?? 0),
-                'balance_dinar' => (float) ($user->wallet->balance_dinar ?? 0),
-            ])
+            ->filter(fn (Vault $vault) => $vault->isCashBox() && (int) $vault->legacy_user_id > 0)
+            ->map(function (Vault $vault) use ($vaultService) {
+                return [
+                    'id' => (int) $vault->legacy_user_id,
+                    'vault_id' => (int) $vault->id,
+                    'name' => $vault->name,
+                    'email' => $vault->legacyUser?->email,
+                    'vault_type' => $vault->type,
+                    'vault_code' => $vault->code,
+                    'is_vault' => true,
+                    'balance' => $vaultService->cashBalance($vault, '$'),
+                    'balance_dinar' => $vaultService->cashBalance($vault, 'IQD'),
+                ];
+            })
             ->values();
     }
 }

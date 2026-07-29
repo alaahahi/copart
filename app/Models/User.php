@@ -86,7 +86,8 @@ class User extends Authenticatable
     }
     public function wallet()
     {
-        return $this->hasOne(Wallet::class);
+        // Wallets table removed — kept as empty relation stub for soft transition.
+        return $this->hasOne(\App\Models\User::class, 'id', 'id')->whereRaw('0 = 1');
     }
     public function name()
     {

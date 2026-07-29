@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\UserType;
-use App\Models\Wallet;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -49,13 +48,6 @@ class AdminSeeder extends Seeder
             ]
         );
 
-        Wallet::query()->firstOrCreate(
-            ['user_id' => $user->id],
-            [
-                'balance' => 0,
-                'balance_dinar' => 0,
-                'card' => 0,
-            ]
-        );
+        // Wallets removed — admin uses ledger only.
     }
 }

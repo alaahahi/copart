@@ -12,7 +12,6 @@ use App\Models\Transactions;
 use App\Models\Results;
 use App\Models\DoctorResults;
 use App\Models\SystemConfig;
-use App\Models\Wallet;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Requests\Auth\LoginRequest;
@@ -117,11 +116,13 @@ class AccountingController extends Controller
     public function index()
     {  
         $owner_id=Auth::user()->owner_id;
-        $boxes = User::with('wallet')->where('owner_id',$owner_id)->where('email', 'mainBox@account.com')->get();
+        $boxes = User::where('owner_id',$owner_id)->where('email', 'mainBox@account.com')->get();
         $this->accounting->loadAccounts(Auth::user()->owner_id);
+        $this->attachLedgerBalancesToUsers($boxes, (int) $owner_id);
         
         // قاصات النظام من جدول vaults — ليست تجاراً بعلم show_in_dashboard
         $flaggedWallets = app(VaultService::class)->accountingShortcutUsers((int) $owner_id);
+        $this->attachLedgerBalancesToUsers($flaggedWallets, (int) $owner_id);
 
         // إسناد السحب إلى قاصة → قائمة القاصات فقط (legacy_user_id للتوافق مع API)
         $vaultService = app(VaultService::class);
@@ -152,8 +153,11 @@ class AccountingController extends Controller
     {  
         $id= $request->id;
         $owner_id=Auth::user()->owner_id;
-        $boxes = User::with('wallet')->where('owner_id',$owner_id)->where('id',$id)->first();
+        $boxes = User::where('owner_id',$owner_id)->where('id',$id)->first();
         $this->accounting->loadAccounts(Auth::user()->owner_id);
+        if ($boxes) {
+            $this->attachLedgerBalancesToUsers(collect([$boxes]), (int) $owner_id);
+        }
 
         return Inertia::render('Accounting/Wallet', ['boxes'=>$boxes,'accounts'=>$this->accounting->mainAccount()]);
     }
@@ -209,31 +213,24 @@ class AccountingController extends Controller
      $type = $_GET['type'] ??'';
      $transactions_id = $_GET['transactions_id'] ?? 0;
      $owner_id = $owner_id ?? Auth::user()->owner_id;
-     $user = User::with('wallet')->where('id',$user_id)->first();
-
-     // رصيد الحسابات في المحاسبة = من الحركات (الدفتر)، مش من كاش قديم في wallets.
-     if ($user && $user->wallet) {
-         try {
-             app(LedgerService::class)->syncWalletFromLedger((int) $owner_id, (int) $user->id);
-             $user->load('wallet');
-         } catch (\Throwable $e) {
-             // keep existing wallet cache if ledger accounts are missing
-         }
+     $user = User::where('id', $user_id)->first();
+     if (! $user || (int) $user->owner_id !== (int) $owner_id) {
+         return response()->json(['message' => 'الحساب غير موجود'], 404);
      }
 
-     if($from && $to ){
-         $transactions = Transactions ::with('TransactionsImages')->with('morphed')->where('wallet_id', $user->wallet->id)->orderBy('id','desc')->whereBetween('created', [$from, $to]);
-     }else{
-         $transactions = Transactions ::with('TransactionsImages')->with('morphed')->where('wallet_id', $user->wallet->id)->orderBy('id','desc');
+     // رصيد/حركات المحاسبة = من vault_id + الدفتر (بدون جدول wallets).
+     $transactions = $this->transactionsQueryForUser($user)
+         ->with(['TransactionsImages', 'morphed'])
+         ->orderBy('id', 'desc');
+     if ($from && $to) {
+         $transactions = $transactions->whereBetween('created', [$from, $to]);
      }
-     if($q){
-        $transactions = Transactions::with('TransactionsImages')->with('morphed')->where('wallet_id', $user->wallet->id)
-        ->where(function ($query) use ($q) {
-            $query->where('id', $q)
-                  ->orWhere('description', 'LIKE', '%' . $q . '%');
-        })
-        ->orderBy('id', 'desc');
-    }
+     if ($q) {
+         $transactions = $transactions->where(function ($query) use ($q) {
+             $query->where('id', $q)
+                 ->orWhere('description', 'LIKE', '%'.$q.'%');
+         });
+     }
      $tag_filter = $request->get('tag');
      if ($tag_filter !== null && $tag_filter !== '') {
          $transactions = $transactions->where('tag', $tag_filter);
@@ -255,16 +252,24 @@ class AccountingController extends Controller
              $transactions = $transactions->whereRaw("JSON_EXTRACT(details, '$.loan') = true");
          }
      }
-     if($type=='wallet'){
-        $allTransactions = $transactions
-        ->whereIn('type', ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'])
-        ->where('wallet_id', $user->wallet->id)
-        ->paginate(1000);
-         }elseif($type=='printExcel'){
-            $allTransactions = $transactions->paginate(1000);
-        }
-         else{
-        $allTransactions = $transactions->paginate(100);
+     if ($type == 'wallet') {
+         $allTransactions = $transactions
+             ->whereIn('type', ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'])
+             ->paginate(1000);
+     } elseif ($type == 'printExcel') {
+         $allTransactions = $transactions->paginate(1000);
+     } else {
+         $allTransactions = $transactions->paginate(100);
+     }
+
+     // أرصدة العرض من دليل الحسابات (قاصة نقدية أو ذمم زبون).
+     try {
+         $ledger = app(LedgerService::class);
+         $user->setAttribute('balance', $ledger->walletLedgerAccount((int) $owner_id, (int) $user->id, '$')->balance('$'));
+         $user->setAttribute('balance_dinar', $ledger->walletLedgerAccount((int) $owner_id, (int) $user->id, 'IQD')->balance('IQD'));
+     } catch (\Throwable $e) {
+         $user->setAttribute('balance', 0);
+         $user->setAttribute('balance_dinar', 0);
      }
      // التأكد من تحميل المرفقات (TransactionsImages) في كل الحالات بما فيها عند الفلترة بالتاريخ
      $allTransactions->getCollection()->load(['TransactionsImages', 'journalEntry.lines.account', 'parent.journalEntry.lines.account']);
@@ -305,8 +310,8 @@ class AccountingController extends Controller
          'sumOutTransactionsUserAmanah' =>  $sumOutTransactionsUserAmanah,
          'sumOutTransactionsDinarUserAmanah' => $sumOutTransactionsDinarUserAmanah
      ];
-     if ($request->get('group_by_driver') && $user && $user->wallet) {
-         $walletTrans = Transactions::where('wallet_id', $user->wallet->id)
+     if ($request->get('group_by_driver') && $user) {
+         $walletTrans = $this->transactionsQueryForUser($user)
              ->whereIn('type', ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'])
              ->get();
          $data['drivers_summary'] = $walletTrans->groupBy(function ($t) {
@@ -343,7 +348,7 @@ class AccountingController extends Controller
      elseif($print==6){
         $config=SystemConfig::first();
       
-        return Excel::download(new ExportAccount($from,$to,$user->wallet->id), $from.' '.$to.'.xlsx');
+        return Excel::download(new ExportAccount($from,$to,(int) $user->id), $from.' '.$to.'.xlsx');
 
         return view('receiptPaymentTotal',compact('data','config','transactions_id'));
      }
@@ -411,70 +416,51 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
-        $user_id = $request->id ?: $mainBox->id;
-        $user = User::with('wallet')->find($user_id);
-
-        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+        // Expense always from receipts/mainBox cash: Dr Expense / Cr Cash — no mirror child on target vault.
+        $vaults = app(\App\Services\VaultService::class);
+        try {
+            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
+            $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        }
+        $cashUser = User::find($cashUserId);
+        if (!$cashUser || (int) $cashUser->owner_id !== (int) $owner_id) {
             return Response::json([
-                'message' => 'حساب القاصة غير موجود',
-                'errors' => ['id' => ['حساب القاصة غير موجود']],
+                'message' => 'حساب النقد غير موجود',
+                'errors' => ['id' => ['حساب النقد غير موجود']],
             ], 422);
         }
 
-        if (!$user->wallet) {
-            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
-            $user->load('wallet');
+        $label = $cashUser->name;
+        if ($request->id && (int) $request->id !== (int) $cashUserId) {
+            $named = User::find($request->id);
+            if ($named) {
+                $label = $named->name;
+            }
         }
 
-        $desc = 'وصل سحب مباشر قاسه '.$user->name.' '.$note;
+        $desc = 'وصل سحب مباشر قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
         $tag = $request->input('tag') ? trim($request->input('tag')) : null;
         $transaction = null;
 
         if ($amountDollar) {
-            $transactiond = $this->debtWallet($amountDollar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'outUserBox');
-            if (!$transactiond) {
+            $transaction = $this->debtWallet($amountDollar, $desc, $cashUserId, $cashUserId, 'App\Models\User', 0, 0, '$', $date, 0, 'outUserBox');
+            if (!$transaction) {
                 return Response::json(['message' => 'تعذر تسجيل السحب من الصندوق'], 500);
             }
-            $transaction = Transactions::create([
-                'type' => 'outUser',
-                'wallet_id' => $user->wallet->id,
-                'description' => $desc,
-                'amount' => $amountDollar,
-                'is_pay' => 1,
-                'morphed_id' => $user_id,
-                'morphed_type' => 'App\Models\User',
-                'user_added' => 0,
-                'created' => $date,
-                'discount' => 0,
-                'currency' => '$',
-                'parent_id' => $transactiond->id,
-                'details' => [],
-                'tag' => $tag,
-            ]);
+            if ($tag && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'tag')) {
+                $transaction->forceFill(['tag' => $tag])->save();
+            }
         }
         if ($amountDinar) {
-            $transactionq = $this->debtWallet($amountDinar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'outUserBox');
-            if (!$transactionq) {
+            $transaction = $this->debtWallet($amountDinar, $desc, $cashUserId, $cashUserId, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'outUserBox');
+            if (!$transaction) {
                 return Response::json(['message' => 'تعذر تسجيل السحب من الصندوق'], 500);
             }
-            $transaction = Transactions::create([
-                'type' => 'outUser',
-                'wallet_id' => $user->wallet->id,
-                'description' => $desc,
-                'amount' => $amountDinar,
-                'is_pay' => 1,
-                'morphed_id' => $user_id,
-                'morphed_type' => 'App\Models\User',
-                'user_added' => 0,
-                'created' => $date,
-                'discount' => 0,
-                'currency' => 'IQD',
-                'parent_id' => $transactionq->id,
-                'details' => [],
-                'tag' => $tag,
-            ]);
+            if ($tag && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'tag')) {
+                $transaction->forceFill(['tag' => $tag])->save();
+            }
         }
 
         return Response::json($transaction ?? $request, 200);
@@ -491,59 +477,77 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
-        $user_id = $request->id ?: $mainBox->id;
-        $user = User::with('wallet')->find($user_id);
-
-        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+        $vaults = app(\App\Services\VaultService::class);
+        try {
+            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
+            $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        }
+        $cashUser = User::find($cashUserId);
+        if (!$cashUser || (int) $cashUser->owner_id !== (int) $owner_id) {
             return Response::json([
-                'message' => 'حساب القاصة غير موجود',
-                'errors' => ['id' => ['حساب القاصة غير موجود']],
+                'message' => 'حساب النقد غير موجود',
+                'errors' => ['id' => ['حساب النقد غير موجود']],
             ], 422);
         }
 
-        if (!$user->wallet) {
-            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
-            $user->load('wallet');
+        $label = $cashUser->name;
+        if ($request->id && (int) $request->id !== (int) $cashUserId) {
+            $named = User::find($request->id);
+            if ($named) {
+                $label = $named->name;
+            }
         }
 
-        $desc = 'وصل سحب أمانة قاسه '.$user->name.' '.$note;
+        $desc = 'وصل سحب أمانة قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
         $transaction = null;
+        $vaultId = $vaults->resolveVaultIdForLegacyUser($cashUserId);
+        $walletId = $vaults->resolveWalletIdForLegacyUser($cashUserId);
 
         if ($amountDollar) {
-            // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transaction = Transactions::create([
+            $payload = [
                 'type' => 'outUserAmanah',
-                'wallet_id' => $user->wallet->id,
                 'description' => $desc,
                 'amount' => $amountDollar,
                 'is_pay' => 1,
-                'morphed_id' => $user_id,
+                'morphed_id' => $cashUserId,
                 'morphed_type' => 'App\Models\User',
                 'user_added' => 0,
                 'created' => $date,
                 'discount' => 0,
                 'currency' => '$',
                 'parent_id' => 0,
-            ]);
+            ];
+            if ($walletId) {
+                $payload['wallet_id'] = $walletId;
+            }
+            if ($vaultId && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'vault_id')) {
+                $payload['vault_id'] = $vaultId;
+            }
+            $transaction = Transactions::create($payload);
         }
         if ($amountDinar) {
-            // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transaction = Transactions::create([
+            $payload = [
                 'type' => 'outUserAmanah',
-                'wallet_id' => $user->wallet->id,
                 'description' => $desc,
                 'amount' => $amountDinar,
                 'is_pay' => 1,
-                'morphed_id' => $user_id,
+                'morphed_id' => $cashUserId,
                 'morphed_type' => 'App\Models\User',
                 'user_added' => 0,
                 'created' => $date,
                 'discount' => 0,
                 'currency' => 'IQD',
                 'parent_id' => 0,
-            ]);
+            ];
+            if ($walletId) {
+                $payload['wallet_id'] = $walletId;
+            }
+            if ($vaultId && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'vault_id')) {
+                $payload['vault_id'] = $vaultId;
+            }
+            $transaction = Transactions::create($payload);
         }
 
         return Response::json($transaction ?? $request, 200);
@@ -604,70 +608,51 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
-        $user_id = $request->id ?: $mainBox->id;
-        $user = User::with('wallet')->find($user_id);
-
-        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+        // Receipt always on receipts/mainBox cash: Dr Cash / Cr Revenue — no mirror child on target vault.
+        $vaults = app(\App\Services\VaultService::class);
+        try {
+            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
+            $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        }
+        $cashUser = User::find($cashUserId);
+        if (!$cashUser || (int) $cashUser->owner_id !== (int) $owner_id) {
             return Response::json([
-                'message' => 'حساب القاصة غير موجود',
-                'errors' => ['id' => ['حساب القاصة غير موجود']],
+                'message' => 'حساب النقد غير موجود',
+                'errors' => ['id' => ['حساب النقد غير موجود']],
             ], 422);
         }
 
-        if (!$user->wallet) {
-            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
-            $user->load('wallet');
+        $label = $cashUser->name;
+        if ($request->id && (int) $request->id !== (int) $cashUserId) {
+            $named = User::find($request->id);
+            if ($named) {
+                $label = $named->name;
+            }
         }
 
-        $desc = 'وصل قبض مباشر قاسه '.$user->name.' '.$note;
+        $desc = 'وصل قبض مباشر قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
         $tag = $request->input('tag') ? trim($request->input('tag')) : null;
         $transaction = null;
 
         if ($amountDollar) {
-            $transactiond = $this->increaseWallet($amountDollar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'inUserBox', []);
-            if (!$transactiond) {
+            $transaction = $this->increaseWallet($amountDollar, $desc, $cashUserId, $cashUserId, 'App\Models\User', 0, 0, '$', $date, 0, 'inUserBox', []);
+            if (!$transaction) {
                 return Response::json(['message' => 'تعذر تسجيل الإيداع في الصندوق'], 500);
             }
-            $transaction = Transactions::create([
-                'type' => 'inUser',
-                'wallet_id' => $user->wallet->id,
-                'description' => $desc,
-                'amount' => $amountDollar,
-                'is_pay' => 1,
-                'morphed_id' => $user_id,
-                'morphed_type' => 'App\Models\User',
-                'user_added' => 0,
-                'created' => $date,
-                'discount' => 0,
-                'currency' => '$',
-                'parent_id' => $transactiond->id,
-                'details' => [],
-                'tag' => $tag,
-            ]);
+            if ($tag && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'tag')) {
+                $transaction->forceFill(['tag' => $tag])->save();
+            }
         }
         if ($amountDinar) {
-            $transactionq = $this->increaseWallet($amountDinar, $desc, $mainBox->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'inUserBox', []);
-            if (!$transactionq) {
+            $transaction = $this->increaseWallet($amountDinar, $desc, $cashUserId, $cashUserId, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'inUserBox', []);
+            if (!$transaction) {
                 return Response::json(['message' => 'تعذر تسجيل الإيداع في الصندوق'], 500);
             }
-            $transaction = Transactions::create([
-                'type' => 'inUser',
-                'wallet_id' => $user->wallet->id,
-                'description' => $desc,
-                'amount' => $amountDinar,
-                'is_pay' => 1,
-                'morphed_id' => $user_id,
-                'morphed_type' => 'App\Models\User',
-                'user_added' => 0,
-                'created' => $date,
-                'discount' => 0,
-                'currency' => 'IQD',
-                'parent_id' => $transactionq->id,
-                'details' => [],
-                'tag' => $tag,
-            ]);
+            if ($tag && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'tag')) {
+                $transaction->forceFill(['tag' => $tag])->save();
+            }
         }
 
         return Response::json($transaction, 200);
@@ -684,37 +669,82 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        $mainBox = app(SystemWalletService::class)->requireMainBox((int) $owner_id);
-        $user_id = $request->id ?: $mainBox->id;
-        $user = User::with('wallet')->find($user_id);
-
-        if (!$user || (int) $user->owner_id !== (int) $owner_id) {
+        $vaults = app(\App\Services\VaultService::class);
+        try {
+            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
+            $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        }
+        $cashUser = User::find($cashUserId);
+        if (!$cashUser || (int) $cashUser->owner_id !== (int) $owner_id) {
             return Response::json([
-                'message' => 'حساب القاصة غير موجود',
-                'errors' => ['id' => ['حساب القاصة غير موجود']],
+                'message' => 'حساب النقد غير موجود',
+                'errors' => ['id' => ['حساب النقد غير موجود']],
             ], 422);
         }
 
-        if (!$user->wallet) {
-            Wallet::create(['user_id' => $user->id, 'balance' => 0, 'balance_dinar' => 0]);
-            $user->load('wallet');
+        $label = $cashUser->name;
+        if ($request->id && (int) $request->id !== (int) $cashUserId) {
+            $named = User::find($request->id);
+            if ($named) {
+                $label = $named->name;
+            }
         }
 
-        $desc = 'وصل قبض أمانة قاسه '.$user->name.' '.$note;
+        $desc = 'وصل قبض أمانة قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
         $transaction = null;
-
         $tag = $request->input('tag') ? trim($request->input('tag')) : null;
+        $vaultId = $vaults->resolveVaultIdForLegacyUser($cashUserId);
+        $walletId = $vaults->resolveWalletIdForLegacyUser($cashUserId);
 
         if($amountDollar){
-            // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transactionDetilsd = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDollar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'$','parent_id'=>0,'details'=>[],'tag'=>$tag];
-            $transaction = Transactions::create($transactionDetilsd);
+            $payload = [
+                'type' => 'inUserAmanah',
+                'description' => $desc,
+                'amount' => $amountDollar,
+                'is_pay' => 1,
+                'morphed_id' => $cashUserId,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => 0,
+                'details' => [],
+                'tag' => $tag,
+            ];
+            if ($walletId) {
+                $payload['wallet_id'] = $walletId;
+            }
+            if ($vaultId && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'vault_id')) {
+                $payload['vault_id'] = $vaultId;
+            }
+            $transaction = Transactions::create($payload);
         }
         if($amountDinar){
-            // الأمانة لا تؤثر على balance - balance فقط للسيارات
-            $transactionDetilsq = ['type' => 'inUserAmanah','wallet_id'=>$user->wallet->id,'description'=>$desc,'amount'=>$amountDinar,'is_pay'=>1,'morphed_id'=>$user_id,'morphed_type'=>'App\Models\User','user_added'=>0,'created'=>$date,'discount'=>0,'currency'=>'IQD','parent_id'=>0,'details'=>[],'tag'=>$tag];
-            $transaction = Transactions::create($transactionDetilsq);
+            $payload = [
+                'type' => 'inUserAmanah',
+                'description' => $desc,
+                'amount' => $amountDinar,
+                'is_pay' => 1,
+                'morphed_id' => $cashUserId,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => 0,
+                'details' => [],
+                'tag' => $tag,
+            ];
+            if ($walletId) {
+                $payload['wallet_id'] = $walletId;
+            }
+            if ($vaultId && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'vault_id')) {
+                $payload['vault_id'] = $vaultId;
+            }
+            $transaction = Transactions::create($payload);
         }
 
         return Response::json($transaction, 200);
@@ -736,13 +766,17 @@ class AccountingController extends Controller
         $transactions_id = $_GET['transactions_id'] ?? 0;
         // Clients/Show only: include soft-deleted payments for restore UI.
         $includeTrashed = (int) ($_GET['include_trashed'] ?? 0) === 1;
-        $client = User::with('wallet')->where('id', $user_id)->first();
+        $client = User::where('id', $user_id)->first();
         $contract_total = 0;
         $contract_total_debit_Dollar = 0;
         $contract_total_debit_Dinar = 0;
 
+        if (!$client) {
+            return Response::json(['message' => 'المستخدم غير موجود'], 404);
+        }
+
         if($from && $to ){
-            $transactions = Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])->where('wallet_id', $client?->wallet?->id)->whereBetween('created', [$from, $to]);
+            $transactions = $this->transactionsQueryForUser($client)->whereBetween('created', [$from, $to]);
             $cars = Car::with('CarImages')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
@@ -754,7 +788,7 @@ class AccountingController extends Controller
             $exit_car_total=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->where('is_exit','!=',0)->count();
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }else{
-            $transactions = Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])->where('wallet_id', $client?->wallet?->id);
+            $transactions = $this->transactionsQueryForUser($client);
             $cars =  Car::with('CarImages')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
@@ -949,8 +983,12 @@ class AccountingController extends Controller
         try {
             DB::beginTransaction();
             // Perform your database operations with Eloquent
-            $user=  User::with('wallet')->find($id);
-            $transactions =Transactions ::where('wallet_id', $user?->wallet?->id)->where('is_pay',0);
+            $user = User::find($id);
+            if (! $user) {
+                DB::rollBack();
+                return Response::json(['message' => 'user not found'], 404);
+            }
+            $transactions = $this->transactionsQueryForUser($user)->where('is_pay', 0);
             $amount=$transactions->sum('amount');
             $transactions->update(['is_pay' => 1]);
             $profile_count = Profile::where('user_id', $user?->id)->where('results',1)->update(['results' => 2]);
@@ -997,7 +1035,6 @@ class AccountingController extends Controller
             'rest' => $restTotal,
         ];
 
-        $wallet = Wallet::where('user_id',$car->client_id)->first();
         $desc=trans('text.addPayment').' '.$amount.' '.$car->car_type.' رقم الشانص'.' '.$car->vin.' '.$note;
         // Parent posts ONE journal: Dr receipts-vault cash / Cr AR. Child legs are UI mirrors only.
         $receiptsUserId = app(\App\Services\VaultService::class)->receiptsCashUserId((int) $owner_id);
@@ -1164,8 +1201,8 @@ class AccountingController extends Controller
         $ownerId = (int) Auth::user()->owner_id;
         $this->accounting->loadAccounts($ownerId);
         $userId = (int) $request->userId;
-        $user = User::with('wallet')->where('id', $userId)->where('owner_id', $ownerId)->first();
-        if (!$user || !$user->wallet) {
+        $user = User::where('id', $userId)->where('owner_id', $ownerId)->first();
+        if (! $user) {
             return Response::json(['message' => 'user not found'], 404);
         }
 
@@ -1191,13 +1228,14 @@ class AccountingController extends Controller
             'description' => ['required', 'string', 'max:1000'],
         ]);
 
-        $transaction = Transactions::with(['wallet.user'])->find($validated['transaction_id']);
+        $transaction = Transactions::find($validated['transaction_id']);
 
         if (!$transaction) {
             return Response::json(['message' => 'لم يتم العثور على الحركة المطلوبة'], 404);
         }
 
-        $walletUser = optional($transaction->wallet)->user;
+        $txUserId = $this->resolveTxUserId($transaction);
+        $walletUser = $txUserId ? User::find($txUserId) : null;
 
         if (!$walletUser || $walletUser->owner_id !== Auth::user()->owner_id) {
             return Response::json(['message' => 'غير مصرح بتعديل هذه الحركة'], 403);
@@ -1251,7 +1289,7 @@ class AccountingController extends Controller
     }
 
     /**
-     * Convert a main-box withdrawal (debt/out) into a wallet withdrawal (outUserBox + outUser).
+     * Convert a main-box withdrawal (debt/out) into a cash-box expense assignment.
      */
     public function assignTransactionToWallet(Request $request)
     {
@@ -1262,15 +1300,24 @@ class AccountingController extends Controller
 
         $this->accounting->loadAccounts(Auth::user()->owner_id);
         $mainBox = $this->accounting->mainBox();
-        $mainBoxWalletId = $mainBox->wallet->id ?? null;
+        $vaults = app(\App\Services\VaultService::class);
+        $mainBoxVaultId = $vaults->resolveVaultIdForLegacyUser((int) $mainBox->id);
+        $mainBoxWalletId = $vaults->resolveWalletIdForLegacyUser((int) $mainBox->id);
 
-        if (!$mainBoxWalletId) {
+        if (!$mainBoxVaultId && !$mainBoxWalletId) {
             return Response::json(['message' => 'لم يتم العثور على صندوق المحاسبة'], 422);
         }
 
-        $transaction = Transactions::with('wallet.user')->find($validated['transaction_id']);
+        $transaction = Transactions::find($validated['transaction_id']);
 
-        if (!$transaction || (int) $transaction->wallet_id !== (int) $mainBoxWalletId) {
+        $isMainBoxTx = false;
+        if ($mainBoxVaultId && (int) ($transaction->vault_id ?? 0) === (int) $mainBoxVaultId) {
+            $isMainBoxTx = true;
+        } elseif ($mainBoxWalletId && (int) ($transaction->wallet_id ?? 0) === (int) $mainBoxWalletId) {
+            $isMainBoxTx = true;
+        }
+
+        if (!$transaction || ! $isMainBoxTx) {
             return Response::json(['message' => 'هذه الحركة ليست من صندوق المحاسبة'], 422);
         }
 
@@ -1286,7 +1333,7 @@ class AccountingController extends Controller
             return Response::json(['message' => 'الحركة مرتبطة مسبقاً بقاصة'], 422);
         }
 
-        $targetUser = User::with('wallet')
+        $targetUser = User::query()
             ->where('id', $validated['user_id'])
             ->where('owner_id', Auth::user()->owner_id)
             ->first();
@@ -1295,25 +1342,21 @@ class AccountingController extends Controller
             return Response::json(['message' => 'القاصة المحددة غير موجودة'], 404);
         }
 
-        // Target must be a system vault (vaults.legacy_user_id), never a trader.
+        // Target must be an active cash vault, never a trader.
         if (Schema::hasTable('vaults')) {
             $isVault = Vault::query()
-                ->where('owner_id', Auth::user()->owner_id)
+                ->forOwner((int) Auth::user()->owner_id)
                 ->where('legacy_user_id', (int) $targetUser->id)
-                ->where('is_active', true)
+                ->active()
+                ->cashBoxes()
                 ->exists();
             if (! $isVault) {
-                return Response::json(['message' => 'الهدف يجب أن يكون قاصة نظام — اختر من قائمة القاصات'], 422);
+                return Response::json(['message' => 'الهدف يجب أن يكون قاصة نقدية — اختر من قائمة القاصات'], 422);
             }
         }
 
         if ((int) $targetUser->id === (int) $mainBox->id) {
             return Response::json(['message' => 'لا يمكن إسناد الحركة إلى الصندوق نفسه'], 422);
-        }
-
-        if (!$targetUser->wallet) {
-            Wallet::create(['user_id' => $targetUser->id, 'balance' => 0, 'balance_dinar' => 0]);
-            $targetUser->load('wallet');
         }
 
         $amount = abs((float) $transaction->amount);
@@ -1347,7 +1390,8 @@ class AccountingController extends Controller
         $originalCreated = $transaction->created;
         $currentDate = $this->currentDate;
 
-        DB::transaction(function () use ($transaction, $targetUser, $description, $amount, $originalCreatedAt, $originalCreated, $morphedId, $childDetails, $currentDate) {
+        DB::transaction(function () use ($transaction, $description, $morphedId, $childDetails) {
+            // Keep single cash-box expense leg — do not mirror onto target vault.
             $transaction->type = 'outUserBox';
             $transaction->morphed_id = $morphedId;
             $transaction->morphed_type = User::class;
@@ -1356,33 +1400,10 @@ class AccountingController extends Controller
                 $transaction->details = $childDetails;
             }
             $transaction->save();
-
-            $child = Transactions::create([
-                'type' => 'outUser',
-                'wallet_id' => $targetUser->wallet->id,
-                'description' => $description,
-                'amount' => $amount,
-                'is_pay' => $transaction->is_pay,
-                'morphed_id' => $morphedId,
-                'morphed_type' => User::class,
-                'user_added' => 0,
-                'created' => $originalCreated ?: ($originalCreatedAt ? Carbon::parse($originalCreatedAt)->format('Y-m-d') : $currentDate),
-                'discount' => $transaction->discount ?? 0,
-                'currency' => $transaction->currency,
-                'parent_id' => $transaction->id,
-                'details' => $childDetails ?: null,
-                'tag' => $transaction->tag,
-            ]);
-
-            if ($originalCreatedAt) {
-                $child->created_at = $originalCreatedAt;
-                $child->updated_at = $originalCreatedAt;
-                $child->save();
-            }
         });
 
         return Response::json([
-            'message' => 'تم إسناد الحركة إلى القاسة بنجاح',
+            'message' => 'تم إسناد الحركة إلى القاصة بنجاح',
             'transaction_id' => $transaction->id,
             'wallet_user_id' => $targetUser->id,
         ], 200);
@@ -1406,13 +1427,14 @@ class AccountingController extends Controller
             'details.entry_date' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $transaction = Transactions::with(['wallet.user'])->find($validated['transaction_id']);
+        $transaction = Transactions::find($validated['transaction_id']);
 
         if (!$transaction) {
             return Response::json(['message' => 'لم يتم العثور على الحركة المطلوبة'], 404);
         }
 
-        $walletUser = optional($transaction->wallet)->user;
+        $txUserId = $this->resolveTxUserId($transaction);
+        $walletUser = $txUserId ? User::find($txUserId) : null;
 
         if (!$walletUser || $walletUser->owner_id !== Auth::user()->owner_id) {
             return Response::json(['message' => 'غير مصرح بتعديل هذه الحركة'], 403);
@@ -1507,7 +1529,7 @@ class AccountingController extends Controller
             'cmr' => 'nullable|string|max:255',
         ]);
         $user_id = $request->id;
-        $user = User::with('wallet')->find($user_id);
+        $user = User::find($user_id);
         if (!$user || $user->owner_id !== Auth::user()->owner_id) {
             return Response::json(['message' => 'غير مصرح'], 403);
         }
@@ -1527,21 +1549,40 @@ class AccountingController extends Controller
         $note = $request->note ? trim($request->note) : '';
         $desc = 'قرض سائق - ' . $driver_name . ($note ? ' - ' . $note : '');
         $transaction = null;
+        $mainBoxId = (int) $this->accounting->mainBox()->id;
         if ($amountDollar) {
-            $transactiond = $this->debtWallet($amountDollar, $desc, $this->accounting->mainBox()->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'outUserBox');
-            $transaction = Transactions::create([
-                'type' => 'outUser', 'wallet_id' => $user->wallet->id, 'description' => $desc, 'amount' => $amountDollar * -1,
-                'is_pay' => 1, 'morphed_id' => $user_id, 'morphed_type' => 'App\Models\User', 'user_added' => 0, 'created' => $date,
-                'discount' => 0, 'currency' => '$', 'parent_id' => $transactiond->id, 'details' => $details,
-            ]);
+            $transactiond = $this->debtWallet($amountDollar, $desc, $mainBoxId, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'outUserBox');
+            $transaction = Transactions::create($this->transactionAttrsForUser($mainBoxId, [
+                'type' => 'outUser',
+                'description' => $desc,
+                'amount' => $amountDollar * -1,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => $transactiond->id,
+                'details' => $details,
+            ]));
         }
         if ($amountDinar) {
-            $transactionq = $this->debtWallet($amountDinar, $desc, $this->accounting->mainBox()->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'outUserBox');
-            $transaction = Transactions::create([
-                'type' => 'outUser', 'wallet_id' => $user->wallet->id, 'description' => $desc, 'amount' => $amountDinar * -1,
-                'is_pay' => 1, 'morphed_id' => $user_id, 'morphed_type' => 'App\Models\User', 'user_added' => 0, 'created' => $date,
-                'discount' => 0, 'currency' => 'IQD', 'parent_id' => $transactionq->id, 'details' => $details,
-            ]);
+            $transactionq = $this->debtWallet($amountDinar, $desc, $mainBoxId, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'outUserBox');
+            $transaction = Transactions::create($this->transactionAttrsForUser($mainBoxId, [
+                'type' => 'outUser',
+                'description' => $desc,
+                'amount' => $amountDinar * -1,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => $transactionq->id,
+                'details' => $details,
+            ]));
         }
         return Response::json(['message' => 'تم تسجيل القرض', 'transaction' => $transaction], 201);
     }
@@ -1555,7 +1596,7 @@ class AccountingController extends Controller
             'amountDinar' => 'nullable|numeric|min:0',
             'date' => 'nullable|string',
         ]);
-        $loanTran = Transactions::with('wallet.user')->find($request->parent_id);
+        $loanTran = Transactions::find($request->parent_id);
         if (!$loanTran || $loanTran->type !== 'outUser') {
             return Response::json(['message' => 'حركة القرض غير موجودة'], 404);
         }
@@ -1563,12 +1604,17 @@ class AccountingController extends Controller
         if (empty($details['loan'])) {
             return Response::json(['message' => 'هذه الحركة ليست قرضاً'], 400);
         }
-        $walletUser = $loanTran->wallet->user;
+        $txUserId = $this->resolveTxUserId($loanTran);
+        // Loan rows are stored on mainBox vault with morphed client; prefer morph party.
+        if ((int) ($loanTran->morphed_id ?? 0) > 0
+            && in_array((string) $loanTran->morphed_type, [User::class, 'App\\Models\\User', 'App\Models\User'], true)) {
+            $txUserId = (int) $loanTran->morphed_id;
+        }
+        $walletUser = $txUserId ? User::find($txUserId) : null;
         if (!$walletUser || $walletUser->owner_id !== Auth::user()->owner_id) {
             return Response::json(['message' => 'غير مصرح'], 403);
         }
         $user_id = $walletUser->id;
-        $user = User::with('wallet')->find($user_id);
         $amountDollar = $request->amountDollar ?? 0;
         $amountDinar = $request->amountDinar ?? 0;
         if (!$amountDollar && !$amountDinar) {
@@ -1578,21 +1624,40 @@ class AccountingController extends Controller
         $driver_name = $details['driver_name'] ?? 'سائق';
         $desc = 'دفعة إرجاع قرض - ' . $driver_name;
         $transaction = null;
+        $mainBoxId = (int) $this->accounting->mainBox()->id;
         if ($amountDollar) {
-            $transactiond = $this->increaseWallet($amountDollar, $desc, $this->accounting->mainBox()->id, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'inUserBox', []);
-            $transaction = Transactions::create([
-                'type' => 'inUser', 'wallet_id' => $user->wallet->id, 'description' => $desc, 'amount' => $amountDollar,
-                'is_pay' => 1, 'morphed_id' => $user_id, 'morphed_type' => 'App\Models\User', 'user_added' => 0, 'created' => $date,
-                'discount' => 0, 'currency' => '$', 'parent_id' => $loanTran->id, 'details' => ['driver_name' => $driver_name],
-            ]);
+            $transactiond = $this->increaseWallet($amountDollar, $desc, $mainBoxId, $user_id, 'App\Models\User', 0, 0, '$', $date, 0, 'inUserBox', []);
+            $transaction = Transactions::create($this->transactionAttrsForUser($mainBoxId, [
+                'type' => 'inUser',
+                'description' => $desc,
+                'amount' => $amountDollar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => '$',
+                'parent_id' => $loanTran->id,
+                'details' => ['driver_name' => $driver_name],
+            ]));
         }
         if ($amountDinar) {
-            $transactionq = $this->increaseWallet($amountDinar, $desc, $this->accounting->mainBox()->id, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'inUserBox', []);
-            $transaction = Transactions::create([
-                'type' => 'inUser', 'wallet_id' => $user->wallet->id, 'description' => $desc, 'amount' => $amountDinar,
-                'is_pay' => 1, 'morphed_id' => $user_id, 'morphed_type' => 'App\Models\User', 'user_added' => 0, 'created' => $date,
-                'discount' => 0, 'currency' => 'IQD', 'parent_id' => $loanTran->id, 'details' => ['driver_name' => $driver_name],
-            ]);
+            $transactionq = $this->increaseWallet($amountDinar, $desc, $mainBoxId, $user_id, 'App\Models\User', 0, 0, 'IQD', $date, 0, 'inUserBox', []);
+            $transaction = Transactions::create($this->transactionAttrsForUser($mainBoxId, [
+                'type' => 'inUser',
+                'description' => $desc,
+                'amount' => $amountDinar,
+                'is_pay' => 1,
+                'morphed_id' => $user_id,
+                'morphed_type' => 'App\Models\User',
+                'user_added' => 0,
+                'created' => $date,
+                'discount' => 0,
+                'currency' => 'IQD',
+                'parent_id' => $loanTran->id,
+                'details' => ['driver_name' => $driver_name],
+            ]));
         }
         return Response::json(['message' => 'تم تسجيل دفعة الإرجاع', 'transaction' => $transaction], 201);
     }
@@ -1607,18 +1672,29 @@ class AccountingController extends Controller
         if($created==0){
             $created=$this->currentDate;
         }
-        $user=  User::with('wallet')->find($user_id);
-        if(!$user || !$user->wallet){
+        $user=  User::find($user_id);
+        if(!$user){
             return null;
         }
 
         return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user) {
-            $id = $user->wallet->id;
-            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
+            $transactionDetils = $this->transactionAttrsForUser((int) $user_id, [
+                'type' => $type,
+                'description'=>$desc,
+                'amount'=>$amount,
+                'is_pay'=>$is_pay,
+                'morphed_id'=>$morphed_id,
+                'morphed_type'=>$morphed_type,
+                'user_added'=>0,
+                'created'=>$created,
+                'discount'=>$discount??0,
+                'currency'=>$currency,
+                'parent_id'=>$parent_id,
+                'details'=>$details,
+            ]);
             $transaction = Transactions::create($transactionDetils);
 
             // Child / mirror legs do not post journals — the root cash-box (or party) leg owns the entry.
-            // Matches receiptArrivedUser / salesDebtUser which create child rows via Transactions::create only.
             if ((int) $parent_id > 0) {
                 return $transaction;
             }
@@ -1628,8 +1704,6 @@ class AccountingController extends Controller
             $absAmount = abs((float) $amount);
             $disc = abs((float) ($discount ?? 0));
 
-            // Client payment into قاصة استلام الدفعات: Dr Cash(or vault ledger) / Cr AR.
-            // Distinguish from قاصة deposits (type inUserBox) which stay Cash/Revenue.
             $receiptsCashUserId = null;
             try {
                 $receiptsCashUserId = app(\App\Services\VaultService::class)->receiptsCashUserId((int) $ownerId);
@@ -1689,18 +1763,26 @@ class AccountingController extends Controller
             $created=$this->currentDate;
         }
 
-        $user=  User::with('wallet')->find($user_id);
+        $user=  User::find($user_id);
         if(!$user){
             return null;
         }
-        if(!$user->wallet){
-          Wallet::create(['user_id' => $user_id,'balance'=>0]);
-          $user->load('wallet');
-        }
 
         return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user) {
-            $id = $user->wallet->id;
-            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id,'details'=>$details];
+            $transactionDetils = $this->transactionAttrsForUser((int) $user_id, [
+                'type' => $type,
+                'description'=>$desc,
+                'amount'=>$amount*-1,
+                'is_pay'=>$is_pay,
+                'morphed_id'=>$morphed_id,
+                'morphed_type'=>$morphed_type,
+                'user_added'=>0,
+                'created'=>$created,
+                'discount'=>$discount??0,
+                'currency'=>$currency,
+                'parent_id'=>$parent_id,
+                'details'=>$details,
+            ]);
             $transaction =Transactions::create($transactionDetils);
 
             if ((int) $parent_id > 0) {
@@ -1734,14 +1816,25 @@ class AccountingController extends Controller
         if($created==0){
             $created=$this->currentDate ;
         }
-        $user=  User::with('wallet')->find($user_id);
-        if(!$user || !$user->wallet){
+        $user=  User::find($user_id);
+        if(!$user){
             return null;
         }
 
         return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $ownerId, $user) {
-            $id = $user->wallet->id;
-            $transactionDetils = ['type' => $type,'wallet_id'=>$id,'description'=>$desc,'amount'=>$amount*-1,'is_pay'=>$is_pay,'morphed_id'=>$morphed_id,'morphed_type'=>$morphed_type,'user_added'=>0,'created'=>$created,'discount'=>$discount??0,'currency'=>$currency,'parent_id'=>$parent_id];
+            $transactionDetils = $this->transactionAttrsForUser((int) $user_id, [
+                'type' => $type,
+                'description'=>$desc,
+                'amount'=>$amount*-1,
+                'is_pay'=>$is_pay,
+                'morphed_id'=>$morphed_id,
+                'morphed_type'=>$morphed_type,
+                'user_added'=>0,
+                'created'=>$created,
+                'discount'=>$discount??0,
+                'currency'=>$currency,
+                'parent_id'=>$parent_id,
+            ]);
             $transaction = Transactions::create($transactionDetils);
 
             if ((int) $parent_id > 0) {
@@ -1764,6 +1857,32 @@ class AccountingController extends Controller
 
             return $transaction;
         });
+    }
+
+    /**
+     * Build transaction attributes with vault_id and optional legacy wallet_id.
+     * Does not create Wallet rows.
+     *
+     * @param  array<string, mixed>  $base
+     * @return array<string, mixed>
+     */
+    protected function transactionAttrsForUser(int $userId, array $base): array
+    {
+        $vaults = app(\App\Services\VaultService::class);
+        $vaultId = $vaults->resolveVaultIdForLegacyUser($userId);
+        $walletId = $vaults->resolveWalletIdForLegacyUser($userId);
+
+        if ($vaultId && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'vault_id')) {
+            $base['vault_id'] = $vaultId;
+        }
+        if ($walletId) {
+            $base['wallet_id'] = $walletId;
+        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'wallet_id')) {
+            // Nullable after Phase 2 migration; omit if column still NOT NULL and no wallet.
+            $base['wallet_id'] = null;
+        }
+
+        return $base;
     }
 
     /**
@@ -1808,7 +1927,7 @@ class AccountingController extends Controller
                 $transactionsImage->delete();
             }
             $ledger = app(LedgerService::class);
-            $walletUserId = Wallet::where('id', $originalTransaction->wallet_id)->value('user_id');
+            $walletUserId = $this->resolveTxUserId($originalTransaction);
             if ($ledger->voidJournalForTransaction($originalTransaction, 'حذف أمانة #' . $originalTransaction->id)) {
                 if ($walletUserId) {
                     $ledger->syncWalletFromLedger((int) $owner_id, (int) $walletUserId);
@@ -1870,16 +1989,97 @@ class AccountingController extends Controller
      */
     protected function legacyReverseWalletMovement(Transactions $transaction): void
     {
-        $wallet = Wallet::find($transaction->wallet_id);
-        if (!$wallet) {
+        if (! Schema::hasTable('wallets') || ! $transaction->wallet_id) {
             return;
         }
 
-        if ($transaction->currency === 'IQD') {
-            $wallet->decrement('balance_dinar', $transaction->amount);
-        } else {
-            $wallet->decrement('balance', $transaction->amount);
+        $wallet = DB::table('wallets')->where('id', $transaction->wallet_id)->first();
+        if (! $wallet) {
+            return;
         }
+
+        $col = $transaction->currency === 'IQD' ? 'balance_dinar' : 'balance';
+        DB::table('wallets')->where('id', $transaction->wallet_id)->update([
+            $col => (float) ($wallet->{$col} ?? 0) - (float) $transaction->amount,
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Attach ledger balance / balance_dinar on user models for Accounting UI.
+     *
+     * @param  \Illuminate\Support\Collection<int, User>|iterable<User>  $users
+     */
+    protected function attachLedgerBalancesToUsers($users, int $ownerId): void
+    {
+        $ledger = app(LedgerService::class);
+        foreach ($users as $user) {
+            if (! $user || ! isset($user->id)) {
+                continue;
+            }
+            try {
+                $user->setAttribute('balance', $ledger->walletLedgerAccount($ownerId, (int) $user->id, '$')->balance('$'));
+                $user->setAttribute('balance_dinar', $ledger->walletLedgerAccount($ownerId, (int) $user->id, 'IQD')->balance('IQD'));
+            } catch (\Throwable $e) {
+                $user->setAttribute('balance', 0);
+                $user->setAttribute('balance_dinar', 0);
+            }
+        }
+    }
+
+    /**
+     * Resolve user id for a transaction via vault_id / wallets / morph.
+     */
+    protected function resolveTxUserId(Transactions $transaction): ?int
+    {
+        if ($transaction->vault_id && Schema::hasTable('vaults')) {
+            $legacy = Vault::query()->where('id', (int) $transaction->vault_id)->value('legacy_user_id');
+            if ($legacy) {
+                return (int) $legacy;
+            }
+        }
+        if ($transaction->wallet_id && Schema::hasTable('wallets')) {
+            $uid = DB::table('wallets')->where('id', $transaction->wallet_id)->value('user_id');
+            if ($uid) {
+                return (int) $uid;
+            }
+        }
+        if ((int) ($transaction->morphed_id ?? 0) > 0
+            && in_array((string) ($transaction->morphed_type ?? ''), [User::class, 'App\\Models\\User', 'App\Models\User'], true)) {
+            return (int) $transaction->morphed_id;
+        }
+
+        return null;
+    }
+
+    /**
+     * Query transactions belonging to a user (vault, legacy wallet, or morph).
+     */
+    protected function transactionsQueryForUser(User $user)
+    {
+        $vaultId = app(\App\Services\VaultService::class)->resolveVaultIdForLegacyUser((int) $user->id);
+        $walletId = app(\App\Services\VaultService::class)->resolveWalletIdForLegacyUser((int) $user->id);
+        $carIds = Car::where('client_id', $user->id)->pluck('id');
+
+        return Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])
+            ->where(function ($q) use ($user, $vaultId, $walletId, $carIds) {
+                if ($vaultId) {
+                    $q->orWhere('vault_id', $vaultId);
+                }
+                if ($walletId) {
+                    $q->orWhere('wallet_id', $walletId);
+                }
+                $q->orWhere(function ($inner) use ($user) {
+                    $inner->whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                        ->where('morphed_id', $user->id);
+                });
+                if ($carIds->isNotEmpty()) {
+                    $q->orWhere(function ($inner) use ($carIds) {
+                        $inner->whereIn('morphed_type', [Car::class, 'App\\Models\\Car', 'App\Models\Car'])
+                            ->whereIn('morphed_id', $carIds);
+                    });
+                }
+            });
     }
 
     public function receiveCard(Request $request)
@@ -1887,17 +2087,36 @@ class AccountingController extends Controller
         $authUser = auth()->user();
         $profile_id = $_GET['id'] ?? 0;
         $profile = Profile::find($profile_id);
-        $wallet = Wallet::where('user_id', $profile->user_id)->first();
         $user = User::find($profile->user_id);
-        $old_card = $wallet->card;
         $percentage = $user->percentage ?? 0;
+
+        if (! Schema::hasTable('wallets')) {
+            try {
+                DB::beginTransaction();
+                $profile->update(['results' => 1, 'user_accepted' => $authUser->id]);
+                $this->increaseWallet($percentage, ' نسبة على البطاقة رقم ' . $profile?->card_number, $user->id);
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::warning('receiveCard failed', ['error' => $e->getMessage()]);
+            }
+
+            return Response::json(0, 200);
+        }
+
+        $wallet = DB::table('wallets')->where('user_id', $profile->user_id)->first();
+        $old_card = $wallet->card ?? 0;
 
         try {
             DB::beginTransaction();
             $profile->update(['results' => 1, 'user_accepted' => $authUser->id]);
             $this->increaseWallet($percentage, ' نسبة على البطاقة رقم ' . $profile?->card_number, $user->id);
-            $wallet->update(['card' => $old_card - 1]);
-            $wallet->refresh();
+            if ($wallet) {
+                DB::table('wallets')->where('id', $wallet->id)->update([
+                    'card' => max(0, (int) $old_card - 1),
+                    'updated_at' => now(),
+                ]);
+            }
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();

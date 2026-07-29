@@ -4,13 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Transactions extends Model
 {
-    use HasFactory,SoftDeletes;
+    use HasFactory, SoftDeletes;
+
     protected $fillable = [
         'wallet_id',
+        'vault_id',
         'amount',
         'type',
         'description',
@@ -25,24 +28,34 @@ class Transactions extends Model
         'tag',
         'journal_entry_id',
     ];
+
     protected $casts = [
         'details' => 'array',
     ];
 
     protected $dates = ['deleted_at'];
 
-    public function wallet()
+    public function wallet(): BelongsTo
     {
-        return $this->belongsTo(Wallet::class);
+        // Wallets table dropped — relation disabled.
+        return $this->belongsTo(self::class, 'id', 'id')->whereRaw('0 = 1');
     }
+
+    public function vault(): BelongsTo
+    {
+        return $this->belongsTo(Vault::class);
+    }
+
     public function morphed()
     {
         return $this->morphTo('morphed', 'morphed_type', 'morphed_id');
     }
+
     public function TransactionsImages()
     {
         return $this->hasMany(TransactionsImages::class, 'transactions_id');
     }
+
     /**
      * The double-entry journal posted for this transaction (source of truth
      * for which real ledger account the money hit).
@@ -51,6 +64,7 @@ class Transactions extends Model
     {
         return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
+
     /**
      * Parent leg (e.g. the main cash-box movement a client/قاسة allocation
      * was split off from). Used to resolve the money account when this row

@@ -696,14 +696,14 @@ async function saveDescription(tran) {
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('cash_balance_usd') }}</div>
                 <div class="mt-1 font-mono text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                  {{ updateResults(laravelData?.user?.wallet?.balance ?? 0) }}
+                  {{ updateResults(laravelData?.user?.balance ?? laravelData?.user?.wallet?.balance ?? 0) }}
                   <span class="text-sm font-normal text-slate-400">$</span>
                 </div>
               </div>
               <div class="rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-slate-600 dark:text-slate-200">{{ $t('cash_balance_iqd') }}</div>
                 <div class="mt-1 font-mono text-lg font-bold tabular-nums text-sky-700 dark:text-sky-300">
-                  {{ updateResults(laravelData?.user?.wallet?.balance_dinar ?? 0) }}
+                  {{ updateResults(laravelData?.user?.balance_dinar ?? laravelData?.user?.wallet?.balance_dinar ?? 0) }}
                   <span class="text-sm font-normal text-slate-400">د.ع</span>
                 </div>
               </div>

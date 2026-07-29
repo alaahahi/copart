@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\User;
-use App\Models\Wallet;
 use App\Models\UserType;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
@@ -55,7 +54,6 @@ class AnnualController extends Controller
             $client->created =$this->currentDate;
             $client->type_id = $this->userClientAnnual;
             $client->save();
-            Wallet::create(['user_id' => $client->id,'balance'=>0]);
             $client_id=$client->id;
         } 
         $car=Warehouse::create([
@@ -158,7 +156,6 @@ class AnnualController extends Controller
             $client->created =$this->currentDate;
             $client->type_id = $this->userClientAnnual;
             $client->save();
-            Wallet::create(['user_id' => $client->id,'balance'=>0]);
             $client_id=$client->id;
         } 
         $warehouse= Warehouse::find($request->id)->update(

@@ -4,12 +4,13 @@ namespace App\Services;
 
 use App\Models\Car;
 use App\Models\Transactions;
-use App\Models\Wallet;
+use App\Models\Vault;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Car-linked payment allocation + soft-delete restore for wallet transactions.
@@ -57,7 +58,7 @@ class TransactionPaymentService
                     $leg,
                     'حذف حركة #' . $leg->id
                 );
-                $uid = Wallet::where('id', $leg->wallet_id)->value('user_id');
+                $uid = $this->resolveTransactionUserId($leg);
                 if ($voided && $uid) {
                     $syncedFromLedger[] = (int) $uid;
                 } elseif (!$voided && $legacyReverseWallet) {
@@ -200,7 +201,7 @@ class TransactionPaymentService
 
             $voidOriginalRestored = $this->ledger->restoreJournalForTransaction($originalTransaction);
             if ($voidOriginalRestored) {
-                $uid = Wallet::where('id', $originalTransaction->wallet_id)->value('user_id');
+                $uid = $this->resolveTransactionUserId($originalTransaction);
                 if ($uid) {
                     $syncedFromLedger[] = (int) $uid;
                 }
@@ -212,7 +213,7 @@ class TransactionPaymentService
             foreach ($children as $transaction) {
                 $restored = $this->ledger->restoreJournalForTransaction($transaction);
                 if ($restored) {
-                    $uid = Wallet::where('id', $transaction->wallet_id)->value('user_id');
+                    $uid = $this->resolveTransactionUserId($transaction);
                     if ($uid) {
                         $syncedFromLedger[] = (int) $uid;
                     }
@@ -342,20 +343,54 @@ class TransactionPaymentService
     }
 
     /**
-     * Re-apply wallet effect for transactions created before ledger linking
-     * (undoes legacyReverseWalletMovement used on delete).
+     * Resolve owning user for a transaction without requiring wallets table.
+     */
+    protected function resolveTransactionUserId(Transactions $transaction): ?int
+    {
+        if ($transaction->vault_id && Schema::hasTable('vaults')) {
+            $legacy = Vault::query()->where('id', (int) $transaction->vault_id)->value('legacy_user_id');
+            if ($legacy) {
+                return (int) $legacy;
+            }
+        }
+
+        if ($transaction->wallet_id && Schema::hasTable('wallets')) {
+            $uid = DB::table('wallets')->where('id', $transaction->wallet_id)->value('user_id');
+            if ($uid) {
+                return (int) $uid;
+            }
+        }
+
+        $isUser = in_array((string) $transaction->morphed_type, [
+            \App\Models\User::class,
+            'App\\Models\\User',
+            'App\Models\User',
+        ], true);
+        if ($isUser && $transaction->morphed_id) {
+            return (int) $transaction->morphed_id;
+        }
+
+        return null;
+    }
+
+    /**
+     * Legacy wallet balance writes — no-op when wallets table is gone.
      */
     protected function legacyApplyWalletMovement(Transactions $transaction): void
     {
-        $wallet = Wallet::find($transaction->wallet_id);
-        if (!$wallet) {
+        if (! Schema::hasTable('wallets') || ! $transaction->wallet_id) {
             return;
         }
 
-        if ($transaction->currency === 'IQD') {
-            $wallet->increment('balance_dinar', $transaction->amount);
-        } else {
-            $wallet->increment('balance', $transaction->amount);
+        $wallet = DB::table('wallets')->where('id', $transaction->wallet_id)->first();
+        if (! $wallet) {
+            return;
         }
+
+        $col = $transaction->currency === 'IQD' ? 'balance_dinar' : 'balance';
+        DB::table('wallets')->where('id', $transaction->wallet_id)->update([
+            $col => (float) ($wallet->{$col} ?? 0) + (float) $transaction->amount,
+            'updated_at' => now(),
+        ]);
     }
 }

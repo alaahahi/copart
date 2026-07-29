@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserType;
-use App\Models\Wallet;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -75,11 +74,6 @@ class UserManagementService
                 'created' => Carbon::now()->format('Y-m-d'),
                 'year_date' => (int) Carbon::now()->format('Y'),
             ]);
-
-            Wallet::query()->firstOrCreate(
-                ['user_id' => $user->id],
-                ['balance' => 0, 'balance_dinar' => 0, 'card' => 0]
-            );
 
             Log::info('Settings user created', [
                 'user_id' => $user->id,

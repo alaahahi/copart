@@ -594,7 +594,7 @@ onMounted(() => {
                   :class="tab === 'transfer' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
                   @click="tab = 'transfer'"
                 >
-                  حركة بين القاصات
+                  تحويل نقدي
                 </button>
                 <button
                   type="button"
@@ -650,10 +650,10 @@ onMounted(() => {
               <div class="flex flex-wrap items-end gap-3">
                 <div class="min-w-[16rem] flex-1">
                   <label class="mb-1 block text-xs font-semibold text-slate-200">
-                    قاصة استلام دفعات الزبائن
+                    قاصة نقد استلام دفعات الزبائن
                   </label>
                   <p class="mb-2 text-xs text-slate-400">
-                    كل دفعات التجار/السيارات تُرحَّل إلى هذه القاصة (افتراضي: الصندوق). ليست تاجراً.
+                    كل دفعات التجار/السيارات تُرحَّل نقداً إلى هذه القاصة النقدية (صندوق/بنك/خزنة). افتراضي: الصندوق الرئيسي.
                   </p>
                   <select
                     v-model="receiptsVaultId"
@@ -956,7 +956,7 @@ onMounted(() => {
             <template v-else-if="tab === 'transfer'">
               <div class="mx-auto max-w-3xl space-y-6">
                 <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل بين القاصات</h2>
+                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل نقدي</h2>
                   <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitTransfer">
                     <div>
                       <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من قاصة</label>

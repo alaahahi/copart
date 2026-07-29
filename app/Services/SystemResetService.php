@@ -11,7 +11,6 @@ use App\Models\Transactions;
 use App\Models\Transfers;
 use App\Models\User;
 use App\Models\UserType;
-use App\Models\Wallet;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -83,11 +82,23 @@ class SystemResetService
                 ->map(fn ($id) => (int) $id)
                 ->all();
 
-            $walletIds = Wallet::query()
-                ->whereIn('user_id', $ownerUserIds)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+            $walletIds = [];
+            if (Schema::hasTable('wallets')) {
+                $walletIds = DB::table('wallets')
+                    ->whereIn('user_id', $ownerUserIds)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
+
+            $vaultIds = [];
+            if (Schema::hasTable('vaults')) {
+                $vaultIds = DB::table('vaults')
+                    ->where('owner_id', $ownerId)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
 
             $carIds = Car::withTrashed()
                 ->where('owner_id', $ownerId)
@@ -107,11 +118,14 @@ class SystemResetService
                 ->whereNull('deleted_at')
                 ->update(['deleted_at' => now(), 'updated_at' => now()]);
 
-            // 3) Wallet transactions (payments) for this owner's wallets + car/client morphs
+            // 3) Wallet/vault transactions (payments) for this owner
             $txQuery = Transactions::query()->whereNull('deleted_at');
-            $txQuery->where(function ($q) use ($walletIds, $carIds, $ownerUserIds) {
+            $txQuery->where(function ($q) use ($walletIds, $vaultIds, $carIds, $ownerUserIds) {
                 if ($walletIds !== []) {
                     $q->orWhereIn('wallet_id', $walletIds);
+                }
+                if ($vaultIds !== [] && Schema::hasColumn('transactions', 'vault_id')) {
+                    $q->orWhereIn('vault_id', $vaultIds);
                 }
                 if ($carIds !== []) {
                     $q->orWhere(function ($inner) use ($carIds) {
@@ -192,25 +206,28 @@ class SystemResetService
             $stats['vault_users_removed'] = $vaultWipe['users'];
             $stats['vaults_removed'] = $vaultWipe['vaults'];
 
-            // 10) Zero remaining wallets for this owner's users (mainBox kept; balances cleared)
-            $survivingUserIds = User::withTrashed()
-                ->where(function ($q) use ($ownerId) {
-                    $q->where('owner_id', $ownerId)->orWhere('id', $ownerId);
-                })
-                ->whereNull('deleted_at')
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+            // 10) Wallets table removed — balances live on ledger only.
+            $stats['wallets_reset'] = 0;
+            if (Schema::hasTable('wallets')) {
+                $survivingUserIds = User::withTrashed()
+                    ->where(function ($q) use ($ownerId) {
+                        $q->where('owner_id', $ownerId)->orWhere('id', $ownerId);
+                    })
+                    ->whereNull('deleted_at')
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
 
-            if ($survivingUserIds !== []) {
-                $stats['wallets_reset'] = Wallet::query()
-                    ->whereIn('user_id', $survivingUserIds)
-                    ->update([
-                        'balance' => 0,
-                        'balance_dinar' => 0,
-                        'card' => 0,
-                        'updated_at' => now(),
-                    ]);
+                if ($survivingUserIds !== []) {
+                    $stats['wallets_reset'] = DB::table('wallets')
+                        ->whereIn('user_id', $survivingUserIds)
+                        ->update([
+                            'balance' => 0,
+                            'balance_dinar' => 0,
+                            'card' => 0,
+                            'updated_at' => now(),
+                        ]);
+                }
             }
 
             // 11) Re-ensure essential vault only (mainBox) + ledger chart

@@ -626,11 +626,14 @@ class LedgerService
     }
 
     /**
-     * Cash-box receipt (وصل قبض): Debit Cash / Credit Revenue
+     * Cash-box receipt (وصل قبض): Debit Cash / Credit Revenue.
+     * Optional $cashUserId routes to that user's cash vault ledger (not always 1100).
      */
-    public function postCashReceipt(int $ownerId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    public function postCashReceipt(int $ownerId, float $amount, string $currency, string $memo, $reference = null, ?int $cashUserId = null): JournalEntry
     {
-        $cash = $this->cashAccount($ownerId, $currency);
+        $cash = $cashUserId
+            ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
+            : $this->cashAccount($ownerId, $currency);
         $revenue = $this->systemAccount($ownerId, self::CODE_REVENUE);
 
         return $this->post([
@@ -648,11 +651,14 @@ class LedgerService
     }
 
     /**
-     * Cash-box payment (وصل سحب): Debit Expense / Credit Cash
+     * Cash-box payment (وصل سحب): Debit Expense / Credit Cash.
+     * Optional $cashUserId routes to that user's cash vault ledger.
      */
-    public function postCashDisbursement(int $ownerId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
+    public function postCashDisbursement(int $ownerId, float $amount, string $currency, string $memo, $reference = null, ?int $cashUserId = null): JournalEntry
     {
-        $cash = $this->cashAccount($ownerId, $currency);
+        $cash = $cashUserId
+            ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
+            : $this->cashAccount($ownerId, $currency);
         $expense = $this->systemAccount($ownerId, self::CODE_EXPENSE);
 
         return $this->post([
@@ -671,7 +677,7 @@ class LedgerService
 
     /**
      * Route wallet increase to the correct electronic accounts.
-     * client → AR/Revenue | mainBox → Cash/Revenue | other system → Suspense via cash receipt style on opening
+     * client → AR/Revenue | cash_box → Cash/Revenue | other system → party mirror
      */
     public function postWalletIncrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
     {
@@ -679,7 +685,7 @@ class LedgerService
 
         return match ($kind) {
             'client' => $this->postClientDebtIncrease($ownerId, $userId, $amount, $currency, $memo, $reference),
-            'cash_box' => $this->postCashReceipt($ownerId, $amount, $currency, $memo, $reference),
+            'cash_box' => $this->postCashReceipt($ownerId, $amount, $currency, $memo, $reference, $userId),
             default => $this->postSystemWalletIncrease($ownerId, $userId, $amount, $currency, $memo, $reference),
         };
     }
@@ -693,7 +699,7 @@ class LedgerService
 
         return match ($kind) {
             'client' => $this->postClientPayment($ownerId, $userId, $amount, $currency, $memo, $reference),
-            'cash_box' => $this->postCashDisbursement($ownerId, $amount, $currency, $memo, $reference),
+            'cash_box' => $this->postCashDisbursement($ownerId, $amount, $currency, $memo, $reference, $userId),
             default => $this->postSystemWalletDecrease($ownerId, $userId, $amount, $currency, $memo, $reference),
         };
     }
@@ -706,6 +712,17 @@ class LedgerService
         $user = User::find($userId);
         if (!$user) {
             return 'system';
+        }
+
+        // Cash vault linked by legacy_user_id → cash_box (real COA cash).
+        if (\Illuminate\Support\Facades\Schema::hasTable('vaults')) {
+            $vault = \App\Models\Vault::query()
+                ->where('owner_id', $ownerId)
+                ->where('legacy_user_id', $userId)
+                ->first();
+            if ($vault && $vault->isCashBox()) {
+                return 'cash_box';
+            }
         }
 
         $clientTypeId = (int) (\Illuminate\Support\Facades\Cache::get('user_type_client')
@@ -816,18 +833,47 @@ class LedgerService
     }
 
     /**
-     * Ledger account that actually backs a wallet-holding user (حساب/account users:
-     * mainBox/cash box, Dubai, Iran, border, howler, etc.), matching the same routing
-     * used by postWalletIncrease/postWalletDecrease so balances stay consistent.
-     * cash_box → Cash 1100/1110 | client & system wallets → party mirror account (1200-{userId})
+     * Ledger account that backs a user for posting / balances.
+     * cash_box + mainBox → system Cash 1100/1110 (or vault.ledger_account_id for other cash vaults)
+     * client & system → party mirror account (1200-{userId})
      */
     public function walletLedgerAccount(int $ownerId, int $userId, string $currency): LedgerAccount
     {
         $kind = $this->walletPostingKind($ownerId, $userId);
 
-        return $kind === 'cash_box'
-            ? $this->cashAccount($ownerId, $currency)
-            : $this->clientReceivableAccount($ownerId, $userId);
+        if ($kind !== 'cash_box') {
+            return $this->clientReceivableAccount($ownerId, $userId);
+        }
+
+        $currency = $currency === 'IQD' ? 'IQD' : '$';
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('vaults')) {
+            $vault = \App\Models\Vault::query()
+                ->where('owner_id', $ownerId)
+                ->where('legacy_user_id', $userId)
+                ->first();
+
+            if ($vault && $vault->isCashBox()) {
+                $isMainBox = strcasecmp((string) $vault->code, 'mainBox') === 0
+                    || strcasecmp((string) ($vault->legacyUser?->email ?? ''), 'mainBox@account.com') === 0;
+
+                // mainBox: currency-specific system cash 1100/1110
+                if ($isMainBox) {
+                    return $this->cashAccount($ownerId, $currency);
+                }
+
+                // Other cash vaults: single ledger account; currency lives on journal lines.
+                if ($vault->ledger_account_id) {
+                    $account = LedgerAccount::query()->find((int) $vault->ledger_account_id);
+                    if ($account) {
+                        return $account;
+                    }
+                }
+            }
+        }
+
+        // Fallback: system cash (mainBox / legacy email)
+        return $this->cashAccount($ownerId, $currency);
     }
 
     public function profitsAccount(int $ownerId): LedgerAccount
@@ -1152,86 +1198,31 @@ class LedgerService
     }
 
     /**
-     * Per-client COALESCE(ledger, wallet) then sum — safe before/after opening migration.
+     * Per-client ledger AR sum (wallet fallback removed — ledger only).
      */
     public function sumClientsReceivableWithFallback(int $ownerId, int $clientTypeId, string $currency = '$'): float
     {
-        $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
-        $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
-        $codeExpr = self::sqlConcatBoundPrefixWithColumn('?', 'u.id');
-
-        $row = DB::selectOne(
-            "SELECT ROUND(COALESCE(SUM(client_bal), 0), 2) AS total
-             FROM (
-                SELECT COALESCE(
-                    (
-                        SELECT ROUND(COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0), 2)
-                        FROM ledger_accounts AS la
-                        INNER JOIN journal_lines AS jl ON jl.ledger_account_id = la.id
-                        INNER JOIN journal_entries AS je ON je.id = jl.journal_entry_id AND je.deleted_at IS NULL
-                        WHERE la.owner_id = ?
-                          AND la.code = {$codeExpr}
-                          AND jl.currency = ?
-                    ),
-                    (
-                        SELECT w.{$walletColumn} FROM wallets AS w WHERE w.user_id = u.id LIMIT 1
-                    ),
-                    0
-                ) AS client_bal
-                FROM users AS u
-                WHERE u.owner_id = ?
-                  AND u.type_id = ?
-             ) AS t",
-            [$ownerId, $prefix, $currency, $ownerId, $clientTypeId]
-        );
-
-        return (float) ($row->total ?? 0);
+        return $this->sumClientsReceivable($ownerId, $currency);
     }
 
     /**
-     * Keep wallets.balance as a cache of the correct ledger control account.
-     * client → AR | cash box → Cash 1100/1110 | system → party mirror account
+     * No-op: balances are read from the ledger only (Wallet table is being removed).
      */
     public function syncWalletFromLedger(int $ownerId, int $clientId): void
     {
-        $wallet = \App\Models\Wallet::where('user_id', $clientId)->first();
-        if (!$wallet) {
-            return;
-        }
-
-        $kind = $this->walletPostingKind($ownerId, $clientId);
-
-        if ($kind === 'cash_box') {
-            $usd = $this->cashAccount($ownerId, '$')->balance('$');
-            $iqd = $this->cashAccount($ownerId, 'IQD')->balance('IQD');
-        } else {
-            $usd = $this->clientBalance($ownerId, $clientId, '$');
-            $iqd = $this->clientBalance($ownerId, $clientId, 'IQD');
-        }
-
-        $payload = [
-            'balance' => $usd,
-            'balance_dinar' => $iqd,
-        ];
-
-        if (\Illuminate\Support\Facades\Schema::hasColumn('wallets', 'ledger_synced_at')) {
-            $payload['ledger_synced_at'] = now();
-        }
-
-        $wallet->forceFill($payload)->save();
+        // Intentionally empty — do not write wallets.balance.
     }
 
     /**
-     * SQL expression (correlated) for client USD balance from ledger, with wallet fallback.
+     * SQL expression (correlated) for client USD balance from ledger only.
      * Use as selectSub / selectRaw binding owner_id once.
      */
     public static function clientBalanceSqlSubquery(int $ownerId, string $currency = '$'): \Closure
     {
         $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
-        $walletColumn = $currency === 'IQD' ? 'balance_dinar' : 'balance';
         $codeExpr = self::sqlConcatBoundPrefixWithColumn('?', 'users.id');
 
-        return function ($subquery) use ($ownerId, $currency, $prefix, $walletColumn, $codeExpr) {
+        return function ($subquery) use ($ownerId, $currency, $prefix, $codeExpr) {
             $subquery->selectRaw(
                 "COALESCE(
                     (
@@ -1242,9 +1233,6 @@ class LedgerService
                         WHERE la.owner_id = ?
                           AND la.code = {$codeExpr}
                           AND jl.currency = ?
-                    ),
-                    (
-                        SELECT w.{$walletColumn} FROM wallets AS w WHERE w.user_id = users.id LIMIT 1
                     ),
                     0
                 )",

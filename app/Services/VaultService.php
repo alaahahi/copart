@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\LedgerAccount;
 use App\Models\User;
 use App\Models\UserType;
 use App\Models\Vault;
-use App\Models\Wallet;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,17 +18,24 @@ use RuntimeException;
 
 /**
  * Vaults (قاصات) are independent from traders (تجار).
- * Phase 1: vaults table is UI source of truth; Wallet + legacy_user keep ledger history.
+ * Cash boxes (cash/bank/safe + mainBox) own real COA cash accounts — not 1200 party mirrors.
  */
 class VaultService
 {
+    /** Types allowed when creating / updating vaults from the UI. */
+    public const CREATABLE_TYPES = [
+        Vault::TYPE_CASH,
+        Vault::TYPE_BANK,
+        Vault::TYPE_SAFE,
+    ];
+
     public function __construct(protected LedgerService $ledger)
     {
     }
 
     /**
-     * Create a vault and register it in accounting (Wallet + ledger party account).
-     * Creates a hidden technical User (type=account) only for payment API compatibility.
+     * Create a cash vault with a real cash COA account (not 1200 party).
+     * Still creates a hidden technical User for payment API morph compatibility.
      *
      * @param  array{
      *   name:string,
@@ -51,13 +58,9 @@ class VaultService
             throw new InvalidArgumentException('اسم القاصة مطلوب.');
         }
 
-        $type = (string) ($data['type'] ?? Vault::TYPE_SYSTEM);
-        $allowed = [
-            Vault::TYPE_CASH, Vault::TYPE_SYSTEM, Vault::TYPE_COMMISSION,
-            Vault::TYPE_COMPANY, Vault::TYPE_EXPENSE, Vault::TYPE_SUPPLIER, Vault::TYPE_CONTRACTS,
-        ];
-        if (! in_array($type, $allowed, true)) {
-            throw new InvalidArgumentException('نوع القاصة غير صالح.');
+        $type = (string) ($data['type'] ?? Vault::TYPE_CASH);
+        if (! in_array($type, self::CREATABLE_TYPES, true)) {
+            throw new InvalidArgumentException('نوع القاصة غير صالح. المسموح: نقد، بنك، خزنة.');
         }
 
         $code = $this->normalizeCode((string) ($data['code'] ?? '')) ?: $this->uniqueCodeFromName($ownerId, $name);
@@ -85,22 +88,11 @@ class VaultService
                 'year_date' => $year,
             ]);
 
-            $wallet = Wallet::query()->create([
-                'user_id' => $legacyUser->id,
-                'balance' => 0,
-                'balance_dinar' => 0,
-                'card' => 0,
-            ]);
+            // No Wallet rows — balances live on ledger via ledger_account_id.
 
-            // Ledger party mirror (1200-{legacy_user_id}) used by wallet deposit/withdraw / transfers.
             $this->ledger->ensureSystemAccounts($ownerId);
-            $ledgerAccount = $this->ledger->clientReceivableAccount($ownerId, (int) $legacyUser->id);
-            $ledgerAccount->forceFill([
-                'name' => 'Vault: '.$name,
-                'name_ar' => 'قاصة: '.$name,
-            ])->save();
 
-            $vault = Vault::query()->create([
+            $vaultAttrs = [
                 'owner_id' => $ownerId,
                 'name' => $name,
                 'code' => $code,
@@ -110,22 +102,44 @@ class VaultService
                 'show_in_accounting' => array_key_exists('show_in_accounting', $data)
                     ? (bool) $data['show_in_accounting']
                     : true,
-                'wallet_id' => (int) $wallet->id,
                 'legacy_user_id' => (int) $legacyUser->id,
-                'ledger_account_id' => (int) $ledgerAccount->id,
+                'ledger_account_id' => null,
                 'notes' => isset($data['notes']) ? (trim((string) $data['notes']) ?: null) : null,
+            ];
+            if (Schema::hasColumn('vaults', 'wallet_id')) {
+                $vaultAttrs['wallet_id'] = null;
+            }
+
+            $vault = Vault::query()->create($vaultAttrs);
+
+            // Real cash COA under cash (11V-{vaultId}) — NOT 1200 party.
+            $cashParent = LedgerAccount::query()
+                ->where('owner_id', $ownerId)
+                ->where('code', LedgerService::CODE_CASH_USD)
+                ->first();
+
+            $ledgerAccount = $this->ledger->createAccount($ownerId, [
+                'code' => '11V-'.$vault->id,
+                'name' => 'Cash vault: '.$name,
+                'name_ar' => 'نقد قاصة: '.$name,
+                'type' => 'asset',
+                'currency' => null,
+                'parent_id' => $cashParent?->id,
+                'is_active' => true,
             ]);
 
-            Log::info('Vault created and registered in accounting', [
+            $vault->forceFill(['ledger_account_id' => (int) $ledgerAccount->id])->save();
+
+            Log::info('Vault created with cash COA account', [
                 'vault_id' => $vault->id,
                 'owner_id' => $ownerId,
                 'legacy_user_id' => $legacyUser->id,
-                'wallet_id' => $wallet->id,
                 'ledger_account_id' => $ledgerAccount->id,
                 'code' => $code,
+                'type' => $type,
             ]);
 
-            return $vault->fresh(['wallet', 'legacyUser', 'ledgerAccount']);
+            return $vault->fresh(['legacyUser', 'ledgerAccount']);
         });
     }
 
@@ -155,14 +169,9 @@ class VaultService
 
             if (isset($data['type'])) {
                 $type = (string) $data['type'];
-                $allowed = [
-                    Vault::TYPE_CASH, Vault::TYPE_SYSTEM, Vault::TYPE_COMMISSION,
-                    Vault::TYPE_COMPANY, Vault::TYPE_EXPENSE, Vault::TYPE_SUPPLIER, Vault::TYPE_CONTRACTS,
-                ];
-                if (! in_array($type, $allowed, true)) {
-                    throw new InvalidArgumentException('نوع القاصة غير صالح.');
+                if (! in_array($type, self::CREATABLE_TYPES, true)) {
+                    throw new InvalidArgumentException('نوع القاصة غير صالح. المسموح: نقد، بنك، خزنة.');
                 }
-                // Protect main cash box type
                 if ($this->isEssentialMainBox($vault) && $type !== Vault::TYPE_CASH) {
                     throw new InvalidArgumentException('لا يمكن تغيير نوع الصندوق الرئيسي.');
                 }
@@ -213,14 +222,51 @@ class VaultService
                 DB::table('ledger_accounts')
                     ->where('id', (int) $vault->ledger_account_id)
                     ->update([
-                        'name' => 'Vault: '.$vault->name,
-                        'name_ar' => 'قاصة: '.$vault->name,
+                        'name' => 'Cash vault: '.$vault->name,
+                        'name_ar' => 'نقد قاصة: '.$vault->name,
                         'updated_at' => now(),
                     ]);
             }
 
-            return $vault->fresh(['wallet', 'legacyUser', 'ledgerAccount']);
+            return $vault->fresh(['legacyUser', 'ledgerAccount']);
         });
+    }
+
+    /**
+     * Soft-disable vaults that are not cash boxes (hide from accounting / transfers).
+     *
+     * @return int Number of vaults deactivated
+     */
+    public function deactivateNonCashVaults(int $ownerId): int
+    {
+        if (! Schema::hasTable('vaults')) {
+            return 0;
+        }
+
+        $ids = Vault::query()
+            ->forOwner($ownerId)
+            ->where(function ($q) {
+                $q->whereNotIn('type', Vault::CASH_TYPES)
+                    ->where(function ($inner) {
+                        $inner->where('type', '!=', Vault::TYPE_SYSTEM)
+                            ->orWhereRaw('LOWER(code) != ?', ['mainbox']);
+                    });
+            })
+            // Equivalent: NOT (cash type OR system mainBox)
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhere('show_in_accounting', true);
+            })
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        return Vault::query()->whereIn('id', $ids)->update([
+            'is_active' => false,
+            'show_in_accounting' => false,
+            'updated_at' => now(),
+        ]);
     }
 
     /**
@@ -279,6 +325,73 @@ class VaultService
         }
 
         return strcasecmp($email, 'mainBox@account.com') === 0;
+    }
+
+    /**
+     * Cash balance for a vault from its ledger account (or system cash for mainBox).
+     */
+    public function cashBalance(Vault $vault, string $currency): float
+    {
+        $currency = $currency === 'IQD' ? 'IQD' : '$';
+        $ownerId = (int) $vault->owner_id;
+
+        if ($this->isEssentialMainBox($vault)) {
+            return $this->ledger->cashAccount($ownerId, $currency)->balance($currency);
+        }
+
+        if ($vault->ledger_account_id) {
+            $account = LedgerAccount::query()->find((int) $vault->ledger_account_id);
+            if ($account) {
+                return $account->balance($currency);
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Temporary helper while wallets table still exists.
+     */
+    public function resolveWalletIdForLegacyUser(int $userId): ?int
+    {
+        if ($userId <= 0 || ! Schema::hasTable('wallets')) {
+            return null;
+        }
+
+        $id = DB::table('wallets')->where('user_id', $userId)->value('id');
+
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Resolve vault id for a legacy technical user (cash box).
+     */
+    public function resolveVaultIdForLegacyUser(int $userId): ?int
+    {
+        if ($userId <= 0 || ! Schema::hasTable('vaults')) {
+            return null;
+        }
+
+        $id = Vault::query()->where('legacy_user_id', $userId)->value('id');
+
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Find active cash-box vault by legacy user id.
+     */
+    public function findCashVaultByLegacyUser(int $ownerId, int $legacyUserId): ?Vault
+    {
+        if ($legacyUserId <= 0 || ! Schema::hasTable('vaults')) {
+            return null;
+        }
+
+        $vault = Vault::query()
+            ->forOwner($ownerId)
+            ->where('legacy_user_id', $legacyUserId)
+            ->first();
+
+        return $vault && $vault->isCashBox() ? $vault : null;
     }
 
     /**
@@ -355,9 +468,11 @@ class VaultService
         SystemWalletService::scopeSystemVaults($query, $accountTypeId, $clientTypeId);
 
         $synced = [];
-        foreach ($query->with('wallet')->get() as $user) {
+        foreach ($query->get() as $user) {
             $synced[] = $this->syncFromSystemUser($user);
         }
+
+        $this->deactivateNonCashVaults($ownerId);
 
         return $synced;
     }
@@ -370,8 +485,10 @@ class VaultService
         $code = $this->codeFromUser($user);
         $type = $this->typeFromUser($user);
 
-        $walletId = $user->wallet?->id
-            ?? Wallet::query()->where('user_id', $user->id)->value('id');
+        $walletId = null;
+        if (Schema::hasTable('wallets')) {
+            $walletId = DB::table('wallets')->where('user_id', $user->id)->value('id');
+        }
 
         $vault = Vault::withTrashed()
             ->where('owner_id', (int) $user->owner_id)
@@ -382,7 +499,6 @@ class VaultService
             ->first();
 
         if ($vault && $vault->trashed()) {
-            // Respect soft-delete: do not resurrect.
             return $vault;
         }
 
@@ -397,22 +513,26 @@ class VaultService
             || strcasecmp((string) ($user->email ?? ''), 'mainBox@account.com') === 0
             || $type === Vault::TYPE_CASH;
 
-        $vault->fill([
+        $fill = [
             'owner_id' => (int) $user->owner_id,
             'name' => $user->name ?: $code,
             'code' => $code,
-            'type' => $type,
-            'is_active' => true,
-            // Main cash box is always a visible قاصة in accounting.
+            'type' => $isMainBox ? Vault::TYPE_CASH : $type,
+            'is_active' => $vault->exists ? (bool) $vault->is_active : true,
             'show_in_accounting' => $isMainBox
                 ? true
                 : ($vault->exists ? (bool) $vault->show_in_accounting : true),
-            'wallet_id' => $walletId ? (int) $walletId : null,
             'legacy_user_id' => (int) $user->id,
             'notes' => $vault->notes ?: ($isMainBox ? 'الصندوق الأساسي (قاصة نقد)' : 'Linked to legacy vault user'),
-        ]);
+        ];
+        if (Schema::hasColumn('vaults', 'wallet_id')) {
+            $fill['wallet_id'] = $walletId ? (int) $walletId : null;
+        }
+
+        $vault->fill($fill);
 
         if ($isMainBox && Schema::hasTable('ledger_accounts')) {
+            $this->ledger->ensureSystemAccounts((int) $user->owner_id);
             $cashId = DB::table('ledger_accounts')
                 ->where('owner_id', (int) $user->owner_id)
                 ->where('code', LedgerService::CODE_CASH_USD)
@@ -424,7 +544,7 @@ class VaultService
 
         $vault->save();
 
-        return $vault->fresh(['wallet', 'legacyUser', 'ledgerAccount']);
+        return $vault->fresh(['legacyUser', 'ledgerAccount']);
     }
 
     /**
@@ -437,14 +557,14 @@ class VaultService
         }
 
         $mainBox = app(SystemWalletService::class)->requireMainBox($ownerId);
-        $mainBox->loadMissing('wallet');
+        $vault = $this->syncFromSystemUser($mainBox);
+        $this->deactivateNonCashVaults($ownerId);
 
-        return $this->syncFromSystemUser($mainBox);
+        return $vault->fresh(['legacyUser', 'ledgerAccount']);
     }
 
     /**
-     * Vault that receives client/trader payments (دفعات الزبائن).
-     * Uses system_config.default_receipts_vault_id or falls back to mainBox vault.
+     * Vault that receives client/trader payments (دفعات الزبائن) — must be a cash box.
      */
     public function resolveReceiptsVault(int $ownerId): Vault
     {
@@ -460,32 +580,37 @@ class VaultService
         }
 
         $configured = Vault::query()
-            ->with(['wallet', 'legacyUser'])
+            ->with(['legacyUser'])
             ->forOwner($ownerId)
             ->active()
+            ->cashBoxes()
             ->where('id', $configuredId)
             ->whereNotNull('legacy_user_id')
             ->first();
 
-        return $configured ?: $mainVault;
+        if ($configured && $configured->isCashBox()) {
+            return $configured;
+        }
+
+        return $mainVault;
     }
 
     /**
-     * Legacy user id of the receipts vault (wallet target for client payments).
+     * Legacy user id of the receipts vault (target for client payments).
      */
     public function receiptsCashUserId(int $ownerId): int
     {
         $vault = $this->resolveReceiptsVault($ownerId);
         $legacyId = (int) ($vault->legacy_user_id ?? 0);
         if ($legacyId <= 0) {
-            throw new RuntimeException('قاصة استلام دفعات الزبائن غير مرتبطة بمحفظة.');
+            throw new RuntimeException('قاصة استلام دفعات الزبائن غير مرتبطة بمستخدم تقني.');
         }
 
         return $legacyId;
     }
 
     /**
-     * Persist default receipts vault (admin). Null / 0 → use mainBox.
+     * Persist default receipts vault (admin). Null / 0 → use mainBox. Must be cash box.
      */
     public function setDefaultReceiptsVaultId(int $ownerId, ?int $vaultId): Vault
     {
@@ -503,11 +628,12 @@ class VaultService
             $vault = Vault::query()
                 ->forOwner($ownerId)
                 ->active()
+                ->cashBoxes()
                 ->where('id', $vaultId)
                 ->whereNotNull('legacy_user_id')
                 ->first();
-            if (! $vault) {
-                throw new InvalidArgumentException('القاصة المحددة غير موجودة أو غير نشطة.');
+            if (! $vault || ! $vault->isCashBox()) {
+                throw new InvalidArgumentException('القاصة المحددة يجب أن تكون نقدية (صندوق/بنك/خزنة).');
             }
             $saveId = (int) $vault->id;
         } else {
@@ -529,13 +655,14 @@ class VaultService
     }
 
     /**
-     * Active vaults for owner (قاصات النظام list).
+     * Active cash-box vaults for owner (قاصات النظام list).
      */
     public function listForOwner(int $ownerId, bool $activeOnly = true): Collection
     {
         $query = Vault::query()
-            ->with(['wallet', 'legacyUser'])
+            ->with(['legacyUser', 'ledgerAccount'])
             ->forOwner($ownerId)
+            ->cashBoxes()
             ->orderBy('name');
 
         if ($activeOnly) {
@@ -546,7 +673,7 @@ class VaultService
     }
 
     /**
-     * Accounting page orange shortcut buttons — vaults only, never traders.
+     * Accounting page orange shortcut buttons — cash vaults only, never traders.
      *
      * Shape matches legacy flaggedWallets: { id: legacy_user_id, name, wallet }.
      */
@@ -557,8 +684,9 @@ class VaultService
         }
 
         return Vault::query()
-            ->with(['legacyUser.wallet'])
+            ->with(['legacyUser'])
             ->forOwner($ownerId)
+            ->cashBoxes()
             ->accountingShortcuts()
             ->orderBy('name')
             ->get()
@@ -567,7 +695,6 @@ class VaultService
                 if (! $user) {
                     return null;
                 }
-                // Ensure name follows vault table (source of truth for UI label).
                 $user->setAttribute('name', $vault->name);
                 $user->setAttribute('vault_id', $vault->id);
                 $user->setAttribute('vault_code', $vault->code);
@@ -580,7 +707,7 @@ class VaultService
     }
 
     /**
-     * Rows for Vaults Index page «القاصات» — compatible with table UI.
+     * Rows for Vaults Index page «القاصات» — cash boxes only.
      * id = legacy_user_id so /wallet?id=… keeps working.
      *
      * @return \Illuminate\Support\Collection<int, object>
@@ -592,9 +719,10 @@ class VaultService
         }
 
         $vaults = Vault::query()
-            ->with(['wallet', 'legacyUser'])
+            ->with(['legacyUser', 'ledgerAccount'])
             ->forOwner($ownerId)
             ->active()
+            ->cashBoxes()
             ->whereNotNull('legacy_user_id')
             ->orderBy('name')
             ->get();
@@ -606,7 +734,7 @@ class VaultService
         $legacyIds = $vaults->pluck('legacy_user_id')->map(fn ($id) => (int) $id)->all();
         $movementIds = array_fill_keys(SystemWalletService::idsWithMovements($legacyIds), true);
 
-        $balanceByUser = $this->balancesForLegacyUsers($ownerId, $legacyIds);
+        $balanceByUser = $this->balancesForLegacyUsers($ownerId, $legacyIds, $vaults);
 
         return $vaults->map(function (Vault $vault) use ($movementIds, $balanceByUser) {
             $legacyId = (int) $vault->legacy_user_id;
@@ -623,13 +751,12 @@ class VaultService
                 'email' => $vault->legacyUser?->email,
                 'type_id' => $vault->legacyUser?->type_id,
                 'created_at' => $vault->created_at,
-                // Historical field name on client rows; for vaults mirrors show_in_accounting.
                 'show_in_dashboard' => (bool) $vault->show_in_accounting,
                 'show_in_accounting' => (bool) $vault->show_in_accounting,
                 'car_count' => 0,
                 'car_count_completed' => 0,
                 'car_total_un_pay' => 0,
-                'balance' => $balanceByUser[$legacyId] ?? (float) ($vault->wallet?->balance ?? 0),
+                'balance' => $balanceByUser[$legacyId] ?? $this->cashBalance($vault, '$'),
                 'has_movements' => $hasMovements,
                 'can_delete' => ! $hasMovements && ! $isEssential,
                 'is_essential' => $isEssential,
@@ -643,9 +770,10 @@ class VaultService
 
     /**
      * @param  list<int>  $userIds
+     * @param  Collection<int, Vault>|null  $vaults
      * @return array<int, float>
      */
-    protected function balancesForLegacyUsers(int $ownerId, array $userIds): array
+    protected function balancesForLegacyUsers(int $ownerId, array $userIds, ?Collection $vaults = null): array
     {
         $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
         if ($userIds === []) {
@@ -654,7 +782,24 @@ class VaultService
 
         $out = [];
 
-        if (Schema::hasTable('ledger_accounts') && Schema::hasTable('journal_lines')) {
+        $vaults = $vaults ?? Vault::query()
+            ->forOwner($ownerId)
+            ->whereIn('legacy_user_id', $userIds)
+            ->get();
+
+        foreach ($vaults as $vault) {
+            $legacyId = (int) ($vault->legacy_user_id ?? 0);
+            if ($legacyId <= 0) {
+                continue;
+            }
+            // Prefer vault ledger / system cash when available.
+            if ($vault->ledger_account_id || $this->isEssentialMainBox($vault)) {
+                $out[$legacyId] = $this->cashBalance($vault, '$');
+            }
+        }
+
+        $missing = array_diff($userIds, array_keys($out));
+        if ($missing !== [] && Schema::hasTable('ledger_accounts') && Schema::hasTable('journal_lines')) {
             $prefix = LedgerService::CODE_CLIENT_AR_PREFIX.'-';
             $rows = DB::table('ledger_accounts as la')
                 ->leftJoin('journal_lines as jl', 'jl.ledger_account_id', '=', 'la.id')
@@ -677,18 +822,10 @@ class VaultService
                 $code = (string) $row->code;
                 if (str_starts_with($code, $prefix)) {
                     $uid = (int) substr($code, strlen($prefix));
-                    $out[$uid] = (float) $row->bal;
+                    if (! isset($out[$uid])) {
+                        $out[$uid] = (float) $row->bal;
+                    }
                 }
-            }
-        }
-
-        $missing = array_diff($userIds, array_keys($out));
-        if ($missing !== [] && Schema::hasTable('wallets')) {
-            $wallets = DB::table('wallets')
-                ->whereIn('user_id', $missing)
-                ->get(['user_id', 'balance']);
-            foreach ($wallets as $w) {
-                $out[(int) $w->user_id] = (float) $w->balance;
             }
         }
 

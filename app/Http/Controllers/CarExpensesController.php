@@ -13,7 +13,6 @@ use App\Models\Company;
 use App\Models\Name;
 use App\Models\CarModel;
 use App\Models\Color;
-use App\Models\Wallet;
 use App\Models\UserType;
 use Illuminate\Support\Facades\DB;
 use App\Models\Transactions;

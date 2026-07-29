@@ -143,6 +143,8 @@ function formatBalance(balance) {
 function vaultTypeLabel(type) {
   const map = {
     cash: 'نقد',
+    bank: 'بنك',
+    safe: 'خزنة',
     system: 'نظام',
     commission: 'عمولة',
     company: 'شركة',

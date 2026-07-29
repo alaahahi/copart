@@ -655,7 +655,7 @@ function checkClientBalance(_v) {
                   </option>
                   <template v-for="(user, index) in clients" :key="index">
                     <option
-                      v-if="user.wallet.balance > 0 || user.id == client_Select"
+                      v-if="(user.balance ?? user.wallet?.balance ?? 0) > 0 || user.id == client_Select"
                       :value="user.id"
                     >
                       {{ user.name }}

@@ -13,7 +13,6 @@ use App\Models\Company;
 use App\Models\Name;
 use App\Models\CarModel;
 use App\Models\Color;
-use App\Models\Wallet;
 use App\Models\UserType;
 use Illuminate\Support\Facades\DB;
 use App\Models\Transactions;
@@ -95,33 +94,46 @@ class DashboardController extends Controller
     {
         $owner_id=Auth::user()->owner_id;
         $mainBox = $this->mainBox->where('owner_id', $owner_id)->first();
-        $mainBoxId = $mainBox?->wallet?->id;
+        $mainBoxVaultId = $mainBox
+            ? app(\App\Services\VaultService::class)->resolveVaultIdForLegacyUser((int) $mainBox->id)
+            : null;
 
         $today = Carbon::now()->toDateString();
 
-        $sumBox = function (string $currency, array $types) use ($mainBoxId, $today) {
-            if (!$mainBoxId) {
+        $mainBoxTx = function () use ($mainBoxVaultId, $mainBox) {
+            if ($mainBoxVaultId) {
+                return Transactions::where('vault_id', $mainBoxVaultId);
+            }
+            if ($mainBox) {
+                return Transactions::whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                    ->where('morphed_id', $mainBox->id);
+            }
+
+            return null;
+        };
+
+        $sumBox = function (string $currency, array $types) use ($mainBoxTx, $today) {
+            $q = $mainBoxTx();
+            if (! $q) {
                 return 0.0;
             }
-            return (float) Transactions::where('wallet_id', $mainBoxId)
-                ->where('currency', $currency)
+
+            return (float) $q->where('currency', $currency)
                 ->whereIn('type', $types)
                 ->whereDate('created', $today)
                 ->whereNull('deleted_at')
                 ->sum('amount');
         };
 
-        $transactionIn = (int) ($mainBoxId
-            ? Transactions::where('wallet_id', $mainBoxId)
-                ->where('currency', '$')
+        $transactionIn = (int) (($q = $mainBoxTx())
+            ? $q->where('currency', '$')
                 ->whereIn('type', ['in', 'inUserBox'])
                 ->whereNull('deleted_at')
                 ->sum('amount')
             : 0);
 
-        $transactionOut = (int) ($mainBoxId
-            ? Transactions::where('wallet_id', $mainBoxId)
-                ->where('currency', '$')
+        $transactionOut = (int) (($q = $mainBoxTx())
+            ? $q->where('currency', '$')
                 ->whereIn('type', ['out', 'debt', 'outUserBox'])
                 ->whereNull('deleted_at')
                 ->sum('amount')
@@ -154,8 +166,8 @@ class DashboardController extends Controller
             $mainBoxDollar = $ledger->cashAccount((int) $owner_id, '$')->balance('$');
             $mainBoxDinar = $ledger->cashAccount((int) $owner_id, 'IQD')->balance('IQD');
         } catch (\Throwable $e) {
-            $mainBoxDollar = (float) ($mainBox?->wallet?->balance ?? 0);
-            $mainBoxDinar = (float) ($mainBox?->wallet?->balance_dinar ?? 0);
+            $mainBoxDollar = 0.0;
+            $mainBoxDinar = 0.0;
         }
 
         $data = [
@@ -366,7 +378,6 @@ class DashboardController extends Controller
             $client->owner_id = $owner_id;
             $client->year_date = $year_date;
             $client->save();
-            Wallet::create(['user_id' => $client->id,'balance'=>0]);
             $client_id=$client->id;
         }
         $car=Car::create([
@@ -589,7 +600,6 @@ class DashboardController extends Controller
             $client->owner_id = $owner_id;
             $client->created =Carbon::now()->format('Y-m-d');
             $client->save();
-            Wallet::create(['user_id' => $client->id,'balance'=>0, 'balance_dinar'=>0]);
             $client_id=$client->id;
         }
 

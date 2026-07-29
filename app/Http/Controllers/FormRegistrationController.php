@@ -8,7 +8,6 @@ use Inertia\Inertia;
 use App\Models\User;
 use App\Models\Profile;
 use App\Models\UserType;
-use App\Models\Wallet;
 use App\Models\Results;
 use App\Models\DoctorResults;
 use App\Models\Transactions;
@@ -49,8 +48,7 @@ class FormRegistrationController extends Controller
         try {
             $authUser = auth()?->user();
             if($authUser){
-                $wallet = Wallet::where('user_id', $authUser->id)->first();
-                $card = $wallet->card ??'';
+                $card = '';
                 return Inertia::render('FormRegistration/Index', ['url'=>$this->url,'card'=>$card]);
             }
             else {
@@ -146,8 +144,21 @@ class FormRegistrationController extends Controller
     public function getIndexAccountsSelas()
     { 
         $user_id = $_GET['user_id'] ?? 0;
-        $sales = User::with('wallet')->where('id', $user_id)->first();
-        $transactions = Transactions ::where('wallet_id', $sales?->wallet?->id);
+        $sales = User::where('id', $user_id)->first();
+        $vaultId = $sales
+            ? app(\App\Services\VaultService::class)->resolveVaultIdForLegacyUser((int) $sales->id)
+            : null;
+        $transactions = Transactions::query()->where(function ($q) use ($sales, $vaultId) {
+            if ($vaultId) {
+                $q->orWhere('vault_id', $vaultId);
+            }
+            if ($sales) {
+                $q->orWhere(function ($inner) use ($sales) {
+                    $inner->whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                        ->where('morphed_id', $sales->id);
+                });
+            }
+        });
 
         $data = $transactions->paginate(10);
         $profile_count = Profile::where('user_id', $sales?->id)->where('results',1)->count();

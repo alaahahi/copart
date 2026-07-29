@@ -7,7 +7,6 @@ use App\Models\JournalLine;
 use App\Models\LedgerAccount;
 use App\Models\User;
 use App\Models\UserType;
-use App\Models\Wallet;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -30,7 +29,7 @@ class AccountingIntegrityService
      *   summary: array<string,int|bool>
      * }
      */
-    public function check(?int $ownerId = null, bool $checkWallets = true): array
+    public function check(?int $ownerId = null, bool $checkWallets = false): array
     {
         if (!Schema::hasTable('journal_entries') || !Schema::hasTable('journal_lines')) {
             return [
@@ -119,6 +118,7 @@ class AccountingIntegrityService
         }
 
         $walletMismatches = [];
+        // Wallet table is deprecated — skip wallet vs ledger comparison by default.
         if ($checkWallets && Schema::hasTable('wallets') && Schema::hasTable('ledger_accounts')) {
             $walletMismatches = $this->walletSpotCheck($ownerId);
         }
@@ -159,42 +159,7 @@ class AccountingIntegrityService
      */
     protected function walletSpotCheck(?int $ownerId): array
     {
-        $ledger = app(LedgerService::class);
-        $clientTypeId = UserType::where('name', 'client')->value('id');
-        if (!$clientTypeId) {
-            return [];
-        }
-
-        $mismatches = [];
-        User::query()
-            ->where('type_id', $clientTypeId)
-            ->when($ownerId, fn ($q) => $q->where('owner_id', $ownerId))
-            ->with('wallet')
-            ->chunkById(200, function ($users) use ($ledger, &$mismatches) {
-                foreach ($users as $user) {
-                    /** @var Wallet|null $wallet */
-                    $wallet = $user->wallet ?? Wallet::where('user_id', $user->id)->first();
-                    if (!$wallet) {
-                        continue;
-                    }
-                    $owner = (int) $user->owner_id;
-                    $usd = $ledger->clientBalance($owner, (int) $user->id, '$');
-                    $iqd = $ledger->clientBalance($owner, (int) $user->id, 'IQD');
-                    $wUsd = round((float) $wallet->balance, 2);
-                    $wIqd = round((float) $wallet->balance_dinar, 2);
-                    if (round($wUsd - $usd, 2) != 0.0 || round($wIqd - $iqd, 2) != 0.0) {
-                        $mismatches[] = [
-                            'user_id' => (int) $user->id,
-                            'name' => $user->name,
-                            'wallet_usd' => $wUsd,
-                            'ledger_usd' => round($usd, 2),
-                            'wallet_iqd' => $wIqd,
-                            'ledger_iqd' => round($iqd, 2),
-                        ];
-                    }
-                }
-            });
-
-        return $mismatches;
+        // Wallets table removed — nothing to compare.
+        return [];
     }
 }

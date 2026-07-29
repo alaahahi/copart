@@ -141,7 +141,8 @@ class VaultController extends Controller
 
     protected function serialize(Vault $vault): array
     {
-        $vault->loadMissing(['wallet', 'legacyUser']);
+        $vault->loadMissing(['legacyUser']);
+        $vaults = app(VaultService::class);
 
         return [
             'id' => $vault->id,
@@ -152,12 +153,12 @@ class VaultController extends Controller
             'currency_default' => $vault->currency_default,
             'is_active' => (bool) $vault->is_active,
             'show_in_accounting' => (bool) $vault->show_in_accounting,
-            'wallet_id' => $vault->wallet_id ? (int) $vault->wallet_id : null,
+            'wallet_id' => null,
             'legacy_user_id' => $vault->legacy_user_id ? (int) $vault->legacy_user_id : null,
             'ledger_account_id' => $vault->ledger_account_id ? (int) $vault->ledger_account_id : null,
             'notes' => $vault->notes,
-            'balance' => (float) ($vault->wallet?->balance ?? 0),
-            'balance_dinar' => (float) ($vault->wallet?->balance_dinar ?? 0),
+            'balance' => $vaults->cashBalance($vault, '$'),
+            'balance_dinar' => $vaults->cashBalance($vault, 'IQD'),
             'is_vault' => true,
         ];
     }
