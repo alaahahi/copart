@@ -10,7 +10,6 @@ import ModalDelClient from "@/Components/ModalDelCar.vue";
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
 import show from "@/Components/icon/show.vue";
-import wallet from "@/Components/icon/wallet.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import { ref, watch } from 'vue';
@@ -239,7 +238,6 @@ function unpaidCars(user) {
                 >
                   <option value="0">{{ $t("allOwners") }}</option>
                   <option value="debit">{{ $t('has_debt') }}</option>
-                  <option value="box_movement">{{ $t('qasa_movement') }}</option>
                 </select>
               </div>
 
@@ -344,13 +342,6 @@ function unpaidCars(user) {
                           >
                             <trash />
                           </button>
-                          <Link
-                            class="action-btn action-wallet"
-                            :href="route('wallet', { id: user.id })"
-                            title="محفظة التاجر"
-                          >
-                            <wallet />
-                          </Link>
                         </div>
                       </td>
                     </template>
@@ -554,10 +545,6 @@ function unpaidCars(user) {
 
 .action-del {
   background: #ea580c;
-}
-
-.action-wallet {
-  background: #581c87;
 }
 
 .clients-switch {

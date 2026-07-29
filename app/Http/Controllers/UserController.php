@@ -179,7 +179,7 @@ class UserController extends Controller
         }
 
         // Free-text / category filters (not used by special tab keys)
-        if ($q && ! in_array($q, ['debit', 'box_movement', 'traders', 'traders_qasa', 'system_qasa', 'show_in_dashboard'], true)) {
+        if ($q && ! in_array($q, ['debit', 'traders', 'traders_qasa', 'system_qasa', 'show_in_dashboard'], true)) {
             $query->leftJoin('car', 'users.id', '=', 'car.client_id')
                 ->where(function ($subQuery) use ($q) {
                     $subQuery->where('users.name', 'like', '%' . $q . '%')
@@ -200,22 +200,7 @@ class UserController extends Controller
             );
         }
 
-        if ($q === 'box_movement') {
-            $query->whereExists(function ($subQuery) use ($from, $to) {
-                $subQuery->select(DB::raw(1))
-                    ->from('transactions')
-                    ->whereColumn('transactions.morphed_id', 'users.id')
-                    ->where('transactions.morphed_type', 'App\\Models\\User')
-                    ->whereIn('transactions.type', ['inUserBox', 'outUserBox'])
-                    ->whereNull('transactions.deleted_at');
-
-                if ($from && $to) {
-                    $subQuery->whereBetween('transactions.created_at', [$from, $to]);
-                }
-            });
-        }
-
-        if ($from && $to && $q !== 'box_movement') {
+        if ($from && $to) {
             $query->whereBetween('users.created_at', [$from, $to]);
         }
 
@@ -238,7 +223,7 @@ class UserController extends Controller
             return view('reportClients', compact('data', 'config', 'owner_id'));
         }
 
-        $fullListKeys = ['debit', 'box_movement', 'traders_qasa', 'show_in_dashboard'];
+        $fullListKeys = ['debit', 'traders_qasa', 'show_in_dashboard'];
         if (in_array($q, $fullListKeys, true)) {
             // page>1 returns [] so infinite-scroll clients list can stop after first fetch
             if ((int) $page === 1) {
