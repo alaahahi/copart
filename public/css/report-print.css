@@ -1,21 +1,9 @@
 /**
  * Shared ERP report / print styles (A4, RTL Arabic)
- * Default: A4 portrait. كشف حساب (body.erp-report--statement) overrides
- * to A4 landscape via an inline @page rule in show.blade.php.
  */
 @page {
     size: A4;
     margin: 12mm 10mm;
-}
-
-/* Named page fallback for account statement (Chromium / Edge print) */
-@page erp-statement {
-    size: A4 landscape;
-    margin: 10mm 8mm;
-}
-
-body.erp-report--statement {
-    page: erp-statement;
 }
 
 html {
@@ -42,11 +30,6 @@ body.erp-report {
     color: #0f172a !important;
     min-height: 100vh;
     box-shadow: 0 1px 8px rgba(15, 23, 42, 0.08);
-}
-
-/* كشف حساب screen preview: A4 landscape canvas (297mm wide) */
-body.erp-report--statement .erp-report-page {
-    max-width: 297mm;
 }
 
 /* Sticky screen toolbar */
@@ -337,7 +320,7 @@ table.erp-report-table .text-start-rtl {
 }
 
 /*
- * Compact wide statement tables (كشف حساب): fit A4 landscape
+ * Compact wide statement tables (كشف حساب): fit A4 portrait
  * without a horizontal scrollbar on the dedicated print page.
  * Other reports keep .erp-report-table-wrap { overflow-x: auto }.
  */
@@ -345,9 +328,8 @@ table.erp-report-table .text-start-rtl {
     overflow-x: hidden;
 }
 
-/* Slightly tighter page gutters when packing many columns onto A4 landscape */
-.erp-report-page:has(.erp-report-table-wrap--fit),
-body.erp-report--statement .erp-report-page {
+/* Slightly tighter page gutters when packing many columns onto A4 */
+.erp-report-page:has(.erp-report-table-wrap--fit) {
     padding-left: 10px;
     padding-right: 10px;
     overflow-x: hidden;
