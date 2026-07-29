@@ -561,7 +561,7 @@ class LedgerController extends Controller
             : round($openingDebit - $openingCredit, 2);
 
         $lines = JournalLine::query()
-            ->with(['entry:id,voucher_no,entry_date,memo,source'])
+            ->with(['entry:id,voucher_no,entry_date,memo,source,reference_type,reference_id'])
             ->where('journal_lines.ledger_account_id', $account->id)
             ->where('journal_lines.currency', $currency)
             ->whereHas('entry', function ($query) use ($ownerId, $from, $to) {
@@ -576,6 +576,56 @@ class LedgerController extends Controller
             ->select('journal_lines.*')
             ->get();
 
+        $entryIds = $lines->pluck('journal_entry_id')->unique()->filter()->values();
+        $txByJournalEntry = collect();
+        $txById = collect();
+        if ($entryIds->isNotEmpty()) {
+            $txByJournalEntry = Transactions::query()
+                ->whereIn('journal_entry_id', $entryIds)
+                ->get()
+                ->keyBy('journal_entry_id');
+
+            $refTxnIds = $lines
+                ->map(function (JournalLine $line) {
+                    $entry = $line->entry;
+                    if (! $entry || ! $entry->reference_id) {
+                        return null;
+                    }
+                    $type = (string) ($entry->reference_type ?? '');
+                    if ($type === Transactions::class || str_ends_with($type, '\\Transactions')) {
+                        return (int) $entry->reference_id;
+                    }
+
+                    return null;
+                })
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($refTxnIds->isNotEmpty()) {
+                $txById = Transactions::query()
+                    ->whereIn('id', $refTxnIds)
+                    ->get()
+                    ->keyBy('id');
+            }
+        }
+
+        $allTx = $txByJournalEntry->values()->merge($txById->values())->unique('id');
+        $legacyByVault = collect();
+        $legacyByWallet = collect();
+        $vaultIds = $allTx->pluck('vault_id')->filter()->unique()->values();
+        if ($vaultIds->isNotEmpty() && Schema::hasTable('vaults')) {
+            $legacyByVault = Vault::query()
+                ->whereIn('id', $vaultIds)
+                ->pluck('legacy_user_id', 'id');
+        }
+        $walletIds = $allTx->pluck('wallet_id')->filter()->unique()->values();
+        if ($walletIds->isNotEmpty() && Schema::hasTable('wallets')) {
+            $legacyByWallet = DB::table('wallets')
+                ->whereIn('id', $walletIds)
+                ->pluck('user_id', 'id');
+        }
+
         $rows = [];
         foreach ($lines as $line) {
             $delta = in_array($account->type, ['liability', 'equity', 'income'], true)
@@ -583,14 +633,44 @@ class LedgerController extends Controller
                 : ((float) $line->debit - (float) $line->credit);
             $running = round($running + $delta, 2);
 
+            $debit = (float) $line->debit;
+            $credit = (float) $line->credit;
+            // Expense Dr (cash out) → وصل صرف; Cr (refund/in) → وصل قبض.
+            // Same debit rule for income lines that hit this screen.
+            $isPayment = $debit > 0 && $debit >= $credit;
+
+            $transaction = $txByJournalEntry->get($line->journal_entry_id);
+            if (! $transaction && $line->entry?->reference_id) {
+                $refType = (string) ($line->entry->reference_type ?? '');
+                if ($refType === Transactions::class || str_ends_with($refType, '\\Transactions')) {
+                    $transaction = $txById->get((int) $line->entry->reference_id);
+                }
+            }
+
+            $printUserId = null;
+            if ($transaction) {
+                if ($transaction->vault_id && $legacyByVault->has($transaction->vault_id)) {
+                    $printUserId = (int) $legacyByVault->get($transaction->vault_id) ?: null;
+                }
+                if (! $printUserId && $transaction->wallet_id && $legacyByWallet->has($transaction->wallet_id)) {
+                    $printUserId = (int) $legacyByWallet->get($transaction->wallet_id) ?: null;
+                }
+            }
+
             $rows[] = [
                 'id' => $line->id,
+                'journal_entry_id' => (int) $line->journal_entry_id,
+                'transaction_id' => $transaction?->id ? (int) $transaction->id : null,
+                'print_user_id' => $printUserId,
+                // print=3 → receiptPayment (وصل صرف); print=2 → receipt (وصل قبض)
+                'voucher_kind' => $isPayment ? 'payment' : 'receipt',
+                'print' => $isPayment ? 3 : 2,
                 'date' => optional($line->entry?->entry_date)->format('Y-m-d'),
                 'voucher_no' => $line->entry?->voucher_no,
                 'memo' => $line->memo ?: $line->entry?->memo,
                 'source' => $line->entry?->source,
-                'debit' => (float) $line->debit,
-                'credit' => (float) $line->credit,
+                'debit' => $debit,
+                'credit' => $credit,
                 'balance' => $running,
             ];
         }

@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import ModalExpenseDisburse from '@/Components/ModalExpenseDisburse.vue';
+import print from '@/Components/icon/print.vue';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import { formatMoney } from '@/utils/formatMoney';
@@ -22,6 +23,11 @@ const disburseModalRef = ref(null);
 const flash = ref('');
 
 const canDisburse = computed(() => !!account.value?.can_disburse);
+
+const fallbackPrintUserId = computed(() => {
+  const first = (props.cashVaults || []).find((v) => v?.id);
+  return first?.id ? Number(first.id) : 0;
+});
 
 async function loadLedger() {
   if (!account.value?.id) return;
@@ -107,6 +113,20 @@ const totalCredit = computed(() =>
 
 function printLedger() {
   window.print();
+}
+
+/** وصل صرف (print=3) when line is Dr; وصل قبض (print=2) when Cr. */
+function rowVoucherHref(row) {
+  const txId = Number(row?.transaction_id || 0);
+  if (!txId) return null;
+  const userId = Number(row?.print_user_id || fallbackPrintUserId.value || 0);
+  if (!userId) return null;
+  const print = Number(row?.print) === 2 ? 2 : 3;
+  return `/api/getIndexAccountsSelas?user_id=${userId}&print=${print}&transactions_id=${txId}`;
+}
+
+function rowVoucherTitle(row) {
+  return row?.voucher_kind === 'receipt' ? 'طباعة وصل قبض' : 'طباعة وصل صرف';
 }
 </script>
 
@@ -201,6 +221,7 @@ function printLedger() {
                     <th>مدين</th>
                     <th>دائن</th>
                     <th>الرصيد</th>
+                    <th class="print:hidden">تنفيذ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -211,9 +232,23 @@ function printLedger() {
                     <td dir="ltr">{{ Number(row.debit) ? formatMoney(row.debit) : '—' }}</td>
                     <td dir="ltr">{{ Number(row.credit) ? formatMoney(row.credit) : '—' }}</td>
                     <td class="font-semibold" dir="ltr">{{ formatMoney(row.balance) }}</td>
+                    <td class="print:hidden">
+                      <a
+                        v-if="rowVoucherHref(row)"
+                        :href="rowVoucherHref(row)"
+                        target="_blank"
+                        rel="noopener"
+                        class="exp-row-print"
+                        :title="rowVoucherTitle(row)"
+                      >
+                        <print class="exp-row-print-icon" />
+                        <span>{{ row.voucher_kind === 'receipt' ? 'وصل قبض' : 'وصل صرف' }}</span>
+                      </a>
+                      <span v-else class="text-slate-400 dark:text-slate-500" title="لا توجد حركة مالية مرتبطة">—</span>
+                    </td>
                   </tr>
                   <tr v-if="!loading && !rows.length">
-                    <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
+                    <td colspan="7" class="py-8 text-slate-500 dark:text-slate-300">
                       لا توجد حركات على هذا الحساب بعد
                     </td>
                   </tr>
@@ -325,6 +360,32 @@ function printLedger() {
 
 .exp-btn-print:hover {
   background: #c2410c;
+}
+
+.exp-row-print {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.45rem;
+  background: #ea580c;
+  color: #fff !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  min-height: 2rem;
+  white-space: nowrap;
+}
+
+.exp-row-print:hover {
+  background: #c2410c;
+}
+
+.exp-row-print-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .exp-kpis {
