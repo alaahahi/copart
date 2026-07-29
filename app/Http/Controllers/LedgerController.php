@@ -61,6 +61,9 @@ class LedgerController extends Controller
         }
 
         $ledger->ensureSystemAccounts($ownerId);
+        // Pull car-purchase costs off 5100 onto مشتريات سيارات before balances/UI.
+        $ledger->resolveCarPurchasesExpenseAccount($ownerId);
+        $account->refresh();
 
         $cashVaults = app(VaultService::class)->systemQasaClientRows($ownerId)->map(fn ($row) => [
             'vault_id' => $row->vault_id,
@@ -492,6 +495,15 @@ class LedgerController extends Controller
         $to = $request->get('to');
 
         $account = LedgerAccount::where('owner_id', $ownerId)->findOrFail($accountId);
+
+        // Viewing general expenses: ensure car purchases no longer sit on 5100.
+        if ($account->code === LedgerService::CODE_EXPENSE) {
+            app(LedgerService::class)->reclassifyMispostedCarPurchaseExpenses($ownerId);
+            // Reload not needed for lines query below (filter by account id).
+        } elseif ($account->code === LedgerService::CODE_CAR_PURCHASES
+            || str_contains((string) ($account->name_ar ?? ''), 'مشتريات سيارات')) {
+            app(LedgerService::class)->resolveCarPurchasesExpenseAccount($ownerId);
+        }
 
         $openingQuery = JournalLine::query()
             ->where('journal_lines.ledger_account_id', $account->id)

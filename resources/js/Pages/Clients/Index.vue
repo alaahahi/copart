@@ -321,7 +321,6 @@ function unpaidCars(user) {
                       <td>
                         <div class="clients-actions">
                           <Link
-                            v-if="user.car_count"
                             class="action-btn action-view"
                             :href="route('showClients', user.id)"
                             title="عرض"

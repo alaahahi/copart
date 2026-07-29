@@ -29,6 +29,31 @@ class VaultService
         Vault::TYPE_SAFE,
     ];
 
+    /**
+     * Transaction types that appear on the vault «حركات الصندوق» page.
+     * Ledger balance includes all cash posts (inUserBox/outUserBox, transfers, purchases),
+     * not only legacy inUser/outUser — the detail list must match.
+     */
+    public const CASH_BOX_MOVEMENT_TYPES = [
+        'inUser',
+        'outUser',
+        'inUserAmanah',
+        'outUserAmanah',
+        'inUserBox',
+        'outUserBox',
+        'transfer_in',
+        'transfer_out',
+        'in',
+        'out',
+        'debt',
+    ];
+
+    /** Amanah (custody) types — excluded from cash-box balance cards / running balance. */
+    public const AMANAH_MOVEMENT_TYPES = [
+        'inUserAmanah',
+        'outUserAmanah',
+    ];
+
     public function __construct(protected LedgerService $ledger)
     {
     }
@@ -392,6 +417,30 @@ class VaultService
             ->first();
 
         return $vault && $vault->isCashBox() ? $vault : null;
+    }
+
+    /**
+     * Resolve which cash-box legacy user should receive a vault deposit/withdraw.
+     * Prefer the vault being viewed ($requestedLegacyUserId); fall back to receipts vault.
+     */
+    public function resolveMovementCashUserId(int $ownerId, ?int $requestedLegacyUserId = null): int
+    {
+        if ($requestedLegacyUserId && $requestedLegacyUserId > 0) {
+            $vault = $this->findCashVaultByLegacyUser($ownerId, $requestedLegacyUserId);
+            if ($vault && (int) ($vault->legacy_user_id ?? 0) > 0) {
+                return (int) $vault->legacy_user_id;
+            }
+        }
+
+        return $this->receiptsCashUserId($ownerId);
+    }
+
+    /**
+     * Whether this legacy user is linked to a cash vault (صندوق/بنك/خزنة).
+     */
+    public function isCashVaultLegacyUser(int $ownerId, int $legacyUserId): bool
+    {
+        return $this->findCashVaultByLegacyUser($ownerId, $legacyUserId) !== null;
     }
 
     /**

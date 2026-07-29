@@ -150,8 +150,10 @@ class DashboardController extends Controller
         $exitCar = 0;
         $sumTotal = $car->sum('total');
         $sumTotalS = $car->sum('total_s');
-        // Same source of truth for KPI sum + merchant debt cards (no HAVING / no separate cache).
-        $merchantDebts = Car::clientsWithDebt((int) $owner_id, (int) $this->userClient);
+        // One ledger AR query → debts (balance > 0) + prepaid credits (balance < 0).
+        $merchantBalances = Car::partitionClientsByBalance((int) $owner_id, (int) $this->userClient);
+        $merchantDebts = $merchantBalances['debts'];
+        $merchantCredits = $merchantBalances['credits'];
         $sumDebit = round((float) $merchantDebts->sum('balance'), 2);
         $sumPaid = $car->sum('paid')+ $car->sum('discount');
         // Profit only when sale pricing exists (total_s > 0) — purchase-only cars are 0, not a fake loss.
@@ -184,6 +186,7 @@ class DashboardController extends Controller
         'clientPaid'=>$sumPaid??0,
         'clientDebit'=>$sumDebit ?? 0,
         'merchantDebts' => $merchantDebts->values(),
+        'merchantCredits' => $merchantCredits->values(),
         'mainBoxDollar'=>$mainBoxDollar,
         'mainBoxDinar'=>$mainBoxDinar,
         'mainBoxDollarNew'=>$transactionIn+$transactionOut,
@@ -841,6 +844,16 @@ class DashboardController extends Controller
         $car=Car::with('client')->where('owner_id', $owner_id)->findOrFail($request->id);
 
         $this->authorize('delete', $car);
+
+        // Block delete when partially/fully paid or settled (incl. discount-only).
+        $paid = (float) ($car->paid ?? 0);
+        $totalS = (float) ($car->total_s ?? 0);
+        $remaining = $totalS - $paid - (float) ($car->discount ?? 0);
+        if ($paid > 0.009 || ($totalS > 0.009 && $remaining <= 0.009)) {
+            return Response::json([
+                'message' => 'لا يمكن حذف سيارة مدفوعة جزئياً أو بالكامل. أعد المبالغ للرصيد أو ألغِ الدفعات أولاً.',
+            ], 422);
+        }
 
         try {
             $cashUserId = $this->resolveCashUserId((int) $owner_id);

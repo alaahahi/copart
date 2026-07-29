@@ -57,8 +57,14 @@ const money = (v) => formatMoney(v, "$");
 const field = (car, salesKey, purchaseKey) =>
   isPurchase.value ? car?.[purchaseKey] : car?.[salesKey];
 
-const remainingOf = (car) => carRemaining(car, { totalKey: "total_s" });
-const statusMeta = (car) => carPaymentStatusMeta(car, { totalKey: "total_s" });
+/** Purchases: cost total; Sales/Clients: sales total_s. */
+const paymentOptions = (car) =>
+  isPurchase.value
+    ? { totalKey: "total", scheme: "purchase" }
+    : { totalKey: "total_s", scheme: "sales" };
+
+const remainingOf = (car) => carRemaining(car, paymentOptions(car));
+const statusMeta = (car) => carPaymentStatusMeta(car, paymentOptions(car));
 
 const brandLogoUrl = (car) =>
   resolveCarLogoUrl(car?.car_type || car?.make || car?.name);
@@ -79,7 +85,7 @@ const articleClass = (car) => {
   const highlighted =
     !!normalizeVinQuery(props.highlightQuery) &&
     carMatchesVin(car, props.highlightQuery);
-  return carPaymentGridCardClass(car, { totalKey: "total_s", highlighted });
+  return carPaymentGridCardClass(car, { ...paymentOptions(car), highlighted });
 };
 
 const getImageUrl = (name) => `/public/uploadsResized/${name}`;

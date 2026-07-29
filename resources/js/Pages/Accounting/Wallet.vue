@@ -162,6 +162,30 @@ function isAmanahTransaction(tran) {
   return tran?.type === 'inUserAmanah' || tran?.type === 'outUserAmanah';
 }
 
+const DEPOSIT_TYPES = ['inUser', 'inUserAmanah', 'inUserBox', 'transfer_in', 'in'];
+const WITHDRAW_TYPES = ['outUser', 'outUserAmanah', 'outUserBox', 'transfer_out', 'out', 'debt'];
+
+function isDepositTransaction(tran) {
+  if (!tran) return false;
+  if (DEPOSIT_TYPES.includes(tran.type)) return true;
+  if (WITHDRAW_TYPES.includes(tran.type)) return false;
+  return Number(tran.amount) > 0;
+}
+
+function isWithdrawTransaction(tran) {
+  if (!tran) return false;
+  if (WITHDRAW_TYPES.includes(tran.type)) return true;
+  if (DEPOSIT_TYPES.includes(tran.type)) return false;
+  return Number(tran.amount) < 0;
+}
+
+function rowToneClass(tran) {
+  if (tran?.type === 'inUserAmanah') return 'bg-sky-50 dark:bg-slate-800 border-r-4 border-sky-500';
+  if (tran?.type === 'outUserAmanah') return 'bg-amber-50 dark:bg-slate-800 border-r-4 border-amber-500';
+  if (isWithdrawTransaction(tran)) return 'bg-rose-50 dark:bg-slate-800 border-r-4 border-rose-500/70';
+  return 'bg-emerald-50 dark:bg-slate-800 border-r-4 border-emerald-500/70';
+}
+
 function openModalDel(tran){
   if (isAmanahTransaction(tran)) {
     deleteAmanahTransaction(tran);
@@ -396,12 +420,16 @@ function calculateBalance(transaction, index) {
     const tran = sortedTransactions[i];
     
     // نأخذ فقط معاملات الصندوق (ليس الأمانة) لحساب الرصيد
-    if (tran.type === 'inUser') {
-      balance += parseFloat(tran.amount) || 0;
-    } else if (tran.type === 'outUser') {
-      balance -= Math.abs(parseFloat(tran.amount) || 0);
+    if (!isAmanahTransaction(tran)) {
+      const amt = parseFloat(tran.amount) || 0;
+      if (isDepositTransaction(tran)) {
+        balance += Math.abs(amt);
+      } else if (isWithdrawTransaction(tran)) {
+        balance -= Math.abs(amt);
+      } else {
+        balance += amt;
+      }
     }
-    // نتجاهل معاملات الأمانة لأنها لا تؤثر على balance
     
     // إذا وصلنا إلى هذه المعاملة، نتوقف
     if (tran.id === transactionId) {
@@ -516,10 +544,22 @@ const tagSummary = computed(() => {
 });
 
 const walletBalanceUsd = computed(
-  () => Number(laravelData.value?.sumInTransactionsUser ?? 0) - Number(laravelData.value?.sumOutTransactionsUser ?? 0)
+  () => {
+    const ledger = Number(laravelData.value?.user?.balance);
+    if (!Number.isNaN(ledger) && laravelData.value?.user?.balance !== undefined && laravelData.value?.user?.balance !== null) {
+      return ledger;
+    }
+    return Number(laravelData.value?.sumInTransactionsUser ?? 0) - Number(laravelData.value?.sumOutTransactionsUser ?? 0);
+  }
 );
 const walletBalanceIqd = computed(
-  () => Number(laravelData.value?.sumInTransactionsDinarUser ?? 0) - Number(laravelData.value?.sumOutTransactionsDinarUser ?? 0)
+  () => {
+    const ledger = Number(laravelData.value?.user?.balance_dinar);
+    if (!Number.isNaN(ledger) && laravelData.value?.user?.balance_dinar !== undefined && laravelData.value?.user?.balance_dinar !== null) {
+      return ledger;
+    }
+    return Number(laravelData.value?.sumInTransactionsDinarUser ?? 0) - Number(laravelData.value?.sumOutTransactionsDinarUser ?? 0);
+  }
 );
 const amanahBalanceUsd = computed(
   () => Number(laravelData.value?.sumInTransactionsUserAmanah ?? 0) - Number(laravelData.value?.sumOutTransactionsUserAmanah ?? 0)
@@ -953,16 +993,11 @@ function printTagDetails() {
                   <tr
                     v-for="(tran, index) in transactions"
                     :key="tran.id"
-                    :class="[
-                      tran.type == 'inUserAmanah' ? 'bg-sky-50 dark:bg-slate-800 border-r-4 border-sky-500' :
-                      tran.type == 'outUserAmanah' ? 'bg-amber-50 dark:bg-slate-800 border-r-4 border-amber-500' :
-                      tran.type != 'inUser' ? 'bg-rose-50 dark:bg-slate-800 border-r-4 border-rose-500/70' : 'bg-emerald-50 dark:bg-slate-800 border-r-4 border-emerald-500/70',
-                      'hover:bg-slate-100 dark:hover:bg-slate-700'
-                    ]"
+                    :class="[rowToneClass(tran), 'hover:bg-slate-100 dark:hover:bg-slate-700']"
                   >
                     <td class="px-2 py-1.5 text-slate-800 dark:text-slate-100">
                       {{ tran.id }}
-                      <span v-if="tran.type == 'inUserAmanah' || tran.type == 'outUserAmanah'" class="text-xs font-bold text-sky-700 dark:text-sky-300">(أمانة)</span>
+                      <span v-if="isAmanahTransaction(tran)" class="text-xs font-bold text-sky-700 dark:text-sky-300">(أمانة)</span>
                     </td>
                     <td class="px-2 py-1.5">
                       <span :class="getMoneyAccountBadgeClass(tran)">
@@ -983,17 +1018,17 @@ function printTagDetails() {
                       </template>
                     </td>
                     <td class="px-2 py-1.5 font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                      <template v-if="tran.type == 'inUser' || tran.type == 'inUserAmanah'">
-                        {{ formatMoney(tran.amount, tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
+                      <template v-if="isDepositTransaction(tran)">
+                        {{ formatMoney(Math.abs(tran.amount), tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
                       </template>
                     </td>
                     <td class="px-2 py-1.5 font-mono font-bold text-rose-700 dark:text-rose-300">
-                      <template v-if="tran.type == 'outUser' || tran.type == 'outUserAmanah'">
-                        {{ formatMoney(tran.amount, tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
+                      <template v-if="isWithdrawTransaction(tran)">
+                        {{ formatMoney(Math.abs(tran.amount), tran.currency ?? '$') }} {{ tran.currency ?? '$' }}
                       </template>
                     </td>
                     <td class="px-2 py-1.5 font-mono font-semibold text-slate-900 dark:text-white">
-                      <span v-if="tran.type == 'inUser' || tran.type == 'outUser'">
+                      <span v-if="!isAmanahTransaction(tran)">
                         {{ updateResults(calculateBalance(tran, index)) }} {{ tran.currency ?? '$' }}
                       </span>
                       <span v-else class="text-slate-500 dark:text-slate-300">—</span>

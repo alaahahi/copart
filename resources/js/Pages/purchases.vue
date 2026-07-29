@@ -17,7 +17,7 @@ import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
 import { erbilTransferSubtotal, ensureErbilFormFields } from "@/utils/carFields";
 import { asNumber, formatMoney } from "@/utils/formatMoney";
-import { carPaymentStatusMeta } from "@/utils/carPaymentStatus";
+import { carPaymentRowClass, canDeleteCar } from "@/utils/carPaymentStatus";
 import { carProfit } from "@/utils/carProfit";
 import debounce from 'lodash/debounce';
 import SearchInput from "@/Components/SearchInput.vue";
@@ -329,19 +329,9 @@ function confirmAddPayment(V) {
 
 const debouncedGetResultsCar = debounce(refresh, 500);
 
-/** Solid dark-safe row surfaces from payment amounts. */
+/** Purchase payment vs purchase total (not sales total_s). */
 function rowClass(row) {
-  const { status } = carPaymentStatusMeta(row);
-  if (status === "paid") {
-    return "bg-emerald-100 text-slate-800 dark:bg-emerald-900 dark:text-slate-100";
-  }
-  if (status === "partially_paid") {
-    return "bg-amber-100 text-slate-800 dark:bg-amber-900 dark:text-slate-100";
-  }
-  if (status === "unpaid" && asNumber(row?.total_s) > 0) {
-    return "bg-rose-100 text-slate-800 dark:bg-rose-900 dark:text-slate-100";
-  }
-  return "bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100";
+  return carPaymentRowClass(row, { totalKey: "total", scheme: "purchase" });
 }
 
 function rowProfit(row) {
@@ -603,6 +593,7 @@ function rowProfit(row) {
                   <edit />
                 </button>
                 <button
+                  v-if="canDeleteCar(row, { totalKey: 'total' })"
                   type="button"
                   class="inline-flex items-center rounded-md bg-orange-500 px-1.5 py-0.5 text-white hover:bg-orange-600"
                   :title="$t('trash')"
@@ -695,6 +686,7 @@ function rowProfit(row) {
                           <edit />
                         </button>
                         <button
+                          v-if="canDeleteCar(row, { totalKey: 'total' })"
                           type="button"
                           class="rounded bg-orange-500 px-1.5 py-1 text-white hover:bg-orange-600"
                           @click="openModalDelCar(row)"

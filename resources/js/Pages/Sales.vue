@@ -17,7 +17,7 @@ import { ModelListSelect } from 'vue-search-select';
 import 'vue-search-select/dist/VueSearchSelect.css';
 import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
 import { asNumber, formatMoney } from "@/utils/formatMoney";
-import { carPaymentStatusMeta } from "@/utils/carPaymentStatus";
+import { carPaymentStatusMeta, canDeleteCar } from "@/utils/carPaymentStatus";
 import CarsGridView from "@/Components/CarsGridView.vue";
 import SearchInput from "@/Components/SearchInput.vue";
 
@@ -144,6 +144,20 @@ function confirmUpdateCar(V) {
     });
 }
 
+function onAllocationReturned(updated) {
+  if (!updated?.id) return;
+  const idx = car.value.findIndex((c) => c.id === updated.id);
+  if (idx >= 0) {
+    car.value[idx] = {
+      ...car.value[idx],
+      payment_allocations: updated.payment_allocations,
+      paid: updated.paid,
+      discount: updated.discount,
+      results: updated.results,
+    };
+  }
+}
+
 function confirmDelCar(V) {
   axios
     .post("/api/DelCar", V)
@@ -195,6 +209,7 @@ function rowClass(row) {
     :client="client"
     :auctions="auctions"
     @a="confirmUpdateCar($event)"
+    @allocation-returned="onAllocationReturned"
     @close="showModalEditCars = false"
   >
     <template #header />
@@ -302,6 +317,7 @@ function rowClass(row) {
                   <edit />
                 </button>
                 <button
+                  v-if="canDeleteCar(row)"
                   type="button"
                   class="inline-flex items-center rounded-md bg-orange-500 px-1.5 py-0.5 text-white hover:bg-orange-600"
                   :title="$t('trash')"
@@ -385,6 +401,7 @@ function rowClass(row) {
                           <edit />
                         </button>
                         <button
+                          v-if="canDeleteCar(row)"
                           type="button"
                           class="rounded bg-orange-500 px-1.5 py-1 text-white hover:bg-orange-600"
                           @click="openModalDelCar(row)"

@@ -13,7 +13,6 @@ import ModalConvertDollarDinar from "@/Components/ModalConvertDollarDinar.vue";
 import ModalConvertDinarDollar from "@/Components/ModalConvertDinarDollar.vue";
 import ModalDel from "@/Components/ModalDel.vue";
 import ModalUploader from "@/Components/ModalUploader.vue";
-import ModalAssignTransactionToWallet from "@/Components/ModalAssignTransactionToWallet.vue";
 import ModalAddExpenseAccount from "@/Components/ModalAddExpenseAccount.vue";
 
 
@@ -41,8 +40,6 @@ let showModalConvertDollarDinar = ref(false);
 let showModalConvertDinarDollar = ref(false);
 let showModalDel = ref(false);
 let showModalUploader = ref(false);
-let showModalAssignToWallet = ref(false);
-let tranForAssignWallet = ref(null);
 let transactions= ref([]);
 let tranId =ref({});
 let formData = ref({});
@@ -152,28 +149,6 @@ function openModalDel(tran){
 function openModalUploader(tran){
   tranId.value = tran
   showModalUploader.value = true;
-}
-
-function canAssignToWallet(tran) {
-  if (!tran) {
-    return false;
-  }
-  const parentId = Number(tran.parent_id ?? 0);
-  if (parentId > 0) {
-    return false;
-  }
-  return tran.type === 'debt' || tran.type === 'out';
-}
-
-function openAssignToWalletModal(tran) {
-  tranForAssignWallet.value = tran;
-  showModalAssignToWallet.value = true;
-}
-
-function onAssignToWalletSaved() {
-  showModalAssignToWallet.value = false;
-  tranForAssignWallet.value = null;
-  refresh();
 }
 
 const props = defineProps({
@@ -405,8 +380,8 @@ function getAmountParts(tran, direction) {
 
 function getAmountClass(direction) {
   return direction === 'in'
-    ? 'amount-pill amount-pill--in flex flex-col items-center justify-center leading-tight gap-0 dark:text-white text-white font-bold'
-    : 'amount-pill amount-pill--out flex flex-col items-center justify-center leading-tight gap-0 dark:text-white text-white font-bold';
+    ? 'amount-pill amount-pill--in'
+    : 'amount-pill amount-pill--out';
 }
 
 function getRowClasses(tran) {
@@ -575,14 +550,6 @@ async function saveDescription(tran) {
     <template #header>
  
     </template>
-    <ModalAssignTransactionToWallet
-      :show="showModalAssignToWallet"
-      :transaction="tranForAssignWallet"
-      :wallet-users="walletUsers"
-      @saved="onAssignToWalletSaved"
-      @close="showModalAssignToWallet = false; tranForAssignWallet = null"
-    />
-
     <ModalDel
             :show="showModalDel ? true : false"
             :formData="tranId"
@@ -723,19 +690,7 @@ async function saveDescription(tran) {
                 {{ $t('convert_iqd_to_usd') }}
               </button>
 
-              <template v-if="flaggedWallets && flaggedWallets.length > 0 && $page.props.auth.user.owner_id==1">
-                <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
-                <Link
-                  v-for="wallet in flaggedWallets"
-                  :key="wallet.vault_id || wallet.id"
-                  :href="`/wallet?id=${wallet.id}`"
-                  class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-600 bg-orange-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-800 dark:border-orange-500 dark:bg-orange-800 dark:text-white dark:hover:bg-orange-700"
-                  :title="`${$t('qasa')} — ${wallet.name}`"
-                >
-                  {{ wallet.name }}
-                </Link>
-              </template>
-
+              <!-- Cash-vault (orange) shortcuts removed from Accounting — use /vaults. Keep COA expense/commission chips only. -->
               <template v-if="$page.props.auth.user.owner_id==1">
                 <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
                 <Link
@@ -946,8 +901,8 @@ async function saveDescription(tran) {
                         :key="`in-${tran.id}`"
                         :class="getAmountClass('in')"
                       >
-                        <span class="leading-none text-base">{{ parts.value }}</span>
-                        <span class="leading-none text-xs opacity-90">{{ parts.currency }}</span>
+                        <span class="tabular-nums">{{ parts.value }}</span>
+                        <span class="amount-pill__currency">{{ parts.currency }}</span>
                       </span>
                     </td>
                     <td class="border border-transparent text-center px-2 py-1 align-middle">
@@ -956,8 +911,8 @@ async function saveDescription(tran) {
                         :key="`out-${tran.id}`"
                         :class="getAmountClass('out')"
                       >
-                        <span class="leading-none text-base">{{ parts.value }}</span>
-                        <span class="leading-none text-xs opacity-90">{{ parts.currency }}</span>
+                        <span class="tabular-nums">{{ parts.value }}</span>
+                        <span class="amount-pill__currency">{{ parts.currency }}</span>
                       </span>
                     </td>
                     <td class="border border-transparent text-center px-2 py-1 align-middle">
@@ -969,14 +924,6 @@ async function saveDescription(tran) {
                           :disabled="isSavingDescription && editingDescriptionId === tran.id"
                         >
                           <edit class="w-4 h-4" />
-                        </button>
-                        <button
-                          v-if="canAssignToWallet(tran)"
-                          class="action-btn action-btn--wallet"
-                          title="إسناد إلى قاسة"
-                          @click="openAssignToWalletModal(tran)"
-                        >
-                          قاسة
                         </button>
                         <button class="action-btn action-btn--delete" @click="openModalDel(tran)" title="حذف الحركة">
                           <trash />
@@ -1056,30 +1003,36 @@ async function saveDescription(tran) {
 
 .amount-pill {
   display: inline-flex;
-  flex-direction: column;
-  align-items: center;
+  flex-direction: row;
+  align-items: baseline;
   justify-content: center;
-  gap: 0;
-  line-height: 1.1;
-  min-width: 3.25rem;
-  min-height: 3.25rem;
-  padding: 0.35rem 0.55rem;
-  border-radius: 9999px;
+  gap: 0.3rem;
+  line-height: 1.2;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.5rem;
   font-weight: 700;
   font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   vertical-align: middle;
 }
 
+.amount-pill__currency {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
 .amount-pill--in {
-  background-color: rgba(16, 185, 129, 0.28);
-  color: #ecfdf5;
-  border: 1px solid rgba(110, 231, 183, 0.35);
+  background-color: rgba(6, 95, 70, 0.55);
+  color: #a7f3d0;
+  border: 1px solid rgba(52, 211, 153, 0.4);
 }
 
 .amount-pill--out {
-  background-color: rgba(244, 63, 94, 0.28);
-  color: #fff1f2;
-  border: 1px solid rgba(251, 113, 133, 0.35);
+  background-color: rgba(136, 19, 55, 0.55);
+  color: #fecdd3;
+  border: 1px solid rgba(251, 113, 133, 0.4);
 }
 
 .action-group {
@@ -1126,16 +1079,6 @@ async function saveDescription(tran) {
 
 .action-btn--print {
   background: linear-gradient(135deg, #22c55e, #16a34a);
-}
-
-.action-btn--wallet {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  width: auto;
-  min-width: 3rem;
-  padding: 0 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
 }
 
 .account-link {

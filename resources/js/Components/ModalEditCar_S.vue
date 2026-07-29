@@ -1,13 +1,12 @@
 <script setup>
-import { ref, computed } from "vue";
-import axios from 'axios';
-import Uploader  from 'vue-media-upload';
+import { ref, computed, watch } from "vue";
+import axios from "axios";
+import Uploader from "vue-media-upload";
 import { useToast } from "vue-toastification";
+import { asNumber, formatNumber } from "@/utils/formatMoney";
 
 const toast = useToast();
-
-
-
+const emit = defineEmits(["a", "close", "allocation-returned"]);
 
 const props = defineProps({
   show: Boolean,
@@ -16,6 +15,47 @@ const props = defineProps({
   auctions: { type: Array, default: () => [] },
 });
 
+const activeTab = ref("details");
+const returningIndex = ref(null);
+const errors = ref({});
+
+const fixed = (v, digits = 0) => formatNumber(v, { maxDecimals: digits });
+
+watch(
+  () => props.show,
+  (open) => {
+    if (open) {
+      activeTab.value = "details";
+      returningIndex.value = null;
+    }
+  }
+);
+
+const allocations = computed(() => {
+  const raw = props.formData?.payment_allocations;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+});
+
+const allocationSourceLabel = (source) => {
+  if (source === "from_balance") return "allocation_from_balance";
+  if (source === "legacy_balance") return "allocation_legacy";
+  return "allocation_direct";
+};
+
+const canReturnAllocation = (row) => {
+  const source = row?.source;
+  return source === "from_balance" || source === "legacy_balance";
+};
+
 function getTodayDate() {
   const today = new Date();
   const year = today.getFullYear();
@@ -23,42 +63,96 @@ function getTodayDate() {
   const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-function check_vin(v){
-  if(v){
-    axios.get(`/api/check_vin?car_vin=${v}`)
-  .then(response => {
-    showErrorVin.value =  response.data;
-  })
-  .catch(error => {
-    console.error(error);
-  })
+
+function check_vin(v) {
+  if (v) {
+    axios
+      .get(`/api/check_vin?car_vin=${v}`)
+      .then((response) => {
+        showErrorVin.value = response.data;
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   }
 }
+
 let showClient = ref(false);
 let showErrorVin = ref(false);
-let exchangeRateError= ref(false);
-function validateExchangeRate(v) {
-      const input = props.formData.dolar_price_s;
-      if (/^\d{6}$/.test(input)) {
-        exchangeRateError.value = false;
-      } else {
-        exchangeRateError.value = true;
-      }
+let exchangeRateError = ref(false);
+
+function validateExchangeRate() {
+  const input = props.formData.dolar_price_s;
+  if (/^\d{6}$/.test(input)) {
+    exchangeRateError.value = false;
+  } else {
+    exchangeRateError.value = true;
+  }
+}
+
+function changeMedia() {}
+function media() {}
+function addMedia() {}
+
+function removeMedia(removedImage) {
+  axios
+    .get("/api/carsAnnualImageDel?img_type=contract&name=" + removedImage.name)
+    .then(() => {
+      toast.success("تم  حذف الصورة بنجاح", {
+        timeout: 5000,
+        position: "bottom-right",
+        rtl: true,
+      });
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+}
+
+async function returnAllocation(index) {
+  if (!props.formData?.id || returningIndex.value !== null) return;
+  if (!window.confirm("إعادة هذا المبلغ للرصيد؟")) return;
+
+  returningIndex.value = index;
+  try {
+    const { data } = await axios.post("/api/ReturnCarAllocation", {
+      id: props.formData.id,
+      index,
+    });
+    if (props.formData && data) {
+      props.formData.payment_allocations = data.payment_allocations ?? [];
+      props.formData.paid = data.paid;
+      props.formData.discount = data.discount;
+      props.formData.results = data.results;
     }
+    toast.success("تمت إعادة المبلغ للرصيد", {
+      timeout: 2500,
+      position: "bottom-right",
+      rtl: true,
+    });
+    emit("allocation-returned", data);
+  } catch (error) {
+    const msg =
+      error?.response?.data?.message || "تعذر إعادة المبلغ للرصيد";
+    toast.error(msg, {
+      timeout: 4000,
+      position: "bottom-right",
+      rtl: true,
+    });
+  } finally {
+    returningIndex.value = null;
+  }
+}
 
-function removeMedia(removedImage){
-          axios.get('/api/carsAnnualImageDel?img_type=contract&name='+removedImage.name)
-        .then(response => {
-          toast.success("تم  حذف الصورة بنجاح", {
-              timeout: 5000,
-              position: "bottom-right",
-              rtl: true
-
-            });
-        })
-        .catch(error => {
-          console.error(error);
-        })
+function formatAllocDate(at) {
+  if (!at) return "—";
+  try {
+    const d = new Date(at);
+    if (Number.isNaN(d.getTime())) return String(at);
+    return d.toLocaleString("ar-IQ");
+  } catch (_) {
+    return String(at);
+  }
 }
 </script>
   <template>
@@ -89,6 +183,30 @@ function removeMedia(removedImage){
 
         <!-- Body -->
         <div class="car-modal-body">
+          <div class="car-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="car-tab"
+              :class="{ 'car-tab--active': activeTab === 'details' }"
+              :aria-selected="activeTab === 'details'"
+              @click="activeTab = 'details'"
+            >
+              {{ $t("edit_car") }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="car-tab"
+              :class="{ 'car-tab--active': activeTab === 'payments' }"
+              :aria-selected="activeTab === 'payments'"
+              @click="activeTab = 'payments'"
+            >
+              {{ $t("payments") }}
+            </button>
+          </div>
+
+          <div v-show="activeTab === 'details'" class="car-tab-panel space-y-4">
           <!-- Section: التاجر -->
           <section class="car-section">
             <h3 class="car-section-title">
@@ -337,6 +455,78 @@ function removeMedia(removedImage){
               v-model="formData.note"
             />
           </section>
+          </div>
+
+          <div v-show="activeTab === 'payments'" class="car-tab-panel">
+            <section class="car-section">
+              <h3 class="car-section-title">
+                <span class="car-section-dot bg-amber-400"></span>
+                {{ $t("payments") }}
+                <span class="car-payments-paid ms-auto text-sm font-semibold text-emerald-300">
+                  {{ $t("paid") }}: {{ fixed(formData.paid, 0) }}$
+                </span>
+              </h3>
+
+              <div
+                v-if="!allocations.length"
+                class="rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-8 text-center text-sm text-slate-300"
+              >
+                {{ $t("no_car_payments") }}
+              </div>
+
+              <ul v-else class="space-y-2">
+                <li
+                  v-for="(row, ai) in allocations"
+                  :key="`alloc-${ai}-${row.transaction_id || row.at || ai}`"
+                  class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-start"
+                >
+                  <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-semibold text-white">
+                        {{ $t(allocationSourceLabel(row.source)) }}
+                        <span class="ms-1 font-mono text-emerald-300">
+                          {{ fixed(row.amount, 0) }}$
+                        </span>
+                        <span
+                          v-if="asNumber(row.discount)"
+                          class="ms-1 text-xs font-normal text-amber-300"
+                        >
+                          · {{ $t("discount") }} {{ fixed(row.discount, 0) }}
+                        </span>
+                      </div>
+                      <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-300">
+                        <span v-if="row.transaction_id">
+                          {{ $t("allocation_tx") }} #{{ row.transaction_id }}
+                        </span>
+                        <span>{{ formatAllocDate(row.at) }}</span>
+                        <span v-if="row.by">{{ $t("user") }} #{{ row.by }}</span>
+                        <span v-if="row.note" class="text-slate-400">{{ row.note }}</span>
+                      </div>
+                      <p
+                        v-if="row.source === 'direct_payment'"
+                        class="mt-1 text-[11px] text-sky-300"
+                      >
+                        {{ $t("allocation_delete_via_accounting") }}
+                      </p>
+                    </div>
+                    <button
+                      v-if="canReturnAllocation(row)"
+                      type="button"
+                      class="shrink-0 rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                      :disabled="returningIndex !== null"
+                      @click="returnAllocation(ai)"
+                    >
+                      {{
+                        returningIndex === ai
+                          ? "…"
+                          : $t("return_to_balance")
+                      }}
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
         </div>
 
         <!-- Footer -->
@@ -457,6 +647,47 @@ function removeMedia(removedImage){
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+}
+
+.car-tabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  flex-shrink: 0;
+}
+
+.car-tab {
+  flex: 1 1 0;
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.car-tab:hover {
+  color: #f1f5f9;
+  background: rgba(51, 65, 85, 0.55);
+}
+
+.car-tab--active {
+  color: #fff;
+  background: #0f766e;
+}
+
+.car-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.car-payments-paid {
+  letter-spacing: 0.01em;
 }
 
 .car-modal-body::-webkit-scrollbar {

@@ -15,7 +15,7 @@ import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import { erbilTransferSubtotal, syncSalesErbilFromPurchase } from "@/utils/carFields";
 import { asNumber, formatNumber } from "@/utils/formatMoney";
-import { carRemaining, carPaymentStatusMeta } from "@/utils/carPaymentStatus";
+import { carRemaining, carPaymentStatusMeta, canDeleteCar } from "@/utils/carPaymentStatus";
 import CarsGridView from "@/Components/CarsGridView.vue";
 
 import { useToast } from "vue-toastification";
@@ -568,6 +568,7 @@ function checkClientBalance(_v) {
       :client="clients"
       :auctions="auctions"
       @a="confirmUpdateCar($event)"
+      @allocation-returned="getResultsSelect()"
       @close="showModalEditCars = false"
     >
       <template #header> </template>
@@ -1110,6 +1111,7 @@ function checkClientBalance(_v) {
                   <edit />
                 </button>
                 <button
+                  v-if="canDeleteCar(car)"
                   type="button"
                   class="inline-flex items-center rounded-md bg-orange-500 px-1.5 py-0.5 text-white hover:bg-orange-600"
                   :title="$t('trash')"
@@ -1256,6 +1258,7 @@ function checkClientBalance(_v) {
                         <edit />
                       </button>
                       <button
+                        v-if="canDeleteCar(car)"
                         tabindex="1"
                         class="mx-0.5 rounded-lg bg-orange-500 px-1.5 py-1 text-white hover:bg-orange-600"
                         @click="openModalDelCar(car)"

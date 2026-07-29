@@ -234,7 +234,7 @@ class Car extends Model
      * and MySQL ONLY_FULL_GROUP_BY is equally fragile with HAVING alone.
      *
      * @param  \Illuminate\Database\Query\Builder  $query
-     * @param  'gt'|'neq'  $mode  gt = balance > 0 (debts), neq = balance != 0
+     * @param  'gt'|'lt'|'neq'  $mode  gt = debts (balance > 0), lt = prepaid credit (balance < 0), neq = either
      */
     public static function filterClientsByBalance(
         \Illuminate\Database\Query\Builder $query,
@@ -245,11 +245,16 @@ class Car extends Model
 
         if ($mode === 'neq') {
             $wrapped->where('balance', '!=', 0);
+        } elseif ($mode === 'lt') {
+            $wrapped->where('balance', '<', 0);
         } else {
             $wrapped->where('balance', '>', 0);
         }
 
-        return $wrapped->orderByDesc('balance');
+        // Debts: highest owed first. Credits: most prepaid (most negative) first.
+        return $mode === 'lt'
+            ? $wrapped->orderBy('balance')
+            : $wrapped->orderByDesc('balance');
     }
 
     /** Clients with remaining debt (balance > 0), same source as the KPI sum. */
@@ -259,6 +264,43 @@ class Car extends Model
             self::clientsRemainingBaseQuery($ownerId, $clientTypeId),
             $excludeZero ? 'neq' : 'gt'
         )->get();
+    }
+
+    /**
+     * Clients with prepaid / undistributed credit (ledger AR balance < 0).
+     * Same source as debts — company owes the trader unused payments.
+     */
+    public static function clientsWithCredit(int $ownerId, int $clientTypeId)
+    {
+        return self::filterClientsByBalance(
+            self::clientsRemainingBaseQuery($ownerId, $clientTypeId),
+            'lt'
+        )->get();
+    }
+
+    /**
+     * One aggregated query split into debts (balance > 0) and credits (balance < 0).
+     *
+     * @return array{debts: \Illuminate\Support\Collection, credits: \Illuminate\Support\Collection}
+     */
+    public static function partitionClientsByBalance(int $ownerId, int $clientTypeId): array
+    {
+        $rows = self::filterClientsByBalance(
+            self::clientsRemainingBaseQuery($ownerId, $clientTypeId),
+            'neq'
+        )->get();
+
+        $debts = $rows
+            ->filter(fn ($row) => (float) $row->balance > 0)
+            ->sortByDesc(fn ($row) => (float) $row->balance)
+            ->values();
+
+        $credits = $rows
+            ->filter(fn ($row) => (float) $row->balance < 0)
+            ->sortBy(fn ($row) => (float) $row->balance)
+            ->values();
+
+        return ['debts' => $debts, 'credits' => $credits];
     }
 
     /** Sum of ledger AR balances across all clients of a tenant. */

@@ -120,14 +120,12 @@ class AccountingController extends Controller
         $boxes = User::where('owner_id',$owner_id)->where('email', 'mainBox@account.com')->get();
         $this->accounting->loadAccounts(Auth::user()->owner_id);
         $this->attachLedgerBalancesToUsers($boxes, (int) $owner_id);
-        
-        // قاصات النظام من جدول vaults — ليست تجاراً بعلم show_in_dashboard
-        $flaggedWallets = app(VaultService::class)->accountingShortcutUsers((int) $owner_id);
-        $this->attachLedgerBalancesToUsers($flaggedWallets, (int) $owner_id);
 
         // اختصارات مصاريف/عمولات = حسابات COA (ليست قاصات نقدية)
+        // Orange vault shortcuts are intentionally not shown on Accounting (use /vaults).
         $ledger = app(LedgerService::class);
         $ledger->ensureSystemAccounts((int) $owner_id);
+        // Ensure مشتريات سيارات COA + move car costs off مصاريف عامة (no vault chips on this page).
         $expenseShortcuts = $ledger->listExpenseCommissionAccounts((int) $owner_id);
         $expenseParentId = LedgerAccount::query()
             ->where('owner_id', (int) $owner_id)
@@ -156,7 +154,8 @@ class AccountingController extends Controller
         return Inertia::render('Accounting/Index', [
             'boxes'=>$boxes,
             'accounts'=>$this->accounting->mainAccount(),
-            'flaggedWallets'=>$flaggedWallets,
+            // Orange vault shortcut chips removed from Accounting UI — empty list kept for prop compat.
+            'flaggedWallets'=>collect(),
             'walletUsers'=>$walletUsers,
             'expenseShortcuts'=>$expenseShortcuts,
             'suggestExpenseCode'=>$ledger->suggestExpenseAccountCode((int) $owner_id, 'expense'),
@@ -267,9 +266,17 @@ class AccountingController extends Controller
              $transactions = $transactions->whereRaw("JSON_EXTRACT(details, '$.loan') = true");
          }
      }
+     $vaultService = app(\App\Services\VaultService::class);
+     $isCashVaultUser = $vaultService->isCashVaultLegacyUser((int) $owner_id, (int) $user->id);
+
      if ($type == 'wallet') {
+         // Cash vaults: ledger balance includes inUserBox/outUserBox, transfers, purchases (in/out).
+         // Legacy filter (inUser/outUser only) hid those movements and emptied the detail page.
+         $walletTypes = $isCashVaultUser
+             ? \App\Services\VaultService::CASH_BOX_MOVEMENT_TYPES
+             : ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'];
          $allTransactions = $transactions
-             ->whereIn('type', ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'])
+             ->whereIn('type', $walletTypes)
              ->paginate(1000);
      } elseif ($type == 'printExcel') {
          $allTransactions = $transactions->paginate(1000);
@@ -292,16 +299,25 @@ class AccountingController extends Controller
      $sumAllTransactions = $allTransactions->where('currency','$')->sum('amount');
      $sumDebitTransactions = $allTransactions->where('currency','$')->whereIn('type', ['debt','outUserBox'])->sum('amount');
      $sumInTransactions = $allTransactions->where('currency','$')->whereIn('type', ['in', 'inUserBox'])->sum('amount');
-     $sumInTransactionsUser = $allTransactions->where('currency','$')->where('type', 'inUser')->sum('amount');
-     $sumOutTransactionsUser = $allTransactions->where('currency','$')->where('type', 'outUser')->sum('amount');
+
+     // Cash vault cards: put ledger balance in sumIn* so existing Wallet.vue (in − out) matches القاصات.
+     if ($isCashVaultUser && $type == 'wallet') {
+         $sumInTransactionsUser = (float) $user->balance;
+         $sumOutTransactionsUser = 0.0;
+         $sumInTransactionsDinarUser = (float) $user->balance_dinar;
+         $sumOutTransactionsDinarUser = 0.0;
+     } else {
+         $sumInTransactionsUser = $allTransactions->where('currency','$')->where('type', 'inUser')->sum('amount');
+         $sumOutTransactionsUser = $allTransactions->where('currency','$')->where('type', 'outUser')->sum('amount');
+         $sumInTransactionsDinarUser = $allTransactions->where('currency','IQD')->where('type', 'inUser')->sum('amount');
+         $sumOutTransactionsDinarUser = $allTransactions->where('currency','IQD')->where('type', 'outUser')->sum('amount');
+     }
      $sumInTransactionsUserAmanah = $allTransactions->where('currency','$')->where('type', 'inUserAmanah')->sum('amount');
      $sumOutTransactionsUserAmanah = $allTransactions->where('currency','$')->where('type', 'outUserAmanah')->sum('amount');
 
      $sumAllTransactionsDinar = $allTransactions->where('currency','IQD')->sum('amount');
      $sumDebitTransactionsDinar = $allTransactions->where('currency','IQD')->whereIn('type', ['debt','outUserBox'])->sum('amount');
      $sumInTransactionsDinar = $allTransactions->where('currency','IQD')->whereIn('type', ['in', 'inUserBox'])->sum('amount');
-     $sumInTransactionsDinarUser = $allTransactions->where('currency','IQD')->where('type', 'inUser')->sum('amount');
-     $sumOutTransactionsDinarUser = $allTransactions->where('currency','IQD')->where('type', 'outUser')->sum('amount');
      $sumInTransactionsDinarUserAmanah = $allTransactions->where('currency','IQD')->where('type', 'inUserAmanah')->sum('amount');
      $sumOutTransactionsDinarUserAmanah = $allTransactions->where('currency','IQD')->where('type', 'outUserAmanah')->sum('amount');
 
@@ -326,15 +342,18 @@ class AccountingController extends Controller
          'sumOutTransactionsDinarUserAmanah' => $sumOutTransactionsDinarUserAmanah
      ];
      if ($request->get('group_by_driver') && $user) {
+         $driverTypes = $isCashVaultUser
+             ? \App\Services\VaultService::CASH_BOX_MOVEMENT_TYPES
+             : ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'];
          $walletTrans = $this->transactionsQueryForUser($user)
-             ->whereIn('type', ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'])
+             ->whereIn('type', $driverTypes)
              ->get();
          $data['drivers_summary'] = $walletTrans->groupBy(function ($t) {
              $d = $t->details;
              return (is_array($d) && !empty($d['driver_name'])) ? $d['driver_name'] : '—';
          })->map(function ($items, $driverName) {
-             $in = $items->whereIn('type', ['inUser', 'inUserAmanah'])->sum('amount');
-             $out = $items->whereIn('type', ['outUser', 'outUserAmanah'])->sum('amount');
+             $in = $items->filter(fn ($t) => (float) $t->amount > 0)->sum('amount');
+             $out = $items->filter(fn ($t) => (float) $t->amount < 0)->sum(fn ($t) => abs((float) $t->amount));
              return ['driver_name' => $driverName, 'total_in' => round($in, 2), 'total_out' => round($out, 2), 'count' => $items->count()];
          })->values()->toArray();
      }
@@ -376,8 +395,10 @@ class AccountingController extends Controller
      }
      elseif($print==8){
         $config=SystemConfig::first();
-        // Filter only Wallet transactions (excluding Amanah) - get collection from paginated result
-        $walletTransactions = collect($allTransactions->items())->whereIn('type', ['inUser', 'outUser'])->values();
+        // Cash vault print: all non-amanah movements (matches on-screen vault ledger).
+        $walletTransactions = collect($allTransactions->items())
+            ->reject(fn ($t) => in_array($t->type, \App\Services\VaultService::AMANAH_MOVEMENT_TYPES, true))
+            ->values();
         $data['transactions'] = $walletTransactions;
         return view('receiptWalletTotal',compact('data','config'));
      }
@@ -431,10 +452,10 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        // Expense always from receipts/mainBox cash: Dr Expense / Cr Cash — no mirror child on target vault.
+        // Expense/withdraw from the cash vault being viewed (ورقة القاصة), else receipts vault.
         $vaults = app(\App\Services\VaultService::class);
         try {
-            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+            $cashUserId = $vaults->resolveMovementCashUserId((int) $owner_id, (int) ($request->id ?? 0));
         } catch (\Throwable $e) {
             $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
         }
@@ -447,12 +468,6 @@ class AccountingController extends Controller
         }
 
         $label = $cashUser->name;
-        if ($request->id && (int) $request->id !== (int) $cashUserId) {
-            $named = User::find($request->id);
-            if ($named) {
-                $label = $named->name;
-            }
-        }
 
         $desc = 'وصل سحب مباشر قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
@@ -494,7 +509,7 @@ class AccountingController extends Controller
 
         $vaults = app(\App\Services\VaultService::class);
         try {
-            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+            $cashUserId = $vaults->resolveMovementCashUserId((int) $owner_id, (int) ($request->id ?? 0));
         } catch (\Throwable $e) {
             $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
         }
@@ -507,12 +522,6 @@ class AccountingController extends Controller
         }
 
         $label = $cashUser->name;
-        if ($request->id && (int) $request->id !== (int) $cashUserId) {
-            $named = User::find($request->id);
-            if ($named) {
-                $label = $named->name;
-            }
-        }
 
         $desc = 'وصل سحب أمانة قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
@@ -623,10 +632,10 @@ class AccountingController extends Controller
             return Response::json(['message' => 'المبلغ مطلوب', 'errors' => ['amount' => ['المبلغ مطلوب']]], 422);
         }
 
-        // Receipt always on receipts/mainBox cash: Dr Cash / Cr Revenue — no mirror child on target vault.
+        // Deposit into the cash vault being viewed (ورقة القاصة), else receipts vault.
         $vaults = app(\App\Services\VaultService::class);
         try {
-            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+            $cashUserId = $vaults->resolveMovementCashUserId((int) $owner_id, (int) ($request->id ?? 0));
         } catch (\Throwable $e) {
             $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
         }
@@ -639,12 +648,6 @@ class AccountingController extends Controller
         }
 
         $label = $cashUser->name;
-        if ($request->id && (int) $request->id !== (int) $cashUserId) {
-            $named = User::find($request->id);
-            if ($named) {
-                $label = $named->name;
-            }
-        }
 
         $desc = 'وصل قبض مباشر قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
@@ -686,7 +689,7 @@ class AccountingController extends Controller
 
         $vaults = app(\App\Services\VaultService::class);
         try {
-            $cashUserId = $vaults->receiptsCashUserId((int) $owner_id);
+            $cashUserId = $vaults->resolveMovementCashUserId((int) $owner_id, (int) ($request->id ?? 0));
         } catch (\Throwable $e) {
             $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
         }
@@ -699,12 +702,6 @@ class AccountingController extends Controller
         }
 
         $label = $cashUser->name;
-        if ($request->id && (int) $request->id !== (int) $cashUserId) {
-            $named = User::find($request->id);
-            if ($named) {
-                $label = $named->name;
-            }
-        }
 
         $desc = 'وصل قبض أمانة قاسه '.$label.' '.$note;
         $date = $request->date ?: $this->currentDate;
@@ -1205,6 +1202,26 @@ class AccountingController extends Controller
         $car = Car::findOrFail($request->id);
         // Clears paid cache + allocation trail (return to undistributed client balance).
         $car = app(\App\Services\CarPaymentAllocationService::class)->clear($car);
+
+        return Response::json($car, 200);
+    }
+
+    /**
+     * Return one from_balance / legacy allocation row to client balance (no journal reverse).
+     */
+    public function ReturnCarAllocation(\App\Http\Requests\ReturnCarAllocationRequest $request)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $car = Car::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail((int) $request->id);
+
+        try {
+            $car = app(\App\Services\CarPaymentAllocationService::class)
+                ->removeEntry($car, (int) $request->index);
+        } catch (\InvalidArgumentException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        }
 
         return Response::json($car, 200);
     }

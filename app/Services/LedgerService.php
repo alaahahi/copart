@@ -28,8 +28,13 @@ class LedgerService
     public const CODE_CLIENT_QASA_IQD_PREFIX = '1220';
     public const CODE_REVENUE = '4100';
     public const CODE_EXPENSE = '5100';
+    /** Car purchase cost expense (child of 5100) — not general expenses */
+    public const CODE_CAR_PURCHASES = '5110';
     public const CODE_OPENING = '3900';
     public const CODE_TRADER_PROFITS = '3200';
+
+    /** @var array<int, true> */
+    private array $carPurchaseExpenseReclassified = [];
 
     /**
      * users column that means «هذا التاجر لديه قاصة» (عرض بالمحاسبة).
@@ -725,6 +730,8 @@ class LedgerService
     public function listExpenseCommissionAccounts(int $ownerId, string $currency = '$'): \Illuminate\Support\Collection
     {
         $this->ensureSystemAccounts($ownerId);
+        // Ensure مشتريات سيارات exists and pull mis-posted car costs off 5100.
+        $this->resolveCarPurchasesExpenseAccount($ownerId);
         $currency = $currency === 'IQD' ? 'IQD' : '$';
 
         $accounts = LedgerAccount::query()
@@ -832,6 +839,7 @@ class LedgerService
 
     /**
      * Route wallet decrease to the correct electronic accounts.
+     * Car purchase / dedicated purchases-vault outflows → مصروف مشتريات سيارات (not 5100).
      */
     public function postWalletDecrease(int $ownerId, int $userId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
     {
@@ -839,9 +847,185 @@ class LedgerService
 
         return match ($kind) {
             'client' => $this->postClientPayment($ownerId, $userId, $amount, $currency, $memo, $reference),
-            'cash_box' => $this->postCashDisbursement($ownerId, $amount, $currency, $memo, $reference, $userId),
+            'cash_box' => $this->postCashDisbursement(
+                $ownerId,
+                $amount,
+                $currency,
+                $memo,
+                $reference,
+                $userId,
+                $this->resolveExpenseAccountIdForCashDisbursement($ownerId, $userId, $reference, $memo)
+            ),
             default => $this->postSystemWalletDecrease($ownerId, $userId, $amount, $currency, $memo, $reference),
         };
+    }
+
+    /**
+     * Resolve expense COA for a cash-box disbursement.
+     * Car purchases (morph Car / purchases vault ≠ mainBox / purchase memo) → 5110 «مشتريات سيارات».
+     * Explicit null → caller/resolveExpenseAccount falls back to general 5100.
+     */
+    public function resolveExpenseAccountIdForCashDisbursement(
+        int $ownerId,
+        ?int $cashUserId,
+        $reference = null,
+        ?string $memo = null
+    ): ?int {
+        if (! $this->isCarPurchaseDisbursement($ownerId, $cashUserId, $reference, $memo)) {
+            return null;
+        }
+
+        return (int) $this->resolveCarPurchasesExpenseAccount($ownerId)->id;
+    }
+
+    /**
+     * Find or create the car-purchases expense account (prefer user-named مشتريات سيارات).
+     */
+    public function resolveCarPurchasesExpenseAccount(int $ownerId): LedgerAccount
+    {
+        $this->ensureSystemAccounts($ownerId);
+
+        $named = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('type', 'expense')
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('code', self::CODE_CAR_PURCHASES)
+                    ->orWhere('name_ar', 'مشتريات سيارات')
+                    ->orWhere('name_ar', 'like', '%مشتريات سيارات%')
+                    ->orWhere('name', 'like', '%Car Purchases%');
+            })
+            ->orderByRaw("CASE
+                WHEN name_ar = 'مشتريات سيارات' THEN 0
+                WHEN code = ? THEN 1
+                ELSE 2
+            END", [self::CODE_CAR_PURCHASES])
+            ->first();
+
+        if ($named) {
+            $this->reclassifyMispostedCarPurchaseExpenses($ownerId, $named);
+
+            return $named;
+        }
+
+        $parent = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+        $account = LedgerAccount::firstOrCreate(
+            ['owner_id' => $ownerId, 'code' => self::CODE_CAR_PURCHASES],
+            [
+                'name' => 'Car Purchases',
+                'name_ar' => 'مشتريات سيارات',
+                'type' => 'expense',
+                'currency' => null,
+                'parent_id' => $parent?->id,
+                'is_system' => true,
+                'is_active' => true,
+            ]
+        );
+
+        $this->reclassifyMispostedCarPurchaseExpenses($ownerId, $account);
+
+        return $account->fresh() ?? $account;
+    }
+
+    /**
+     * True when a cash outflow should hit car-purchases expense (not general 5100).
+     */
+    public function isCarPurchaseDisbursement(
+        int $ownerId,
+        ?int $cashUserId,
+        $reference = null,
+        ?string $memo = null
+    ): bool {
+        if ($reference instanceof Transactions) {
+            $morph = (string) ($reference->morphed_type ?? '');
+            if ($morph !== '' && (str_ends_with($morph, '\\Car') || $morph === 'App\\Models\\Car')) {
+                return true;
+            }
+            $memo = $memo ?: (string) ($reference->description ?? '');
+        }
+
+        $text = (string) ($memo ?? '');
+        if ($text !== '' && preg_match('/اضافة\s*سيارة\s*من\s*المشتريات|من\s*المشتريات\s*رقم\s*شانص/u', $text)) {
+            return true;
+        }
+
+        if ($cashUserId && $cashUserId > 0 && \Illuminate\Support\Facades\Schema::hasTable('vaults')) {
+            try {
+                $vaults = app(VaultService::class);
+                $purchasesVault = $vaults->resolvePurchasesVault($ownerId);
+                $purchasesUserId = (int) ($purchasesVault->legacy_user_id ?? 0);
+                $isMainBox = strcasecmp((string) $purchasesVault->code, 'mainBox') === 0;
+                // Only when a dedicated purchases vault (not الصندوق) pays the outflow.
+                if (! $isMainBox && $purchasesUserId > 0 && $purchasesUserId === (int) $cashUserId) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                // Vault config missing — fall through to general expense.
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Move car-purchase expense lines wrongly posted on 5100 onto مشتريات سيارات.
+     * Debit line only — journal stays balanced. Once per owner per request.
+     */
+    public function reclassifyMispostedCarPurchaseExpenses(int $ownerId, ?LedgerAccount $purchasesAccount = null): int
+    {
+        if (isset($this->carPurchaseExpenseReclassified[$ownerId])) {
+            return 0;
+        }
+        $this->carPurchaseExpenseReclassified[$ownerId] = true;
+
+        $general = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+        $purchases = $purchasesAccount ?? $this->resolveCarPurchasesExpenseAccount($ownerId);
+        if ((int) $general->id === (int) $purchases->id) {
+            return 0;
+        }
+
+        $lines = \App\Models\JournalLine::query()
+            ->where('ledger_account_id', $general->id)
+            ->where('debit', '>', 0)
+            ->whereHas('entry', function ($q) use ($ownerId) {
+                $q->where('owner_id', $ownerId);
+            })
+            ->with('entry:id,memo,reference_type,reference_id')
+            ->get();
+
+        $moved = 0;
+        foreach ($lines as $line) {
+            if (! $this->journalLineLooksLikeCarPurchase($line)) {
+                continue;
+            }
+            $line->forceFill(['ledger_account_id' => (int) $purchases->id])->save();
+            $moved++;
+        }
+
+        if ($moved > 0) {
+            Log::info('Reclassified car-purchase expenses from 5100', [
+                'owner_id' => $ownerId,
+                'from_account_id' => $general->id,
+                'to_account_id' => $purchases->id,
+                'lines' => $moved,
+            ]);
+        }
+
+        return $moved;
+    }
+
+    protected function journalLineLooksLikeCarPurchase(\App\Models\JournalLine $line): bool
+    {
+        // Memo-only: reference morph can be wrong/stale on legacy rows; avoid moving unrelated 5100 lines.
+        $memo = (string) ($line->memo ?: $line->entry?->memo ?? '');
+        if ($memo === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/اضافة\s*سيارة\s*من\s*المشتريات|من\s*المشتريات\s*رقم\s*شانص|مرتجع\s*حذف\s*سيارة|تكلفة\s*شراء|تسعير\s*سيارة/u',
+            $memo
+        );
     }
 
     /**

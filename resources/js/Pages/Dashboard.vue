@@ -20,6 +20,7 @@ function selectUser() {
 }
 
 const laravelData = ref([]);
+const merchantCredits = ref([]);
 let controller = new AbortController();
 const refreshing = ref(false);
 const refreshingOps = ref(false);
@@ -235,6 +236,9 @@ const getcountTotalInfo = async () => {
   if (!searchTerm.value && (userType.value == 1 || userType.value == 6)) {
     laravelData.value = Array.isArray(payload.merchantDebts)
       ? payload.merchantDebts
+      : [];
+    merchantCredits.value = Array.isArray(payload.merchantCredits)
+      ? payload.merchantCredits
       : [];
   }
 };
@@ -506,6 +510,12 @@ function changeColor(total) {
   return 'bg-amber-600 hover:bg-amber-500 dark:bg-amber-700 dark:hover:bg-amber-600';
 }
 
+/** Display prepaid credit as a positive USD amount (ledger AR is negative). */
+function creditDisplayAmount(balance) {
+  const n = typeof balance === 'number' ? balance : parseFloat(balance) || 0;
+  return updateResults(Math.abs(n));
+}
+
 function updateResults(input) {
   const n = typeof input === 'number' ? input : parseFloat(input) || 0;
   return formatMoney(n, '$');
@@ -696,6 +706,56 @@ function directionClass(direction) {
                 </h3>
                 <p class="mt-1 text-sm font-semibold tabular-nums text-white/95">
                   ${{ updateResults(user.balance) }}
+                </p>
+              </div>
+            </Link>
+          </div>
+        </section>
+
+        <!-- Trader prepaid / undistributed credit -->
+        <section class="mt-6 sm:mt-8">
+          <div class="mb-3 sm:mb-4">
+            <h2 class="text-base font-bold text-slate-900 dark:text-white sm:text-lg">
+              {{ $t('merchant_credits') }}
+            </h2>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+              {{ $t('merchant_credits_hint') }}
+            </p>
+          </div>
+
+          <div
+            v-if="!merchantCredits || !merchantCredits.length"
+            class="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-900/40"
+          >
+            <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
+              {{ $t('no_credits_to_show') }}
+            </p>
+          </div>
+
+          <div
+            v-else
+            class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 sm:gap-4"
+          >
+            <Link
+              v-for="(user, i) in merchantCredits"
+              :key="'credit-' + (user.id || i)"
+              :href="route('showClients', { id: user.id, q: searchTerm })"
+              class="group flex min-h-[72px] items-center gap-3 rounded-2xl bg-emerald-600 p-4 text-white shadow-sm transition duration-200 ease-out hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:bg-emerald-700 dark:hover:bg-emerald-600 dark:focus-visible:ring-offset-[#0b1220]"
+            >
+              <div
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition group-hover:bg-white/25"
+                aria-hidden="true"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="truncate text-sm font-bold leading-tight text-white sm:text-base">
+                  {{ user.name }}
+                </h3>
+                <p class="mt-1 text-sm font-semibold tabular-nums text-white/95">
+                  ${{ creditDisplayAmount(user.balance) }}
                 </p>
               </div>
             </Link>

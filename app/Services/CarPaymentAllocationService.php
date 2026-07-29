@@ -92,6 +92,39 @@ class CarPaymentAllocationService
     }
 
     /**
+     * Remove one allocation row by index and resync paid cache.
+     * Only from_balance / legacy rows — direct_payment must be undone via accounting.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function removeEntry(Car $car, int $index): Car
+    {
+        if (! Schema::hasColumn('car', 'payment_allocations')) {
+            throw new \InvalidArgumentException('عمود توزيع الدفعات غير متوفر.');
+        }
+
+        $list = $this->normalizeList($car->payment_allocations);
+        if ($index < 0 || $index >= count($list)) {
+            throw new \InvalidArgumentException('سجل التوزيع غير موجود.');
+        }
+
+        $source = (string) ($list[$index]['source'] ?? '');
+        if ($source === self::SOURCE_DIRECT) {
+            throw new \InvalidArgumentException(
+                'الدفعات المباشرة تُلغى من المحاسبة، وليس بإعادة للرصيد.'
+            );
+        }
+
+        if (! in_array($source, [self::SOURCE_FROM_BALANCE, self::SOURCE_LEGACY], true)) {
+            throw new \InvalidArgumentException('لا يمكن إرجاع هذا النوع من التوزيع للرصيد.');
+        }
+
+        array_splice($list, $index, 1);
+
+        return $this->persistAndSync($car, array_values($list));
+    }
+
+    /**
      * Clear all allocations (e.g. DelPayFromBalanceCar full reset).
      */
     public function clear(Car $car): Car
