@@ -2,9 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
 @include('Components.reportHead', ['pageTitle' => 'كشف حساب'])
+{{-- Dedicated print doc: landscape only for كشف حساب (other reports keep portrait @page) --}}
+<style>
+@page {
+    size: A4 landscape;
+    margin: 10mm 8mm;
+}
+</style>
 </head>
-<body class="erp-report">
-@include('Components.reportToolbar')
+<body class="erp-report erp-report--statement">
+@include('Components.reportToolbar', ['toolbarHint' => 'معاينة كشف الحساب — طباعة A4 أفقي (بالعرض)'])
 <div class="erp-report-page">
 @include('Components.reportHeader', ['title' => 'كشف حساب', 'config' => $config ?? null])
 
@@ -95,7 +102,7 @@
         </table>
     </div>
 
-@include('Components.reportFooter', ['config' => $config ?? null])
+@include('Components.reportFooter', ['config' => $config ?? null, 'pageSizeLabel' => 'A4 أفقي'])
 </div>
 </body>
 </html>

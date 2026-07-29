@@ -12,5 +12,5 @@
 @endphp
 <footer class="erp-report-footer" dir="rtl">
     <span class="erp-report-footer__company">{{ $footerCompany }}</span>
-    <span>صفحة للطباعة · A4</span>
+    <span>صفحة للطباعة · {{ $pageSizeLabel ?? 'A4' }}</span>
 </footer>
