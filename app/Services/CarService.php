@@ -97,6 +97,36 @@ class CarService
     }
 
     /**
+     * Free a VIN for re-create when only soft-deleted rows still hold it.
+     *
+     * Global UNIQUE on car.vin (and MySQL without partial unique) still
+     * blocks INSERT after DelCar / system reset. Validation already rejects
+     * a second *active* car; this purges soft-deleted duplicates for the
+     * same owner so the new insert can succeed on both SQLite and MySQL.
+     */
+    public function releaseSoftDeletedVin(string $vin, int $ownerId): void
+    {
+        $vin = trim($vin);
+        if ($vin === '') {
+            return;
+        }
+
+        $trashed = Car::onlyTrashed()
+            ->where('owner_id', $ownerId)
+            ->where('vin', $vin)
+            ->get();
+
+        foreach ($trashed as $car) {
+            $snapshot = $car->only(['id', 'no', 'vin', 'car_number', 'client_id', 'owner_id']);
+            $car->forceDelete();
+
+            Log::info('Soft-deleted car force-deleted to free VIN for reuse', array_merge($snapshot, [
+                'released_by' => Auth::id(),
+            ]));
+        }
+    }
+
+    /**
      * Renumber display sequence ("no") for non-deleted cars.
      * PHP-side loop works on both MySQL and SQLite — avoids MySQL-only
      * user variables (SET @row_number / @row_number := …) that SQLite rejects.

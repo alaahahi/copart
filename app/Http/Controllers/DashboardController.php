@@ -19,10 +19,12 @@ use App\Models\Transactions;
 use App\Helpers\UploadHelper;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\DeleteCarRequest;
+use App\Http\Requests\StoreCarRequest;
 use App\Models\Auction;
 use App\Services\CarService;
 use App\Services\DashboardActivityService;
 use App\Services\SystemWalletService;
+use App\Services\VaultService;
 use App\Services\ExchangeRateService;
 use App\Services\WeatherService;
 use App\Services\WhatsAppQueueService;
@@ -289,12 +291,21 @@ class DashboardController extends Controller
              ]);
              if($paid_amount){
                 $desc=trans('text.payCar').' '.$purchase_price.trans('text.payDone').$paid_amount;
-             
-                $this->accountingController->decreaseWallet($paid_amount, $desc,$this->mainAccount->id,$car->id,'App\Models\Car');
-                $this->accountingController->increaseWallet($paid_amount, $desc,$this->outAccount->id,$car->id,'App\Models\Car' );
-                $this->accountingController->increaseWallet($paid_amount, $desc,$this->outSupplier->id,$car->id,'App\Models\Car');
+                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+                $this->accountingController->decreaseWallet($paid_amount, $desc,$cashUserId,$car->id,'App\Models\Car');
+                $outAccount = $this->outAccount->where('owner_id', $owner_id)->first();
+                $outSupplier = $this->outSupplier->where('owner_id', $owner_id)->first();
+                if ($outAccount) {
+                    $this->accountingController->increaseWallet($paid_amount, $desc,$outAccount->id,$car->id,'App\Models\Car' );
+                }
+                if ($outSupplier) {
+                    $this->accountingController->increaseWallet($paid_amount, $desc,$outSupplier->id,$car->id,'App\Models\Car');
+                }
                 if($debt_price){
-                   $this->accountingController->increaseWallet($debt_price, $desc,$this->debtSupplier->id,$car->id,'App\Models\Car');
+                   $debtSupplier = $this->debtSupplier->where('owner_id', $owner_id)->first();
+                   if ($debtSupplier) {
+                       $this->accountingController->increaseWallet($debt_price, $desc,$debtSupplier->id,$car->id,'App\Models\Car');
+                   }
                 }
              }
  
@@ -304,20 +315,46 @@ class DashboardController extends Controller
             if($purchase_price > $purchase_price_old){
                 $purchase_price_new = $purchase_price - $purchase_price_old;
                 $desc=trans('text.editCar').' '.trans('text.from').$purchase_price_old.trans('text.to').$purchase_price;
-                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$this->mainAccount->id,$car->id,'App\Models\Car');
-                $this->accountingController->increaseWallet($purchase_price_new, $desc,$this->outAccount->id,$car->id,'App\Models\Car' );
-                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$this->inAccount->id,$car->id,'App\Models\Car');
-                $this->accountingController->increaseWallet($purchase_price_new, $desc,$this->outSupplier->id,$car->id,'App\Models\Car');
-                $this->accountingController->increaseWallet($purchase_price_new, $desc,$this->debtSupplier->id,$car->id,'App\Models\Car');
+                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$cashUserId,$car->id,'App\Models\Car');
+                $outAccount = $this->outAccount->where('owner_id', $owner_id)->first();
+                $inAccount = $this->inAccount->where('owner_id', $owner_id)->first();
+                $outSupplier = $this->outSupplier->where('owner_id', $owner_id)->first();
+                $debtSupplier = $this->debtSupplier->where('owner_id', $owner_id)->first();
+                if ($outAccount) {
+                    $this->accountingController->increaseWallet($purchase_price_new, $desc,$outAccount->id,$car->id,'App\Models\Car' );
+                }
+                if ($inAccount) {
+                    $this->accountingController->decreaseWallet($purchase_price_new, $desc,$inAccount->id,$car->id,'App\Models\Car');
+                }
+                if ($outSupplier) {
+                    $this->accountingController->increaseWallet($purchase_price_new, $desc,$outSupplier->id,$car->id,'App\Models\Car');
+                }
+                if ($debtSupplier) {
+                    $this->accountingController->increaseWallet($purchase_price_new, $desc,$debtSupplier->id,$car->id,'App\Models\Car');
+                }
             }
             if($purchase_price < $purchase_price_old){
                 $purchase_price_new =$purchase_price_old - $purchase_price;
                 $desc=trans('text.editCar').' '.trans('text.from').$purchase_price_old.trans('text.to').$purchase_price;
-                $this->accountingController->increaseWallet($purchase_price_new, $desc,$this->mainAccount->id,$car->id,'App\Models\Car');
-                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$this->outAccount->id,$car->id,'App\Models\Car' );
-                $this->accountingController->increaseWallet($purchase_price_new, $desc,$this->inAccount->id,$car->id,'App\Models\Car');
-                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$this->outSupplier->id,$car->id,'App\Models\Car');
-                $this->accountingController->decreaseWallet($purchase_price_new, $desc,$this->debtSupplier->id,$car->id,'App\Models\Car');
+                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+                $this->accountingController->increaseWallet($purchase_price_new, $desc,$cashUserId,$car->id,'App\Models\Car');
+                $outAccount = $this->outAccount->where('owner_id', $owner_id)->first();
+                $inAccount = $this->inAccount->where('owner_id', $owner_id)->first();
+                $outSupplier = $this->outSupplier->where('owner_id', $owner_id)->first();
+                $debtSupplier = $this->debtSupplier->where('owner_id', $owner_id)->first();
+                if ($outAccount) {
+                    $this->accountingController->decreaseWallet($purchase_price_new, $desc,$outAccount->id,$car->id,'App\Models\Car' );
+                }
+                if ($inAccount) {
+                    $this->accountingController->increaseWallet($purchase_price_new, $desc,$inAccount->id,$car->id,'App\Models\Car');
+                }
+                if ($outSupplier) {
+                    $this->accountingController->decreaseWallet($purchase_price_new, $desc,$outSupplier->id,$car->id,'App\Models\Car');
+                }
+                if ($debtSupplier) {
+                    $this->accountingController->decreaseWallet($purchase_price_new, $desc,$debtSupplier->id,$car->id,'App\Models\Car');
+                }
 
             }
             $car->update([
@@ -337,7 +374,7 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function addCars(Request $request, CarService $carService)
+    public function addCars(StoreCarRequest $request, CarService $carService)
     {
         $owner_id=Auth::user()->owner_id;
         $year_date=Carbon::now()->format('Y');
@@ -380,6 +417,24 @@ class DashboardController extends Controller
             $client->save();
             $client_id=$client->id;
         }
+
+        // Soft-deleted row with same VIN still hits UNIQUE on SQLite/MySQL —
+        // purge it after validation confirmed no *active* duplicate.
+        $carService->releaseSoftDeletedVin((string) $request->vin, (int) $owner_id);
+
+        // Resolve cash box before insert so a missing vault fails cleanly (no orphan car).
+        $cashUserId = null;
+        if ($total_amount) {
+            try {
+                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+            } catch (\Throwable $e) {
+                return Response::json([
+                    'message' => 'حساب الصندوق الرئيسي غير موجود — لا يمكن تسجيل تكلفة السيارة.',
+                    'errors' => ['total' => ['حساب الصندوق الرئيسي غير موجود']],
+                ], 422);
+            }
+        }
+
         $car=Car::create([
             'note'=> $request->note??'',
             'no'=>$no,
@@ -410,11 +465,11 @@ class DashboardController extends Controller
             // No sale pricing yet — do not store purchase cost as negative "profit".
             'profit'=> $carService->computeProfit(0, $total_amount),
              ]);
-                if($total_amount){
+                if($total_amount && $cashUserId){
                     $desc='اضافة سيارة من المشتريات رقم شانصى '.$request->vin;
-                    if($total_amount){
-                        $this->accountingController->decreaseWallet(($total_amount),$desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
-                    }
+                    // After vaults migration, optional الخزينة (main@account.com) may be null —
+                    // post purchase cost against receipts/mainBox cash user instead.
+                    $this->accountingController->decreaseWallet(($total_amount),$desc,$cashUserId,$car->id,'App\Models\Car');
                 }
 
         $carId = (int) $car->id;
@@ -502,12 +557,13 @@ class DashboardController extends Controller
             );
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
+            $cashUserId = $this->resolveCashUserId((int) $owner_id);
             if($total >$car->total){
                 $descClient = trans('text.addExpenses').' '.($total-$car->total).' '.trans('text.for_car').$car->car_type.' '.$car->vin;
-                $this->accountingController->decreaseWallet(($total-$car->total), $descClient,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
+                $this->accountingController->decreaseWallet(($total-$car->total), $descClient,$cashUserId,$car->id,'App\Models\Car');
             }else{
                 $descClient = 'مرتجع للصندوق مصاريف';
-                $this->accountingController->increaseWallet(($car->total-$total), $descClient,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
+                $this->accountingController->increaseWallet(($car->total-$total), $descClient,$cashUserId,$car->id,'App\Models\Car');
 
             }
             // Payment color uses sales remaining (total_s), not purchase total.
@@ -614,12 +670,19 @@ class DashboardController extends Controller
                 'results'=>1
                  ]);
                 $desc=trans('text.buyCar').' '.$car->pay_price.trans('text.payDone').$car->paid_amount_pay;
-                $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$car->id,'App\Models\Car');
-                $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$this->inAccount->id,$car->id,'App\Models\Car');
+                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+                $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$cashUserId,$car->id,'App\Models\Car');
+                $inAccount = $this->inAccount->where('owner_id', $owner_id)->first();
+                if ($inAccount) {
+                    $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$inAccount->id,$car->id,'App\Models\Car');
+                }
                 if($clientDebt != 0){
                     // Client AR from ledger (wallet is cache only)
                     $this->accountingController->increaseWallet($clientDebt, $desc, $client_id, $car->id, 'App\Models\Car');
-                    $this->accountingController->increaseWallet($clientDebt, $desc,$this->debtAccount->id,$car->id,'App\Models\Car');
+                    $debtAccount = $this->debtAccount->where('owner_id', $owner_id)->first();
+                    if ($debtAccount) {
+                        $this->accountingController->increaseWallet($clientDebt, $desc,$debtAccount->id,$car->id,'App\Models\Car');
+                    }
                 }
                 if($pay_price==$paid_amount_pay){
                     $car->increment('results'); 
@@ -774,12 +837,13 @@ class DashboardController extends Controller
 
         $this->authorize('delete', $car);
 
-        $mainAccount = $this->mainAccount->where('owner_id', $owner_id)->first();
-        if (!$mainAccount) {
+        try {
+            $cashUserId = $this->resolveCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
             return Response::json(['message' => 'حساب الصندوق الرئيسي غير موجود — لا يمكن حذف السيارة بأمان.'], 422);
         }
 
-        DB::transaction(function () use ($car, $owner_id, $carService, $mainAccount) {
+        DB::transaction(function () use ($car, $owner_id, $carService, $cashUserId) {
             // Opposite wallet/ledger entries (never hard-delete journals).
             // Soft-deleted cars are excluded from profit/AR via SoftDeletes.
             $desc = 'مرتجع حذف سيارة #' . $car->id . ' | تكلفة ' . (int) $car->total;
@@ -789,7 +853,7 @@ class DashboardController extends Controller
                 $this->accountingController->increaseWallet(
                     $purchaseTotal,
                     $desc,
-                    $mainAccount->id,
+                    $cashUserId,
                     $car->id,
                     'App\Models\Car'
                 );
@@ -818,6 +882,22 @@ class DashboardController extends Controller
         });
 
         return Response::json('delete is done', 200);
+    }
+
+    /**
+     * Cash box user for car purchase/expense postings after vaults migration.
+     * Prefer receipts vault (mainBox); never call mainAccount()->id without a null check.
+     */
+    private function resolveCashUserId(int $ownerId): int
+    {
+        $vaults = app(VaultService::class);
+        try {
+            $vaults->ensureMainBoxVault($ownerId);
+
+            return $vaults->receiptsCashUserId($ownerId);
+        } catch (\Throwable $e) {
+            return (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
+        }
     }
 
 }

@@ -254,7 +254,18 @@ function confirmCar(V) {
       showModalCar.value = false;
       refresh();
     })
-    .catch((error) => console.error(error));
+    .catch((error) => {
+      const msg =
+        error?.response?.data?.errors?.vin?.[0] ||
+        error?.response?.data?.message ||
+        'تعذر إضافة السيارة';
+      toast.error(msg, {
+        timeout: 4000,
+        position: 'bottom-right',
+        rtl: true,
+      });
+      console.error(error);
+    });
 }
 
 function confirmUpdateCar(V) {

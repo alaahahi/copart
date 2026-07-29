@@ -147,7 +147,7 @@ return new class extends Migration
                 $table->integer('client_id')->nullable();
                 $table->text('note')->nullable();
                 $table->string('car_type')->nullable();
-                $table->string('vin')->nullable()->unique();
+                $table->string('vin')->nullable();
                 $table->integer('car_number')->nullable();
                 $table->double('dinar')->nullable()->default(0);
                 $table->double('dolar_price')->nullable()->default(0);
