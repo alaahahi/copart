@@ -2,80 +2,104 @@
 
 namespace App\Exports;
 
-use App\Models\Car; // Adjust the namespace as per your application structure
+use App\Models\Car;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 
-
+/**
+ * Client / trader account statement (كشف حساب الزبون) Excel export.
+ * Column labels and order match Clients/Show cars table (Arabic $t keys).
+ */
 class ExportInfo implements FromCollection, WithHeadings
 {
     protected $clientId;
+
     protected $showComplatedCars;
-    
-    public function __construct($clientId,$showComplatedCars)
+
+    protected $from;
+
+    protected $to;
+
+    public function __construct($clientId = null, $showComplatedCars = 0, $from = null, $to = null)
     {
         $this->clientId = $clientId;
-        $this->showComplatedCars=$showComplatedCars;
+        $this->showComplatedCars = $showComplatedCars;
+        $this->from = $from;
+        $this->to = $to;
     }
-
 
     public function collection()
     {
-        
-        // Fetch data from the database using the Car model
-        if($this->showComplatedCars){
-            $cars = Car::where('client_id', $this->clientId)->whereIn('results', [0,1])->
-            select([
-                'car_type',
-                'vin',
-                'car_number',
-                'car_color',
-                'dinar_s',
-                'dolar_price_s',
-                'shipping_dolar_s',
-                'coc_dolar_s',
-                'checkout_s',
-                'expenses_s',
-                'total_s',
-                'discount',
-                'paid',
-                'date',
-                'note',
-                'results'
-            ])->get();
-        }else{
-            $cars = Car::where('client_id', $this->clientId)->
-            select([
-                'car_type',
-                'vin',
-                'car_number',
-                'car_color',
-                'dinar_s',
-                'dolar_price_s',
-                'shipping_dolar_s',
-                'coc_dolar_s',
-                'checkout_s',
-                'expenses_s',
-                'total_s',
-                'discount',
-                'paid',
-                'date',
-                'note',
-                'results'
-            ])->get();
-        }
-     
-
-        // Transform the fetched data into a collection
         $collection = new Collection();
-        foreach ($cars as $car) {
-            $car['results'] = $this->formatResults($car['results']);
-            $dolarPrice = (float) ($car['dolar_price_s'] ?? 0);
-            $car['resultsdinar'] = $dolarPrice != 0
-                ? (int) (($car['dinar_s'] ?? 0) / ($dolarPrice / 100))
-                : 0;
-            $collection->push($car->toArray());
+
+        if (!$this->clientId) {
+            return $collection;
+        }
+
+        $query = Car::where('client_id', $this->clientId)->select([
+            'car_type',
+            'year',
+            'car_color',
+            'vin',
+            'car_number',
+            'note',
+            'shipping_dolar_s',
+            'dinar_s',
+            'coc_dolar_s',
+            'checkout_s',
+            'expenses_s',
+            'erbil_clearance_s',
+            'erbil_transfer_s',
+            'erbil_border_repair_s',
+            'erbil_customs_s',
+            'commission_s',
+            'total_s',
+            'paid',
+            'discount',
+            'date',
+            'results',
+        ]);
+
+        // Match Clients/Show filter_completed_cars: hide closed (results=2) cars.
+        if ($this->showComplatedCars) {
+            $query->where('results', '!=', 2);
+        }
+
+        if ($this->from && $this->to) {
+            $query->whereBetween('date', [$this->from, $this->to]);
+        }
+
+        $seqNo = 1;
+        foreach ($query->orderBy('date')->orderBy('id')->get() as $car) {
+            $attrs = $car->getAttributes();
+            $total = (float) ($car->total_s ?? 0);
+            $paid = (float) ($car->paid ?? 0);
+            $discount = (float) ($car->discount ?? 0);
+            // Same as UI carRemaining(): total_s − paid − discount
+            $remaining = $total - $paid - $discount;
+
+            $collection->push([
+                $seqNo,
+                $car->car_type ?? '',
+                $car->year ?? '',
+                $car->car_color ?? '',
+                $car->vin ?? '',
+                $car->car_number ?? '',
+                $car->note ?? '',
+                (float) ($car->shipping_dolar_s ?? 0),
+                (float) ($car->dinar_s ?? 0),
+                (float) ($car->coc_dolar_s ?? 0),
+                (float) ($car->checkout_s ?? 0),
+                (float) Car::erbilTransferSubtotal($attrs, true),
+                (float) ($car->commission_s ?? 0),
+                $total,
+                $paid,
+                $remaining,
+                $car->date ?? '',
+            ]);
+
+            $seqNo++;
         }
 
         return $collection;
@@ -83,38 +107,25 @@ class ExportInfo implements FromCollection, WithHeadings
 
     public function headings(): array
     {
+        // Labels aligned with resources/js/lang/ar.json keys used on Clients/Show.
         return [
-            'السيارة',
-            'الشانصى',
-            'رقم كاتي',
-            'اللون',
-            'كمرك بالدينار',
-            'سعر الصرف',
-            'الشحن',
-            'الشهادة',
-            'الخروجية',
-            'المصاريف',
-            'المجموع',
-            'الخصم',
-            'المدفوع',
-            'تاريخ الدخول',
-            'ملاحظة',
-            'الحالة',
-            'كمرك بالدولار'
-           
+            'رقم',                  // no
+            'السيارة',              // car_type
+            'السنة',                // year
+            'اللون',                // color
+            'رقم الشاصي',           // vin
+            'رقم اللوت',            // car_number
+            'ملاحظة',               // note
+            'سعر السيارة أمريكا',   // car_price_usa
+            'نقل أمريكا',           // transfer_usa
+            'ريكفري',               // recovery
+            'مصاريف تصليح',         // repair_expenses
+            'نقل أربيل',            // transfer_erbil
+            'مصاريف أربيل',         // erbil_expenses
+            'الإجمالي',             // total
+            'المدفوع',              // paid
+            'المتبقي',              // remaining (total_s − paid − discount)
+            'بتاريخ',               // date
         ];
-    }
-
-    private function formatResults($value)
-    {
-        switch ($value) {
-            case 0:
-                return 'غير مدفوع';
-            case 1:
-            case 2:
-                return 'مدفوع';
-            default:
-                return '';
-        }
     }
 }

@@ -886,7 +886,10 @@ class AccountingController extends Controller
             $config = $this->resolveSystemConfig();
 
             if($printExcel){
-                return Excel::download(new ExportInfo($user_id,$showComplatedCars), ($client->name ?? 'client').'.xlsx');
+                return Excel::download(
+                    new ExportInfo($user_id, $showComplatedCars, $from ?: null, $to ?: null),
+                    ($client->name ?? 'client').'.xlsx'
+                );
             }else{
                 return view('show',compact('clientData','config'));
             }
