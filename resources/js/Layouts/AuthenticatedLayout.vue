@@ -64,7 +64,7 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
 
 <template>
   <div>
-    <div class="min-h-screen bg-slate-100 text-slate-900 dark:bg-[#0b1220] dark:text-slate-100">
+    <div class="min-h-screen bg-slate-100 text-slate-900 dark:bg-[#0b1220] dark:text-slate-100 print:bg-white print:text-slate-900">
       <nav class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:border-slate-800 dark:bg-slate-900/95 print:hidden">
         <div class="max-w-8xl mx-auto px-4 sm:px-4 lg:px-6">
           <div class="flex min-h-[72px] items-center justify-between gap-4">
@@ -317,7 +317,7 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
         </div>
       </header>
 
-      <main class="min-h-[calc(100vh-4.5rem)] bg-slate-100 dark:bg-[#0b1220]">
+      <main class="min-h-[calc(100vh-4.5rem)] bg-slate-100 dark:bg-[#0b1220] print:bg-white">
         <slot />
       </main>
     </div>

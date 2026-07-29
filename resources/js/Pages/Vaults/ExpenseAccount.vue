@@ -400,6 +400,9 @@ function printLedger() {
     margin: 12mm 10mm;
   }
 
+  /* Force light tokens even when html has .dark (dark: utilities + :global(.dark) vars) */
+  :global(.dark) .exp-page,
+  .dark .exp-page,
   .exp-page {
     --c-bg: #ffffff;
     --c-border: #cbd5e1;
@@ -407,23 +410,40 @@ function printLedger() {
     --c-text: #0f172a;
     --c-muted: #475569;
     padding: 0 !important;
-    background: #fff !important;
+    background: #ffffff !important;
     color: #0f172a !important;
   }
 
   .exp-card {
+    background: #ffffff !important;
+    color: #0f172a !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     overflow: visible !important;
   }
 
-  .exp-kpi {
-    background: #fff !important;
-    border-color: #94a3b8 !important;
-    break-inside: avoid;
+  .exp-page h1,
+  .exp-page p,
+  .exp-print-meta,
+  .exp-code,
+  .exp-kpi-label {
+    color: #0f172a !important;
   }
 
+  .exp-kpi-label {
+    color: #475569 !important;
+  }
+
+  .exp-kpi {
+    background: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .dark .exp-kpi-value,
   .exp-kpi-value {
     color: #047857 !important;
   }
@@ -432,21 +452,37 @@ function printLedger() {
     color: #334155 !important;
   }
 
+  .exp-table {
+    color: #0f172a !important;
+  }
+
   .exp-table thead th {
     background: #e2e8f0 !important;
     color: #0f172a !important;
+    border-bottom: 1px solid #94a3b8 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   .exp-table tbody td,
   .exp-table tfoot td {
+    background: #ffffff !important;
     color: #0f172a !important;
+    border-bottom-color: #cbd5e1 !important;
+  }
+
+  .exp-table tfoot td {
+    background: #f1f5f9 !important;
+    border-top: 2px solid #64748b !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .exp-table-wrap {
     overflow: visible !important;
-    border-color: #94a3b8 !important;
+    border: 1px solid #94a3b8 !important;
+    background: #ffffff !important;
   }
 }
 </style>
