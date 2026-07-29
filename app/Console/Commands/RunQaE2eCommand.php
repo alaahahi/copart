@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 class RunQaE2eCommand extends Command
 {
     protected $signature = 'qa:e2e
-                            {--suite=accounting : accounting|system-core|system-accounting|system-admin|system|health|all}';
+                            {--suite=accounting : accounting|car-flow|system-core|system-accounting|system-admin|system|health|all}';
 
     protected $description = 'Run Playwright e2e suites (system/all run chunks sequentially) and store last result for the QA Blade page';
 

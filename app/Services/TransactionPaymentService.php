@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Schema;
 class TransactionPaymentService
 {
     public function __construct(
-        protected LedgerService $ledger
+        protected LedgerService $ledger,
+        protected CarPaymentAllocationService $allocations
     ) {
     }
 
@@ -99,7 +100,7 @@ class TransactionPaymentService
     }
 
     /**
-     * When deleting a payment that was applied to a car, undo car.paid / discount.
+     * When deleting a payment that was applied to a car, undo JSON allocation + discount.
      */
     public function reverseCarPaymentAllocation(Transactions $transaction): void
     {
@@ -109,6 +110,18 @@ class TransactionPaymentService
         }
 
         [$car, $paidPart, $discPart] = $parts;
+
+        if (Schema::hasColumn('car', 'payment_allocations')) {
+            $this->allocations->removeByTransactionId($car, (int) $transaction->id);
+            $car = $car->fresh() ?? $car;
+            if ($discPart > 0) {
+                $car->discount = max(0, (float) $car->discount - $discPart);
+                $this->syncCarResults($car);
+                $car->save();
+            }
+
+            return;
+        }
 
         if ($paidPart > 0) {
             $car->paid = max(0, (float) $car->paid - $paidPart);
@@ -122,7 +135,7 @@ class TransactionPaymentService
     }
 
     /**
-     * Re-apply car.paid / discount after restoring a soft-deleted payment.
+     * Re-apply car allocation after restoring a soft-deleted payment.
      */
     public function applyCarPaymentAllocation(Transactions $transaction): void
     {
@@ -132,6 +145,22 @@ class TransactionPaymentService
         }
 
         [$car, $paidPart, $discPart] = $parts;
+
+        if (Schema::hasColumn('car', 'payment_allocations')) {
+            if ($discPart > 0) {
+                $car->increment('discount', $discPart);
+                $car = $car->fresh() ?? $car;
+            }
+            $this->allocations->append($car, [
+                'source' => CarPaymentAllocationService::SOURCE_DIRECT,
+                'transaction_id' => (int) $transaction->id,
+                'amount' => $paidPart,
+                'discount' => $discPart,
+                'currency' => (string) ($transaction->currency ?? '$'),
+            ]);
+
+            return;
+        }
 
         if ($paidPart > 0) {
             $car->paid = (float) $car->paid + $paidPart;

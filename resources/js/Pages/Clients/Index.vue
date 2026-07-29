@@ -174,8 +174,9 @@ async function toggleShowInDashboardQuick(user) {
   }
 }
 
+/** Display-only × −1 (accounting: + owes, − credit → UI: credit positive). */
 function formatBalance(balance) {
-  return `${formatMoney(balance, "$")} $`;
+  return `${formatMoney(Number(balance) * -1, "$")} $`;
 }
 
 function unpaidCars(user) {

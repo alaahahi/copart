@@ -38,6 +38,7 @@ use App\Services\SystemWalletService;
 use App\Services\TransactionPaymentService;
 use App\Services\VaultService;
 use App\Models\Vault;
+use App\Models\LedgerAccount;
 use Illuminate\Support\Facades\Schema;
 use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
@@ -124,6 +125,16 @@ class AccountingController extends Controller
         $flaggedWallets = app(VaultService::class)->accountingShortcutUsers((int) $owner_id);
         $this->attachLedgerBalancesToUsers($flaggedWallets, (int) $owner_id);
 
+        // اختصارات مصاريف/عمولات = حسابات COA (ليست قاصات نقدية)
+        $ledger = app(LedgerService::class);
+        $ledger->ensureSystemAccounts((int) $owner_id);
+        $expenseShortcuts = $ledger->listExpenseCommissionAccounts((int) $owner_id);
+        $expenseParentId = LedgerAccount::query()
+            ->where('owner_id', (int) $owner_id)
+            ->where('code', LedgerService::CODE_EXPENSE)
+            ->where('is_active', true)
+            ->value('id');
+
         // إسناد السحب إلى قاصة → قائمة القاصات فقط (legacy_user_id للتوافق مع API)
         $vaultService = app(VaultService::class);
         $mainBoxId = (int) ($boxes->first()?->id ?? 0);
@@ -147,6 +158,10 @@ class AccountingController extends Controller
             'accounts'=>$this->accounting->mainAccount(),
             'flaggedWallets'=>$flaggedWallets,
             'walletUsers'=>$walletUsers,
+            'expenseShortcuts'=>$expenseShortcuts,
+            'suggestExpenseCode'=>$ledger->suggestExpenseAccountCode((int) $owner_id, 'expense'),
+            'suggestCommissionCode'=>$ledger->suggestExpenseAccountCode((int) $owner_id, 'commission'),
+            'expenseParentId'=>$expenseParentId !== null ? (int) $expenseParentId : null,
         ]);
     }
     public function wallet(Request $request)
@@ -903,7 +918,7 @@ class AccountingController extends Controller
                 'cars_sum'=> $car->total_s,
                 'cars_paid'=> $car->paid,
                 'cars_discount'=>$car->discount,
-                'cars_need_paid'=>$car->total_s - $car->paid,
+                'cars_need_paid'=>$car->total_s - $car->paid - $car->discount,
                 'payments_sum_dollar'=>$payments_sum_dollar,
                 'client_balance'=>$client_balance,
                 'transactions'=>$this->attachMoneyAccounts($transactions->get()),
@@ -1058,14 +1073,20 @@ class AccountingController extends Controller
 
         $transaction = $this->decreaseWallet($amount + $discount, $desc, $car->client_id, $car_id, 'App\Models\Car', 1, $discount ?? 0, '$', $this->currentDate, $tran->id, 'out', $details);
 
-        $car->increment('paid',$amount);
-        if($discount ?? 0){
-            $car->increment('discount',$discount);
+        if ($discount ?? 0) {
+            $car->increment('discount', $discount);
+            $car = $car->fresh() ?? $car;
         }
 
-        if((($car->paid)+($car->discount))-$car->total_s < 0 && $amount){
-            $car->update(['results'=>1]);
-        }
+        // JSON reference + paid cache (journals remain the accounting source of truth).
+        app(\App\Services\CarPaymentAllocationService::class)->append($car, [
+            'source' => \App\Services\CarPaymentAllocationService::SOURCE_DIRECT,
+            'transaction_id' => (int) ($transaction->id ?? $tran->id),
+            'amount' => (float) $amount,
+            'discount' => (float) ($discount ?? 0),
+            'currency' => '$',
+            'note' => $note !== '' ? (string) $note : null,
+        ]);
 
         try {
             $client = User::find($car->client_id);
@@ -1167,22 +1188,25 @@ class AccountingController extends Controller
             return Response::json($car, 200);
         }
 
-        $newPaid = (float) $car->paid + $toApply;
-        $updates = ['paid' => $newPaid];
-        if ($newPaid + (float) $car->discount < (float) $car->total_s) {
-            $updates['results'] = 1;
-        }
-        $car->update($updates);
+        // No new journal — parent client payment already posted; JSON is operational reference only.
+        $car = app(\App\Services\CarPaymentAllocationService::class)->append($car, [
+            'source' => \App\Services\CarPaymentAllocationService::SOURCE_FROM_BALANCE,
+            'transaction_id' => null,
+            'amount' => $toApply,
+            'discount' => 0,
+            'currency' => '$',
+            'note' => 'توزيع من رصيد الزبون',
+        ]);
 
-        return Response::json($car->fresh(), 200);
+        return Response::json($car, 200);
     }
 
     public function DelPayFromBalanceCar (Request $request){
-        $car_id = $request->id;
-        $car = Car::find($car_id);
-        $car->update(['paid' => 0 ,'results' =>0]);
-        return Response::json($car, 200);    
+        $car = Car::findOrFail($request->id);
+        // Clears paid cache + allocation trail (return to undistributed client balance).
+        $car = app(\App\Services\CarPaymentAllocationService::class)->clear($car);
 
+        return Response::json($car, 200);
     }
     
     public function convertDollarDinar(Request $request){

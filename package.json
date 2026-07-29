@@ -9,7 +9,8 @@
         "test:e2e:health": "playwright test --grep \"@system-core|@system-accounting|@system-admin|@system|@health|@setup\"",
         "test:e2e:system:core": "playwright test --grep \"@system-core|@setup\"",
         "test:e2e:system:accounting": "playwright test --grep \"@system-accounting|@setup\"",
-        "test:e2e:system:admin": "playwright test --grep \"@system-admin|@setup\""
+        "test:e2e:system:admin": "playwright test --grep \"@system-admin|@setup\"",
+        "test:e2e:car-flow": "playwright test --grep \"@car-flow|@setup\""
     },
     "devDependencies": {
         "@babel/plugin-syntax-dynamic-import": "^7.8.3",

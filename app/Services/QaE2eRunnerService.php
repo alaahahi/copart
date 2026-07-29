@@ -18,6 +18,8 @@ class QaE2eRunnerService
 {
     public const SUITE_ACCOUNTING = 'accounting';
 
+    public const SUITE_CAR_FLOW = 'car-flow';
+
     public const SUITE_SYSTEM_CORE = 'system-core';
 
     public const SUITE_SYSTEM_ACCOUNTING = 'system-accounting';
@@ -34,6 +36,7 @@ class QaE2eRunnerService
     /** @var list<string> */
     public const ALLOWED_SUITES = [
         self::SUITE_ACCOUNTING,
+        self::SUITE_CAR_FLOW,
         self::SUITE_SYSTEM_CORE,
         self::SUITE_SYSTEM_ACCOUNTING,
         self::SUITE_SYSTEM_ADMIN,
@@ -387,6 +390,7 @@ class QaE2eRunnerService
         // Include @setup so storageState is created when --grep filters other projects.
         $grep = match ($suite) {
             self::SUITE_ACCOUNTING => '@accounting|@setup',
+            self::SUITE_CAR_FLOW => '@car-flow|@setup',
             self::SUITE_SYSTEM_CORE => '@system-core|@setup',
             self::SUITE_SYSTEM_ACCOUNTING => '@system-accounting|@setup',
             self::SUITE_SYSTEM_ADMIN => '@system-admin|@setup',

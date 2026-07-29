@@ -96,6 +96,7 @@
     <div class="toolbar">
         <span class="group-label">محاسبة (سلامة القيود)</span>
         <button type="button" class="primary" id="btn-accounting" data-suite="accounting">تشغيل اختبارات المحاسبة</button>
+        <button type="button" id="btn-car-flow" data-suite="car-flow">دورة حياة السيارة</button>
 
         <span class="group-label">فحص النظام (مجزّأ)</span>
         <button type="button" id="btn-system-core" data-suite="system-core">فحص أساسي</button>
@@ -161,6 +162,7 @@
 
     const suiteLabels = {
         accounting: 'تشغيل اختبارات المحاسبة…',
+        'car-flow': 'دورة حياة السيارة (مشتريات → بيع → دفع)…',
         'system-core': 'فحص أساسي…',
         'system-accounting': 'فحص صفحات المحاسبة…',
         'system-admin': 'فحص الإدارة…',

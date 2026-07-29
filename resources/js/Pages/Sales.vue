@@ -371,7 +371,7 @@ function rowClass(row) {
                     <td class="px-1 py-2 font-semibold tabular-nums">{{ money(row.total_s) }}</td>
                     <td class="px-1 py-2 tabular-nums text-emerald-700 dark:text-emerald-300">{{ money(row.paid) }}</td>
                     <td class="px-1 py-2 tabular-nums text-amber-700 dark:text-amber-300">
-                      {{ money(asNumber(row.total_s) - asNumber(row.paid)) }}
+                      {{ money(asNumber(row.total_s) - asNumber(row.paid) - asNumber(row.discount)) }}
                     </td>
                     <td class="px-1 py-2 whitespace-nowrap">{{ row.date }}</td>
                     <td class="max-w-[140px] truncate px-1 py-2" :title="row.note">{{ row.note }}</td>

@@ -43,6 +43,7 @@ class SystemConfig extends Model
         'wa_notify_car_created',
         'wa_notify_payment',
         'default_receipts_vault_id',
+        'default_purchases_vault_id',
     ];
 
     protected $casts = [
@@ -51,5 +52,6 @@ class SystemConfig extends Model
         'wa_notify_car_created' => 'boolean',
         'wa_notify_payment' => 'boolean',
         'default_receipts_vault_id' => 'integer',
+        'default_purchases_vault_id' => 'integer',
     ];
 }

@@ -219,17 +219,17 @@ function formatBalance(balance) {
 
 function vaultTypeLabel(type) {
   const map = {
-    cash: 'نقد',
-    bank: 'بنك',
-    safe: 'خزنة',
-    system: 'نظام',
+    cash: 'vault_type_cash',
+    bank: 'vault_type_bank',
+    safe: 'vault_type_safe',
+    system: 'vault_type_system',
   };
-  return map[type] || type || '—';
+  return map[type] || null;
 }
 
-function accountKindLabel(row) {
-  if (row.kind === 'commission' || row.type === 'income') return 'عمولة';
-  return 'مصروف';
+function accountKindKey(row) {
+  if (row.kind === 'commission' || row.type === 'income') return 'commission_kind';
+  return 'expense_kind';
 }
 
 function walletUserId(row) {
@@ -280,7 +280,7 @@ function walletUserId(row) {
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">{{ $t('vaults') }}</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                  القاصات = نقد فقط · المصاريف والعمولات = حسابات في دليل الحسابات
+                  {{ $t('vaults_page_hint') }}
                 </p>
               </div>
               <button
@@ -289,7 +289,7 @@ function walletUserId(row) {
                 class="vaults-btn vaults-btn-primary"
                 @click="openModalAddVault()"
               >
-                إضافة قاصة نقدية
+                {{ $t('add_cash_vault') }}
               </button>
               <button
                 v-else
@@ -297,7 +297,7 @@ function walletUserId(row) {
                 class="vaults-btn vaults-btn-primary"
                 @click="openModalAddExpenseAccount()"
               >
-                إضافة حساب مصروف/عمولة
+                {{ $t('add_expense_commission_account') }}
               </button>
             </div>
 
@@ -308,7 +308,7 @@ function walletUserId(row) {
                 :class="{ active: activeTab === 'cash' }"
                 @click="activeTab = 'cash'"
               >
-                نقد / قاصات
+                {{ $t('cash_vaults_tab') }}
               </button>
               <button
                 type="button"
@@ -316,7 +316,7 @@ function walletUserId(row) {
                 :class="{ active: activeTab === 'expenses' }"
                 @click="activeTab = 'expenses'"
               >
-                مصاريف وعمولات
+                {{ $t('expenses_and_commissions') }}
               </button>
             </div>
 
@@ -327,7 +327,7 @@ function walletUserId(row) {
                 v-model="q"
                 type="text"
                 input-class="vaults-input"
-                :placeholder="activeTab === 'cash' ? 'بحث بالاسم / الرمز / النوع' : 'بحث بالاسم / رمز الحساب'"
+                :placeholder="activeTab === 'cash' ? $t('search_vault_placeholder') : $t('search_expense_account_placeholder')"
               />
             </div>
 
@@ -345,9 +345,9 @@ function walletUserId(row) {
                   <tr>
                     <th>#</th>
                     <th>{{ $t('name') }}</th>
-                    <th>النوع</th>
-                    <th>الرصيد</th>
-                    <th title="عرض اختصار القاصة في المحاسبة">في المحاسبة</th>
+                    <th>{{ $t('type') }}</th>
+                    <th>{{ $t('balance') }}</th>
+                    <th :title="$t('show_in_accounting')">{{ $t('in_accounting') }}</th>
                     <th>{{ $t('execute') }}</th>
                   </tr>
                 </thead>
@@ -360,9 +360,9 @@ function walletUserId(row) {
                     <td>{{ i + 1 }}</td>
                     <td class="cell-name">
                       {{ row.name }}
-                      <span class="vault-badge">قاصة نقدية</span>
+                      <span class="vault-badge">{{ $t('cash_vault_badge') }}</span>
                     </td>
-                    <td>{{ vaultTypeLabel(row.vault_type || row.type) }}</td>
+                    <td>{{ vaultTypeLabel(row.vault_type || row.type) ? $t(vaultTypeLabel(row.vault_type || row.type)) : (row.vault_type || row.type || '—') }}</td>
                     <td class="cell-balance" dir="ltr">{{ formatBalance(row.balance) }}</td>
                     <td>
                       <label
@@ -381,7 +381,7 @@ function walletUserId(row) {
                         <span class="vaults-switch-track" aria-hidden="true">
                           <span class="vaults-switch-thumb" />
                         </span>
-                        <span class="sr-only">في المحاسبة</span>
+                        <span class="sr-only">{{ $t('in_accounting') }}</span>
                       </label>
                     </td>
                     <td>
@@ -416,7 +416,7 @@ function walletUserId(row) {
                   </tr>
                   <tr v-if="!loading && !filteredVaults.length">
                     <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
-                      لا توجد قاصات نقدية
+                      {{ $t('no_cash_vaults') }}
                     </td>
                   </tr>
                 </tbody>
@@ -426,16 +426,16 @@ function walletUserId(row) {
             <!-- Expense / commission COA -->
             <div v-else class="vaults-table-wrap relative overflow-x-auto rounded-lg">
               <p class="coa-hint">
-                أرصدة من قيود اليومية · الصرف يتم من قاصة نقدية (مدين مصروف / دائن نقد)
+                {{ $t('expense_coa_hint') }}
               </p>
               <table class="vaults-table w-full text-sm text-center">
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>الرمز</th>
+                    <th>{{ $t('account_code') }}</th>
                     <th>{{ $t('name') }}</th>
-                    <th>التصنيف</th>
-                    <th>الرصيد</th>
+                    <th>{{ $t('classification') }}</th>
+                    <th>{{ $t('balance') }}</th>
                     <th>{{ $t('execute') }}</th>
                   </tr>
                 </thead>
@@ -449,16 +449,16 @@ function walletUserId(row) {
                     <td class="cell-code" dir="ltr">{{ row.code }}</td>
                     <td class="cell-name">
                       {{ row.name }}
-                      <span class="vault-badge badge-coa">حساب COA</span>
+                      <span class="vault-badge badge-coa">{{ $t('coa_account_badge') }}</span>
                     </td>
-                    <td>{{ accountKindLabel(row) }}</td>
+                    <td>{{ $t(accountKindKey(row)) }}</td>
                     <td class="cell-balance" dir="ltr">{{ formatBalance(row.balance) }}</td>
                     <td>
                       <div class="vaults-actions">
                         <Link
                           class="action-btn action-wallet"
                           :href="route('expenseAccount', { id: row.id })"
-                          :title="row.can_disburse ? 'دفتر المصروف / صرف' : 'دفتر الحساب'"
+                          :title="row.can_disburse ? $t('expenses') : $t('accounting_account')"
                         >
                           <wallet />
                         </Link>
@@ -467,7 +467,7 @@ function walletUserId(row) {
                   </tr>
                   <tr v-if="!loading && !filteredExpenseAccounts.length">
                     <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
-                      لا توجد حسابات مصاريف/عمولات — أضف حساباً من الزر أعلاه
+                      {{ $t('no_expense_accounts') }}
                     </td>
                   </tr>
                 </tbody>

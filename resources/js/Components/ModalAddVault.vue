@@ -1,5 +1,8 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps({
   show: Boolean,
@@ -15,11 +18,11 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'a']);
 
-const vaultTypes = [
-  { value: 'cash', label: 'نقد / صندوق' },
-  { value: 'bank', label: 'بنك' },
-  { value: 'safe', label: 'خزنة' },
-];
+const vaultTypes = computed(() => [
+  { value: 'cash', label: t('vault_type_cash') },
+  { value: 'bank', label: t('vault_type_bank') },
+  { value: 'safe', label: t('vault_type_safe') },
+]);
 
 const defaultForm = () => ({
   vault_id: null,
@@ -99,17 +102,15 @@ defineExpose({
       <div class="erp-modal-panel">
         <header class="erp-modal-header">
           <div class="erp-modal-header-text">
-            <p class="erp-modal-eyebrow">قاصات النظام</p>
+            <p class="erp-modal-eyebrow">{{ $t('tab_system_qasa') }}</p>
             <h2 :id="isEdit ? 'edit-vault-title' : 'add-vault-title'" class="erp-modal-title">
-              {{ isEdit ? 'تعديل قاصة' : 'إضافة قاصة' }}
+              {{ isEdit ? $t('edit_vault') : $t('add_vault') }}
             </h2>
             <p class="erp-modal-subtitle">
-              {{ isEdit
-                ? 'تحديث بيانات القاصة النقدية وربطها بدليل الحسابات'
-                : 'قاصة نقدية فقط (نقد/بنك/خزنة) — حساب أصل نقدي في دليل الحسابات' }}
+              {{ isEdit ? $t('vault_modal_edit_hint') : $t('vault_modal_create_hint') }}
             </p>
           </div>
-          <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
+          <button type="button" class="erp-modal-close" :aria-label="$t('cancel')" @click="close">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
             </svg>
@@ -120,12 +121,11 @@ defineExpose({
           <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
 
           <div class="erp-field">
-            <label class="erp-label" for="vault-name">اسم القاصة</label>
+            <label class="erp-label" for="vault-name">{{ $t('name') }}</label>
             <input
               id="vault-name"
               v-model="form.name"
               type="text"
-              placeholder="مثال: قاصة الحدود"
               class="erp-input"
               @keyup.enter="submit"
             />
@@ -133,22 +133,21 @@ defineExpose({
 
           <div class="erp-field-grid">
             <div class="erp-field">
-              <label class="erp-label" for="vault-type">النوع</label>
+              <label class="erp-label" for="vault-type">{{ $t('vault_type') }}</label>
               <select id="vault-type" v-model="form.type" class="erp-input">
-                <option v-for="t in vaultTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+                <option v-for="vt in vaultTypes" :key="vt.value" :value="vt.value">{{ vt.label }}</option>
               </select>
             </div>
 
             <div class="erp-field">
               <label class="erp-label" for="vault-code">
-                الرمز <span class="erp-optional">(اختياري — يُولَّد تلقائياً)</span>
+                {{ $t('account_code') }} <span class="erp-optional">({{ $t('optional') }})</span>
               </label>
               <input
                 id="vault-code"
                 v-model="form.code"
                 type="text"
                 dir="ltr"
-                placeholder="border-expenses"
                 class="erp-input"
                 :disabled="isEdit && form.code === 'mainBox'"
               />
@@ -157,10 +156,10 @@ defineExpose({
 
           <div class="erp-toggle-row">
             <div class="erp-toggle-text">
-              <span class="erp-toggle-title">عرض في المحاسبة</span>
-              <span class="erp-toggle-hint">يظهر اختصاراً برتقالياً في صفحة المحاسبة لفتح دفتر القاصة</span>
+              <span class="erp-toggle-title">{{ $t('show_in_accounting') }}</span>
+              <span class="erp-toggle-hint">{{ $t('show_in_accounting_hint') }}</span>
             </div>
-            <label class="erp-switch" :title="form.show_in_accounting ? 'معروضة في المحاسبة' : 'مخفية عن اختصارات المحاسبة'">
+            <label class="erp-switch" :title="$t('show_in_accounting')">
               <input type="checkbox" role="switch" v-model="form.show_in_accounting" />
               <span class="erp-switch-track" aria-hidden="true">
                 <span class="erp-switch-thumb" />
@@ -169,21 +168,20 @@ defineExpose({
           </div>
 
           <div class="erp-field">
-            <label class="erp-label" for="vault-notes">ملاحظات <span class="erp-optional">(اختياري)</span></label>
+            <label class="erp-label" for="vault-notes">{{ $t('notes') }} <span class="erp-optional">({{ $t('optional') }})</span></label>
             <textarea
               id="vault-notes"
               v-model="form.notes"
               rows="2"
               class="erp-input erp-textarea"
-              placeholder="وصف مختصر للقاصة"
             />
           </div>
         </div>
 
         <footer class="erp-modal-footer">
-          <button type="button" class="erp-btn erp-btn--ghost" @click="close">إلغاء</button>
+          <button type="button" class="erp-btn erp-btn--ghost" @click="close">{{ $t('cancel') }}</button>
           <button type="button" class="erp-btn erp-btn--primary" :disabled="!canSubmit()" @click="submit">
-            {{ isEdit ? 'حفظ التعديلات' : 'إنشاء القاصة' }}
+            {{ isEdit ? $t('save_changes') : $t('create_vault') }}
           </button>
         </footer>
       </div>

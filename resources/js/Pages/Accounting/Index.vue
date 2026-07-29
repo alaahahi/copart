@@ -14,6 +14,7 @@ import ModalConvertDinarDollar from "@/Components/ModalConvertDinarDollar.vue";
 import ModalDel from "@/Components/ModalDel.vue";
 import ModalUploader from "@/Components/ModalUploader.vue";
 import ModalAssignTransactionToWallet from "@/Components/ModalAssignTransactionToWallet.vue";
+import ModalAddExpenseAccount from "@/Components/ModalAddExpenseAccount.vue";
 
 
 
@@ -188,7 +189,72 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  expenseShortcuts: {
+    type: Array,
+    default: () => []
+  },
+  suggestExpenseCode: {
+    type: String,
+    default: '5101'
+  },
+  suggestCommissionCode: {
+    type: String,
+    default: '5201'
+  },
+  expenseParentId: {
+    type: [Number, String],
+    default: null
+  },
 });
+
+const showModalExpenseAccount = ref(false);
+const expenseAccountModalRef = ref(null);
+const localExpenseShortcuts = ref([...(props.expenseShortcuts || [])]);
+const localSuggestExpenseCode = ref(props.suggestExpenseCode || '5101');
+const localSuggestCommissionCode = ref(props.suggestCommissionCode || '5201');
+const localExpenseParentId = ref(props.expenseParentId);
+
+function openModalAddExpenseAccount() {
+  showModalExpenseAccount.value = true;
+}
+
+async function refreshExpenseShortcuts() {
+  try {
+    const { data } = await axios.get('/api/ledgerExpenseAccounts');
+    localExpenseShortcuts.value = data.accounts || [];
+    localSuggestExpenseCode.value = data.suggest_expense_code || '5101';
+    localSuggestCommissionCode.value = data.suggest_commission_code || '5201';
+    const rawParent = data.expense_parent_id;
+    const parsedParent = Number(rawParent);
+    localExpenseParentId.value =
+      Number.isFinite(parsedParent) && parsedParent > 0 ? parsedParent : null;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function confirmExpenseAccountSave(payload) {
+  expenseAccountModalRef.value?.setSaving?.(true);
+  expenseAccountModalRef.value?.setError?.('');
+  try {
+    await axios.post('/api/ledgerAccountStore', payload);
+    showModalExpenseAccount.value = false;
+    await refreshExpenseShortcuts();
+  } catch (error) {
+    const errors = error?.response?.data?.errors || {};
+    const msg = error?.response?.data?.message
+      || errors.parent_id?.[0]
+      || errors.code?.[0]
+      || errors.name_ar?.[0]
+      || Object.values(errors)[0]?.[0]
+      || 'تعذر إنشاء حساب المصروف';
+    expenseAccountModalRef.value?.setError?.(msg);
+    console.error(error);
+  } finally {
+    expenseAccountModalRef.value?.setSaving?.(false);
+  }
+}
+
 const search = async (q) => {
   user_id.value=0;
   laravelData.value = [];
@@ -586,6 +652,15 @@ async function saveDescription(tran) {
             @a="confirmConvertDinarDollar ($event)"
             @close="showModalConvertDinarDollar = false"
             />
+    <ModalAddExpenseAccount
+      ref="expenseAccountModalRef"
+      :show="showModalExpenseAccount"
+      :suggest-expense-code="localSuggestExpenseCode"
+      :suggest-commission-code="localSuggestCommissionCode"
+      :expense-parent-id="localExpenseParentId"
+      @save="confirmExpenseAccountSave"
+      @close="showModalExpenseAccount = false"
+    />
     <div v-if="$page.props.success">
       <div
         id="alert-2"
@@ -655,10 +730,31 @@ async function saveDescription(tran) {
                   :key="wallet.vault_id || wallet.id"
                   :href="`/wallet?id=${wallet.id}`"
                   class="min-h-[38px] inline-flex items-center rounded-lg border border-orange-600 bg-orange-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-800 dark:border-orange-500 dark:bg-orange-800 dark:text-white dark:hover:bg-orange-700"
-                  :title="wallet.vault_code ? `قاصة — ${wallet.name}` : `قاصة — ${wallet.name}`"
+                  :title="`${$t('qasa')} — ${wallet.name}`"
                 >
                   {{ wallet.name }}
                 </Link>
+              </template>
+
+              <template v-if="$page.props.auth.user.owner_id==1">
+                <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />
+                <Link
+                  v-for="acc in localExpenseShortcuts"
+                  :key="'exp-' + acc.id"
+                  :href="`/expense-account?id=${acc.id}`"
+                  class="min-h-[38px] inline-flex items-center rounded-lg border border-violet-600 bg-violet-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-800 dark:border-violet-500 dark:bg-violet-800 dark:text-white dark:hover:bg-violet-700"
+                  :title="`${$t('expenses_and_commissions')} — ${acc.name}`"
+                >
+                  {{ acc.name }}
+                </Link>
+                <button
+                  type="button"
+                  class="min-h-[38px] inline-flex items-center rounded-lg border border-violet-500/70 bg-violet-950/40 px-3.5 py-1.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/60 dark:border-violet-400/50 dark:bg-violet-950 dark:text-violet-100 dark:hover:bg-violet-900"
+                  :title="$t('add_expense_commission_account')"
+                  @click="openModalAddExpenseAccount()"
+                >
+                  + {{ $t('add_expense_commission_account') }}
+                </button>
               </template>
 
               <span class="mx-0.5 hidden h-8 w-px self-center bg-slate-200 dark:bg-slate-700 sm:inline-block" aria-hidden="true" />

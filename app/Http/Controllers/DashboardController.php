@@ -468,7 +468,7 @@ class DashboardController extends Controller
                 if($total_amount && $cashUserId){
                     $desc='اضافة سيارة من المشتريات رقم شانصى '.$request->vin;
                     // After vaults migration, optional الخزينة (main@account.com) may be null —
-                    // post purchase cost against receipts/mainBox cash user instead.
+                    // post purchase cost against purchases/mainBox cash user instead.
                     $this->accountingController->decreaseWallet(($total_amount),$desc,$cashUserId,$car->id,'App\Models\Car');
                 }
 
@@ -670,7 +670,12 @@ class DashboardController extends Controller
                 'results'=>1
                  ]);
                 $desc=trans('text.buyCar').' '.$car->pay_price.trans('text.payDone').$car->paid_amount_pay;
-                $cashUserId = $this->resolveCashUserId((int) $owner_id);
+                // Client sale payment → قاصة استلام دفعات الزبائن (not purchases vault).
+                try {
+                    $cashUserId = app(VaultService::class)->receiptsCashUserId((int) $owner_id);
+                } catch (\Throwable $e) {
+                    $cashUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+                }
                 $this->accountingController->increaseWallet($car->paid_amount_pay, $desc,$cashUserId,$car->id,'App\Models\Car');
                 $inAccount = $this->inAccount->where('owner_id', $owner_id)->first();
                 if ($inAccount) {
@@ -885,8 +890,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * Cash box user for car purchase/expense postings after vaults migration.
-     * Prefer receipts vault (mainBox); never call mainAccount()->id without a null check.
+     * Cash box user for car purchase/expense cost outflows after vaults migration.
+     * Uses قاصة صرف المشتريات (not receipts vault). Never call mainAccount()->id without a null check.
      */
     private function resolveCashUserId(int $ownerId): int
     {
@@ -894,7 +899,7 @@ class DashboardController extends Controller
         try {
             $vaults->ensureMainBoxVault($ownerId);
 
-            return $vaults->receiptsCashUserId($ownerId);
+            return $vaults->purchasesCashUserId($ownerId);
         } catch (\Throwable $e) {
             return (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
         }

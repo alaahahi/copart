@@ -655,6 +655,98 @@ class VaultService
     }
 
     /**
+     * Vault that pays car purchase cost (صرف المشتريات) — must be a cash box.
+     * Separate from قاصة استلام دفعات الزبائن.
+     */
+    public function resolvePurchasesVault(int $ownerId): Vault
+    {
+        $mainVault = $this->ensureMainBoxVault($ownerId);
+
+        if (! Schema::hasTable('system_config') || ! Schema::hasColumn('system_config', 'default_purchases_vault_id')) {
+            return $mainVault;
+        }
+
+        $configuredId = (int) (DB::table('system_config')->value('default_purchases_vault_id') ?? 0);
+        if ($configuredId <= 0) {
+            return $mainVault;
+        }
+
+        $configured = Vault::query()
+            ->with(['legacyUser'])
+            ->forOwner($ownerId)
+            ->active()
+            ->cashBoxes()
+            ->where('id', $configuredId)
+            ->whereNotNull('legacy_user_id')
+            ->first();
+
+        if ($configured && $configured->isCashBox()) {
+            return $configured;
+        }
+
+        return $mainVault;
+    }
+
+    /**
+     * Legacy user id of the purchases vault (source for car purchase cost outflow).
+     */
+    public function purchasesCashUserId(int $ownerId): int
+    {
+        $vault = $this->resolvePurchasesVault($ownerId);
+        $legacyId = (int) ($vault->legacy_user_id ?? 0);
+        if ($legacyId <= 0) {
+            throw new RuntimeException('قاصة صرف المشتريات غير مرتبطة بمستخدم تقني.');
+        }
+
+        return $legacyId;
+    }
+
+    /**
+     * Persist default purchases vault (admin). Null / 0 → use mainBox. Must be cash box.
+     */
+    public function setDefaultPurchasesVaultId(int $ownerId, ?int $vaultId): Vault
+    {
+        $mainVault = $this->ensureMainBoxVault($ownerId);
+
+        if (! Schema::hasTable('system_config')) {
+            throw new RuntimeException('جدول إعدادات النظام غير موجود.');
+        }
+        if (! Schema::hasColumn('system_config', 'default_purchases_vault_id')) {
+            throw new RuntimeException('عمود default_purchases_vault_id غير موجود — شغّل php artisan migrate');
+        }
+
+        $saveId = null;
+        if ($vaultId && $vaultId > 0) {
+            $vault = Vault::query()
+                ->forOwner($ownerId)
+                ->active()
+                ->cashBoxes()
+                ->where('id', $vaultId)
+                ->whereNotNull('legacy_user_id')
+                ->first();
+            if (! $vault || ! $vault->isCashBox()) {
+                throw new InvalidArgumentException('القاصة المحددة يجب أن تكون نقدية (صندوق/بنك/خزنة).');
+            }
+            $saveId = (int) $vault->id;
+        } else {
+            $saveId = (int) $mainVault->id;
+        }
+
+        $row = DB::table('system_config')->orderBy('id')->first();
+        if (! $row) {
+            DB::table('system_config')->insert([
+                'default_purchases_vault_id' => $saveId,
+            ]);
+        } else {
+            DB::table('system_config')->where('id', $row->id)->update([
+                'default_purchases_vault_id' => $saveId,
+            ]);
+        }
+
+        return $this->resolvePurchasesVault($ownerId);
+    }
+
+    /**
      * Active cash-box vaults for owner (قاصات النظام list).
      */
     public function listForOwner(int $ownerId, bool $activeOnly = true): Collection

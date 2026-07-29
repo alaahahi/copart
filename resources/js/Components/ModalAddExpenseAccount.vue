@@ -1,5 +1,8 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps({
   show: Boolean,
@@ -44,7 +47,9 @@ watch(
 );
 
 const title = computed(() =>
-  form.value.kind === 'commission' ? 'إضافة حساب عمولة' : 'إضافة حساب مصروف'
+  form.value.kind === 'commission'
+    ? t('add_commission_account_title')
+    : t('add_expense_account_title')
 );
 
 const canSubmit = () =>
@@ -97,10 +102,10 @@ defineExpose({
       <div class="erp-modal-panel">
         <header class="erp-modal-header">
           <div class="erp-modal-header-text">
-            <p class="erp-modal-eyebrow">دليل الحسابات</p>
+            <p class="erp-modal-eyebrow">{{ $t('coa_eyebrow') }}</p>
             <h2 id="add-expense-account-title" class="erp-modal-title">{{ title }}</h2>
             <p class="erp-modal-subtitle">
-              يُنشأ حساب مصروف في دليل الحسابات (COA) — ليس قاصة نقدية
+              {{ $t('expense_account_modal_subtitle') }}
             </p>
           </div>
           <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
@@ -114,33 +119,33 @@ defineExpose({
           <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
 
           <div class="erp-field">
-            <span class="erp-label">التصنيف</span>
+            <span class="erp-label">{{ $t('classification') }}</span>
             <div class="kind-row">
               <label class="kind-chip" :class="{ active: form.kind === 'expense' }">
                 <input v-model="form.kind" type="radio" value="expense" class="sr-only" />
-                مصروف
+                {{ $t('expense_kind') }}
               </label>
               <label class="kind-chip" :class="{ active: form.kind === 'commission' }">
                 <input v-model="form.kind" type="radio" value="commission" class="sr-only" />
-                عمولة
+                {{ $t('commission_kind') }}
               </label>
             </div>
           </div>
 
           <div class="erp-field">
-            <label class="erp-label" for="exp-acc-name">اسم الحساب</label>
+            <label class="erp-label" for="exp-acc-name">{{ $t('name') }}</label>
             <input
               id="exp-acc-name"
               v-model="form.name_ar"
               type="text"
-              :placeholder="form.kind === 'commission' ? 'مثال: عمولة التسجيل' : 'مثال: مصاريف الحدود'"
+              :placeholder="form.kind === 'commission' ? $t('commission_kind') : $t('expense_kind')"
               class="erp-input"
               @keyup.enter="submit"
             />
           </div>
 
           <div class="erp-field">
-            <label class="erp-label" for="exp-acc-code">رمز الحساب (دليل الحسابات)</label>
+            <label class="erp-label" for="exp-acc-code">{{ $t('account_code') }}</label>
             <input
               id="exp-acc-code"
               v-model="form.code"
@@ -153,9 +158,9 @@ defineExpose({
         </div>
 
         <footer class="erp-modal-footer">
-          <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">إلغاء</button>
+          <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">{{ $t('cancel') }}</button>
           <button type="button" class="erp-btn erp-btn-primary" :disabled="!canSubmit()" @click="submit">
-            {{ saving ? 'جاري الحفظ…' : 'إنشاء الحساب' }}
+            {{ saving ? $t('saving') : $t('create_account') }}
           </button>
         </footer>
       </div>

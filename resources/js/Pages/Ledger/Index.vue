@@ -6,7 +6,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
 import { formatMoney as formatMoneyAmount } from "@/utils/formatMoney";
 
-const VALID_TABS = ["tree", "trial", "ledger", "journals", "transfer", "profits", "receipts"];
+const VALID_TABS = ["tree", "trial", "ledger", "journals", "transfer", "profits", "receipts", "purchases"];
 const REPORT_TABS = ["tree", "trial", "ledger", "journals"];
 
 const page = usePage();
@@ -46,6 +46,12 @@ const receiptsVaultId = ref("");
 const receiptsVaultOptions = ref([]);
 const receiptsVaultSaving = ref(false);
 const receiptsVaultLabel = ref("");
+
+/** قاصة صرف المشتريات — نقد فقط (from vaults table) */
+const purchasesVaultId = ref("");
+const purchasesVaultOptions = ref([]);
+const purchasesVaultSaving = ref(false);
+const purchasesVaultLabel = ref("");
 
 const previousTab = ref("tree");
 
@@ -146,7 +152,15 @@ const withdrawForm = ref({
 const postSubmitting = ref(false);
 const withdrawSubmitting = ref(false);
 
-const currencyLabel = computed(() => (currency.value === "$" ? "USD" : "IQD"));
+const currencyLabel = computed(() => {
+  if (currency.value === "both") return "مزدوج";
+  return currency.value === "$" ? "USD" : "IQD";
+});
+
+/** Trial / ledger statement need a concrete journal currency; `both` falls back to USD. */
+const reportCurrency = computed(() => (currency.value === "IQD" ? "IQD" : "$"));
+
+const reportCurrencyLabel = computed(() => (reportCurrency.value === "IQD" ? "IQD" : "USD"));
 
 const treeAccountCount = computed(() =>
   treeGroups.value.reduce((n, g) => n + (g.accounts?.length || 0), 0)
@@ -208,7 +222,26 @@ function getFirstDayOfMonth() {
 }
 
 function formatMoney(v) {
-  return formatMoneyAmount(v, currency.value);
+  return formatMoneyAmount(v, reportCurrency.value);
+}
+
+function formatGroupTotal(group) {
+  if (currency.value === "both") {
+    const usd = formatMoneyAmount(group.total, "$");
+    const iqd = formatMoneyAmount(group.total_iqd ?? 0, "IQD");
+    return `USD ${usd} · IQD ${iqd}`;
+  }
+  return `${formatMoney(group.total)} ${currencyLabel.value}`;
+}
+
+function accountRowBalanceLabel(acc) {
+  if (currency.value === "both" && acc.currency == null && acc.balance_usd != null && acc.balance_iqd != null) {
+    return `${formatMoneyAmount(acc.balance_usd, "$")} / ${formatMoneyAmount(acc.balance_iqd, "IQD")}`;
+  }
+  if (currency.value === "both" && acc.currency === "IQD") {
+    return formatMoneyAmount(acc.balance, "IQD");
+  }
+  return formatMoney(acc.balance);
 }
 
 function typeLabel(type) {
@@ -239,7 +272,7 @@ function readQueryState() {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
     if (VALID_TABS.includes(t)) {
-      if (t === "receipts" && !isAdmin.value) {
+      if ((t === "receipts" || t === "purchases") && !isAdmin.value) {
         tab.value = "tree";
       } else {
         tab.value = t;
@@ -274,7 +307,7 @@ function syncQuery() {
 
 function setTab(next) {
   if (!VALID_TABS.includes(next)) return;
-  if (next === "receipts" && !isAdmin.value) return;
+  if ((next === "receipts" || next === "purchases") && !isAdmin.value) return;
   if (tab.value !== next && REPORT_TABS.includes(tab.value)) {
     previousTab.value = tab.value;
   }
@@ -315,7 +348,7 @@ async function loadTrial() {
   errorMsg.value = "";
   try {
     const { data } = await axios.get("/api/ledgerTrialBalance", {
-      params: { currency: currency.value, from: from.value, to: to.value, q: q.value },
+      params: { currency: reportCurrency.value, from: from.value, to: to.value, q: q.value },
     });
     trialRows.value = data.rows || [];
     totalDebit.value = data.total_debit || 0;
@@ -358,7 +391,7 @@ async function loadAccountLedger() {
     const { data } = await axios.get("/api/ledgerAccount", {
       params: {
         account_id: selectedAccountId.value,
-        currency: currency.value,
+        currency: reportCurrency.value,
         from: from.value,
         to: to.value,
       },
@@ -378,7 +411,7 @@ async function loadJournals() {
   errorMsg.value = "";
   try {
     const { data } = await axios.get("/api/ledgerJournals", {
-      params: { currency: currency.value, limit: 80 },
+      params: { currency: currency.value === "both" ? "both" : currency.value, limit: 80 },
     });
     journals.value = data.entries || [];
   } catch (e) {
@@ -653,6 +686,36 @@ async function saveReceiptsVault() {
   }
 }
 
+async function loadPurchasesVault() {
+  try {
+    const { data } = await axios.get("/api/ledgerPurchasesVault");
+    purchasesVaultOptions.value = data.vaults || [];
+    purchasesVaultId.value = data.default_purchases_vault_id
+      ? String(data.default_purchases_vault_id)
+      : "";
+    purchasesVaultLabel.value = data.vault?.name || "";
+  } catch (e) {
+    console.warn("ledgerPurchasesVault", e);
+  }
+}
+
+async function savePurchasesVault() {
+  if (!purchasesVaultId.value) return;
+  purchasesVaultSaving.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await axios.post("/api/ledgerPurchasesVault", {
+      default_purchases_vault_id: Number(purchasesVaultId.value),
+    });
+    purchasesVaultLabel.value = data.vault?.name || "";
+    flashSuccess(data.message || "تم حفظ قاصة صرف المشتريات");
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر حفظ قاصة صرف المشتريات";
+  } finally {
+    purchasesVaultSaving.value = false;
+  }
+}
+
 async function refresh() {
   if (tab.value === "tree") await loadTree();
   else if (tab.value === "trial") await loadTrial();
@@ -662,6 +725,7 @@ async function refresh() {
   } else if (tab.value === "journals") await loadJournals();
   else if (tab.value === "transfer") await loadTransferAccounts();
   else if (tab.value === "receipts") await loadReceiptsVault();
+  else if (tab.value === "purchases") await loadPurchasesVault();
   else if (tab.value === "profits") {
     await loadProfitsSummary();
     await loadTraderRows();
@@ -697,12 +761,15 @@ onMounted(() => {
   // currency from query (optional)
   try {
     const c = new URLSearchParams(window.location.search).get("currency");
-    if (c === "IQD" || c === "$") currency.value = c;
+    if (c === "IQD" || c === "$" || c === "both") currency.value = c;
   } catch {
     /* ignore */
   }
   refresh();
-  if (isAdmin.value) loadReceiptsVault();
+  if (isAdmin.value) {
+    loadReceiptsVault();
+    loadPurchasesVault();
+  }
 });
 </script>
 
@@ -717,7 +784,7 @@ onMounted(() => {
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">دفتر الأستاذ</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                  تقارير محاسبة (شجرة · ميزان · كشف · يومية) · نقد وإعداد (تحويل · أرباح · قاصة استلام)
+                  تقارير محاسبة (شجرة · ميزان · كشف · يومية) · نقد وإعداد (تحويل · أرباح · قاصة استلام · قاصة مشتريات)
                 </p>
               </div>
               <button
@@ -763,6 +830,15 @@ onMounted(() => {
                 >
                   قاصة استلام الدفعات
                 </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+                  :class="tabBtnClass('purchases')"
+                  @click="setTab('purchases')"
+                >
+                  قاصة صرف المشتريات
+                </button>
               </div>
             </div>
 
@@ -772,6 +848,7 @@ onMounted(() => {
                 <select v-model="currency" class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
                   <option value="$">USD</option>
                   <option value="IQD">IQD</option>
+                  <option value="both">المزدوج</option>
                 </select>
               </div>
               <div v-if="tab === 'trial' || tab === 'ledger'">
@@ -861,7 +938,7 @@ onMounted(() => {
                       </span>
                     </div>
                     <span class="shrink-0 font-mono text-xs font-semibold text-slate-700 dark:text-slate-100">
-                      {{ formatMoney(group.total) }} {{ currencyLabel }}
+                      {{ formatGroupTotal(group) }}
                     </span>
                   </button>
 
@@ -888,11 +965,12 @@ onMounted(() => {
                         <div class="font-mono text-[10px] leading-tight text-slate-500 dark:text-slate-400">
                           {{ acc.code }}
                           <span v-if="acc.currency">· {{ acc.currency === '$' ? 'USD' : acc.currency }}</span>
+                          <span v-else-if="currency === 'both'">· مزدوج</span>
                         </div>
                       </div>
                       <div class="flex shrink-0 items-center gap-0.5">
                         <span class="font-mono text-xs font-bold tabular-nums text-slate-800 dark:text-white">
-                          {{ formatMoney(acc.balance) }}
+                          {{ accountRowBalanceLabel(acc) }}
                         </span>
                         <button
                           type="button"
@@ -941,8 +1019,8 @@ onMounted(() => {
 
             <template v-else-if="tab === 'trial'">
               <div class="mb-3 flex flex-wrap items-center gap-4 text-sm font-semibold">
-                <span class="text-slate-700 dark:text-slate-100">إجمالي المدين: {{ formatMoney(totalDebit) }} {{ currencyLabel }}</span>
-                <span class="text-slate-700 dark:text-slate-100">إجمالي الدائن: {{ formatMoney(totalCredit) }} {{ currencyLabel }}</span>
+                <span class="text-slate-700 dark:text-slate-100">إجمالي المدين: {{ formatMoney(totalDebit) }} {{ reportCurrencyLabel }}</span>
+                <span class="text-slate-700 dark:text-slate-100">إجمالي الدائن: {{ formatMoney(totalCredit) }} {{ reportCurrencyLabel }}</span>
                 <span
                   class="rounded px-2 py-0.5 text-xs font-bold"
                   :class="trialBalanced ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'"
@@ -1069,10 +1147,10 @@ onMounted(() => {
                   <div class="text-left">
                     <div class="text-xs text-slate-400">الرصيد الختامي</div>
                     <div class="font-mono text-xl font-bold text-emerald-300">
-                      {{ formatMoney(closingBalance) }} {{ currencyLabel }}
+                      {{ formatMoney(closingBalance) }} {{ reportCurrencyLabel }}
                     </div>
                     <div class="mt-1 text-xs text-slate-400">
-                      افتتاحي: {{ formatMoney(openingBalance) }} {{ currencyLabel }}
+                      افتتاحي: {{ formatMoney(openingBalance) }} {{ reportCurrencyLabel }}
                     </div>
                   </div>
                 </div>
@@ -1520,6 +1598,57 @@ onMounted(() => {
 
                 <div
                   v-if="!receiptsVaultOptions.length"
+                  class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-600"
+                >
+                  <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قاصات نقدية</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">أضف قاصة نقد/بنك من شاشة القاصات أولاً.</p>
+                </div>
+              </div>
+            </template>
+
+            <!-- قاصة صرف المشتريات — نقد فقط / إعداد -->
+            <template v-else-if="tab === 'purchases'">
+              <div class="mx-auto max-w-2xl space-y-4">
+                <div class="rounded-xl border border-amber-700/40 bg-slate-900 p-4 text-slate-100">
+                  <h2 class="text-base font-bold text-white">قاصة صرف المشتريات</h2>
+                  <p class="mt-2 text-sm text-slate-300">
+                    إعداد تشغيلي: تكلفة شراء السيارات ومصاريف الشراء تُخصم من قاصة نقدية (صندوق/بنك/خزنة).
+                    <span class="font-semibold text-amber-300">منفصلة عن قاصة استلام دفعات الزبائن</span>
+                    — وليست تقريراً محاسبياً.
+                  </p>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">
+                    القاصة النقدية لصرف تكلفة المشتريات
+                  </label>
+                  <select
+                    v-model="purchasesVaultId"
+                    class="w-full rounded-lg border border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  >
+                    <option
+                      v-for="v in purchasesVaultOptions"
+                      :key="v.id"
+                      :value="String(v.id)"
+                    >
+                      {{ v.name }}{{ v.is_main_box ? ' (الصندوق)' : '' }}
+                    </option>
+                  </select>
+                  <p v-if="purchasesVaultLabel" class="mt-2 text-xs text-emerald-600 dark:text-emerald-300">
+                    الحالي: {{ purchasesVaultLabel }}
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    :disabled="purchasesVaultSaving || !purchasesVaultId"
+                    @click="savePurchasesVault"
+                  >
+                    {{ purchasesVaultSaving ? 'جاري الحفظ...' : 'حفظ الربط' }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="!purchasesVaultOptions.length"
                   class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-600"
                 >
                   <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قاصات نقدية</p>

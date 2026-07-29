@@ -45,12 +45,16 @@ npm run test:e2e:health
 npm run test:e2e:system:core
 npm run test:e2e:system:accounting
 npm run test:e2e:system:admin
+
+# دورة حياة السيارة (مشتريات → بيع → دفع)
+npm run test:e2e:car-flow
 ```
 
 أو عبر Artisan (المجاميع `system` / `health` / `all` تشغّل الأجزاء **بالتتابع** كعمليات Process منفصلة ثم تدمج `last-e2e.json`):
 
 ```bash
 php artisan qa:e2e --suite=accounting
+php artisan qa:e2e --suite=car-flow
 php artisan qa:e2e --suite=system-core
 php artisan qa:e2e --suite=system-accounting
 php artisan qa:e2e --suite=system-admin
@@ -97,7 +101,7 @@ php artisan qa:e2e --suite=all             # accounting ثم أجزاء النظ
 | `system-core.spec.ts` | `@system @health @system-core` | dashboard, purchases, sales, clients |
 | `system-accounting.spec.ts` | `@system @health @system-accounting` | accounting, ledger, treasury, wallet |
 | `system-admin.spec.ts` | `@system @health @system-admin` | analytics, settings, sync, `/qa/e2e` |
-| `car-flow.phase2.spec.ts` | — | stubs متجاوزة لتدفق السيارة الكامل |
+| `car-flow.phase2.spec.ts` | `@car-flow` | مشتريات (إضافة سيارة + PIN) → مبيعات (تسعير) → دفع من صفحة التاجر + ميزان مراجعة |
 
 تجار QA بأسماء `qa+…@test.local` ويُحذَفون ناعماً بعد اختبار المحاسبة.
 

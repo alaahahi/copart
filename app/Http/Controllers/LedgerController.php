@@ -6,6 +6,7 @@ use App\Http\Requests\DeactivateLedgerAccountRequest;
 use App\Http\Requests\DisburseExpenseRequest;
 use App\Http\Requests\StoreLedgerAccountRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
+use App\Http\Requests\UpdatePurchasesVaultRequest;
 use App\Http\Requests\UpdateReceiptsVaultRequest;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
@@ -229,12 +230,13 @@ class LedgerController extends Controller
         $this->authorizeLedger();
 
         $ownerId = (int) Auth::user()->owner_id;
-        $currency = $request->get('currency', '$');
+        $currencyFilter = $this->normalizeChartCurrencyFilter($request->get('currency', '$'));
+        $showBoth = $currencyFilter === 'both';
         $q = trim((string) $request->get('q', ''));
 
         $ledger->ensureSystemAccounts($ownerId);
 
-        $accounts = LedgerAccount::query()
+        $allAccounts = LedgerAccount::query()
             ->where('owner_id', $ownerId)
             ->where('is_active', true)
             ->withCount('lines')
@@ -248,6 +250,18 @@ class LedgerController extends Controller
             ->orderBy('code')
             ->get();
 
+        // Parent picker needs the full chart (not currency-filtered).
+        $parentOptions = $allAccounts->map(fn (LedgerAccount $a) => [
+            'id' => $a->id,
+            'code' => $a->code,
+            'name' => $a->name_ar ?: $a->name,
+            'type' => $a->type,
+        ])->values()->all();
+
+        $accounts = $showBoth
+            ? $allAccounts
+            : $allAccounts->filter(fn (LedgerAccount $a) => $this->accountMatchesCurrencyFilter($a, $currencyFilter))->values();
+
         $depthById = $this->accountDepthMap($accounts);
 
         $typeOrder = ['asset', 'liability', 'equity', 'income', 'expense'];
@@ -259,19 +273,15 @@ class LedgerController extends Controller
             'expense' => 'المصاريف',
         ];
 
-        $parentOptions = $accounts->map(fn (LedgerAccount $a) => [
-            'id' => $a->id,
-            'code' => $a->code,
-            'name' => $a->name_ar ?: $a->name,
-            'type' => $a->type,
-        ])->values()->all();
-
         $groups = [];
         foreach ($typeOrder as $type) {
             $typed = $accounts->where('type', $type)->values();
             $ordered = $this->orderAccountsByTree($typed);
-            $items = $ordered->map(function (LedgerAccount $account) use ($currency, $depthById) {
+            $items = $ordered->map(function (LedgerAccount $account) use ($currencyFilter, $showBoth, $depthById) {
                 $hasMovements = ((int) ($account->lines_count ?? 0)) > 0;
+                $balanceCurrency = $showBoth
+                    ? ($account->currency === 'IQD' ? 'IQD' : '$')
+                    : $currencyFilter;
 
                 return [
                     'id' => $account->id,
@@ -286,7 +296,9 @@ class LedgerController extends Controller
                     'is_system' => (bool) $account->is_system,
                     'has_movements' => $hasMovements,
                     'can_edit_code' => ! $account->is_system && ! $hasMovements,
-                    'balance' => $account->balance($currency),
+                    'balance' => $account->balance($balanceCurrency),
+                    'balance_usd' => $showBoth ? $account->balance('$') : null,
+                    'balance_iqd' => $showBoth ? $account->balance('IQD') : null,
                 ];
             })->all();
 
@@ -294,18 +306,34 @@ class LedgerController extends Controller
                 continue;
             }
 
-            $groups[] = [
+            $group = [
                 'type' => $type,
                 'label' => $typeLabels[$type],
                 'accounts' => $items,
-                'total' => round(array_sum(array_column($items, 'balance')), 2),
             ];
+
+            if ($showBoth) {
+                // Keep USD / IQD section totals separate — never mix amounts.
+                $group['total'] = round(array_sum(array_map(
+                    fn (array $row) => (float) ($row['balance_usd'] ?? 0),
+                    $items
+                )), 2);
+                $group['total_iqd'] = round(array_sum(array_map(
+                    fn (array $row) => (float) ($row['balance_iqd'] ?? 0),
+                    $items
+                )), 2);
+            } else {
+                $group['total'] = round(array_sum(array_column($items, 'balance')), 2);
+                $group['total_iqd'] = null;
+            }
+
+            $groups[] = $group;
         }
 
         return Response::json([
             'groups' => $groups,
             'parent_options' => $parentOptions,
-            'currency' => $currency,
+            'currency' => $currencyFilter,
         ], 200);
     }
 
@@ -385,7 +413,7 @@ class LedgerController extends Controller
         $this->authorizeLedger();
 
         $ownerId = (int) Auth::user()->owner_id;
-        $currency = $request->get('currency', '$');
+        $currency = $this->normalizeReportCurrency($request->get('currency', '$'));
         $from = $request->get('from');
         $to = $request->get('to');
         $q = trim((string) $request->get('q', ''));
@@ -459,7 +487,7 @@ class LedgerController extends Controller
 
         $ownerId = (int) Auth::user()->owner_id;
         $accountId = (int) $request->get('account_id');
-        $currency = $request->get('currency', '$');
+        $currency = $this->normalizeReportCurrency($request->get('currency', '$'));
         $from = $request->get('from');
         $to = $request->get('to');
 
@@ -538,7 +566,14 @@ class LedgerController extends Controller
         $this->authorizeLedger();
 
         $ownerId = (int) Auth::user()->owner_id;
-        $currency = $request->get('currency');
+        $currencyRaw = $request->get('currency');
+        $chartFilter = $currencyRaw !== null && $currencyRaw !== ''
+            ? $this->normalizeChartCurrencyFilter($currencyRaw)
+            : null;
+        // `both` / empty → no line-currency filter; otherwise `$` | `IQD`.
+        $currency = ($chartFilter === null || $chartFilter === 'both')
+            ? null
+            : $chartFilter;
         $limit = min(max((int) $request->get('limit', 50), 1), 200);
 
         $entries = JournalEntry::query()
@@ -569,6 +604,46 @@ class LedgerController extends Controller
             });
 
         return Response::json(['entries' => $entries], 200);
+    }
+
+    /**
+     * Chart-of-accounts currency filter: `$` | `IQD` | `both`.
+     */
+    protected function normalizeChartCurrencyFilter(mixed $currency): string
+    {
+        $currency = is_string($currency) ? trim($currency) : '';
+        if (in_array($currency, ['both', 'all', 'multi', 'مزدوج'], true)) {
+            return 'both';
+        }
+        if ($currency === 'IQD') {
+            return 'IQD';
+        }
+
+        return '$';
+    }
+
+    /**
+     * Single-currency chart filter: show currency-locked matches + dual/unrestricted (null) accounts.
+     * Hide accounts locked to the opposite currency (e.g. 1110/1130 when filter is USD).
+     */
+    protected function accountMatchesCurrencyFilter(LedgerAccount $account, string $currencyFilter): bool
+    {
+        $accountCurrency = $account->currency;
+        if ($accountCurrency === null || $accountCurrency === '' || $accountCurrency === 'multi') {
+            return true;
+        }
+
+        return $accountCurrency === $currencyFilter;
+    }
+
+    /**
+     * Line/report APIs need a concrete journal currency (`both` → `$`).
+     */
+    protected function normalizeReportCurrency(mixed $currency): string
+    {
+        $filter = $this->normalizeChartCurrencyFilter($currency);
+
+        return $filter === 'IQD' ? 'IQD' : '$';
     }
 
     /**
@@ -713,6 +788,74 @@ class LedgerController extends Controller
         return Response::json([
             'message' => 'تم ربط دفعات الزبائن بالقاصة: '.$vault->name,
             'default_receipts_vault_id' => (int) $vault->id,
+            'vault' => [
+                'id' => (int) $vault->id,
+                'name' => $vault->name,
+                'code' => $vault->code,
+                'type' => $vault->type,
+                'legacy_user_id' => (int) $vault->legacy_user_id,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Current «قاصة صرف المشتريات» + list of cash vaults for the dropdown.
+     */
+    public function purchasesVault(VaultService $vaults)
+    {
+        $this->authorizeLedger();
+
+        $ownerId = (int) Auth::user()->owner_id;
+        $current = $vaults->resolvePurchasesVault($ownerId);
+        $options = $vaults->listForOwner($ownerId)
+            ->filter(fn (Vault $v) => $v->isCashBox() && (int) ($v->legacy_user_id ?? 0) > 0)
+            ->map(fn (Vault $v) => [
+                'id' => (int) $v->id,
+                'name' => $v->name,
+                'code' => $v->code,
+                'type' => $v->type,
+                'legacy_user_id' => (int) $v->legacy_user_id,
+                'is_main_box' => $vaults->isEssentialMainBox($v),
+            ])
+            ->values();
+
+        return Response::json([
+            'default_purchases_vault_id' => (int) $current->id,
+            'vault' => [
+                'id' => (int) $current->id,
+                'name' => $current->name,
+                'code' => $current->code,
+                'type' => $current->type,
+                'legacy_user_id' => (int) $current->legacy_user_id,
+            ],
+            'vaults' => $options,
+        ], 200);
+    }
+
+    /**
+     * Bind car purchase cost outflows to a cash vault (admin only via Form Request).
+     */
+    public function updatePurchasesVault(UpdatePurchasesVaultRequest $request, VaultService $vaults)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $vaultId = $request->validated('default_purchases_vault_id');
+
+        try {
+            $vault = $vaults->setDefaultPurchasesVaultId(
+                $ownerId,
+                $vaultId !== null ? (int) $vaultId : null
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر حفظ قاصة صرف المشتريات'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم ربط صرف المشتريات بالقاصة: '.$vault->name,
+            'default_purchases_vault_id' => (int) $vault->id,
             'vault' => [
                 'id' => (int) $vault->id,
                 'name' => $vault->name,

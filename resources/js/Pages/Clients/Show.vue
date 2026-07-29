@@ -77,6 +77,38 @@ const clearCarVinSearch = () => {
   carVinSearch.value = "";
 };
 
+/** payment_allocations JSON trail — operational reference only. */
+const carAllocations = (car) => {
+  const raw = car?.payment_allocations;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+};
+
+const allocationSourceLabel = (source) => {
+  if (source === "from_balance") return "allocation_from_balance";
+  if (source === "legacy_balance") return "allocation_legacy";
+  return "allocation_direct";
+};
+
+const expandedAllocations = ref({});
+const toggleAllocations = (carId) => {
+  const id = String(carId);
+  expandedAllocations.value = {
+    ...expandedAllocations.value,
+    [id]: !expandedAllocations.value[id],
+  };
+};
+const isAllocationsOpen = (carId) => !!expandedAllocations.value[String(carId)];
+
+
 const hasUndistributedBalance = computed(
   () =>
     asNumber(calculateTotalFilteredAmount().totalAmount) * -1 -
@@ -150,6 +182,7 @@ function calculateTotalFilteredAmount() {
 /**
  * Client balance (الرصيد) — same as traders list / Car::clientRemainingBalanceSqlSubquery:
  * Σ(total_s − discount) − Σ(wallet payment txs). Independent of car.paid / توزيع.
+ * Accounting sign: + = customer owes, − = credit / overpayment. Do not change storage.
  */
 const clientBalanceUsd = computed(() => {
   if (laravelData.value?.client_balance !== undefined && laravelData.value?.client_balance !== null) {
@@ -165,6 +198,9 @@ const clientBalanceUsd = computed(() => {
     paymentsReceived
   );
 });
+
+/** Display-only flip (× −1) so credit reads as positive for traders. */
+const clientBalanceUsdDisplay = computed(() => clientBalanceUsd.value * -1);
 
 /** Payments received on wallet but not allocated to cars yet (changes with توزيع). */
 const undistributedBalanceUsd = computed(() => {
@@ -763,7 +799,7 @@ function checkClientBalance(_v) {
                   class="mt-1 font-mono text-lg font-bold"
                   :class="clientBalanceUsd > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-indigo-700 dark:text-indigo-200'"
                 >
-                  {{ clientBalanceUsd }}
+                  {{ clientBalanceUsdDisplay }}
                 </div>
               </div>
               <div
@@ -1177,7 +1213,33 @@ function checkClientBalance(_v) {
                     <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ erbilTransferSubtotal(car, true) }}</td>
                     <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.commission_s ?? 0 }}</td>
                     <td class="px-2 py-1.5 font-mono font-semibold text-slate-900 dark:text-white">{{ fixed(car.total_s, 0) }}</td>
-                    <td class="px-2 py-1.5 font-mono font-semibold text-emerald-800 dark:text-emerald-300">{{ car.paid }}</td>
+                    <td class="px-2 py-1.5 font-mono font-semibold text-emerald-800 dark:text-emerald-300">
+                      <div>{{ car.paid }}</div>
+                      <button
+                        v-if="carAllocations(car).length"
+                        type="button"
+                        class="mt-0.5 text-[10px] font-semibold text-sky-700 underline dark:text-sky-300 print:hidden"
+                        @click="toggleAllocations(car.id)"
+                      >
+                        {{ $t("paid_from_sources") }}
+                        ({{ carAllocations(car).length }})
+                      </button>
+                      <ul
+                        v-if="isAllocationsOpen(car.id) && carAllocations(car).length"
+                        class="mt-1 space-y-0.5 text-start text-[10px] font-normal text-slate-600 dark:text-slate-300 print:hidden"
+                      >
+                        <li
+                          v-for="(row, ai) in carAllocations(car)"
+                          :key="`${car.id}-alloc-${ai}`"
+                          class="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800"
+                        >
+                          {{ $t(allocationSourceLabel(row.source)) }}
+                          · {{ fixed(row.amount, 0) }}$
+                          <span v-if="asNumber(row.discount)"> · خصم {{ fixed(row.discount, 0) }}</span>
+                          <span v-if="row.transaction_id"> · {{ $t("allocation_tx") }} #{{ row.transaction_id }}</span>
+                        </li>
+                      </ul>
+                    </td>
                     <td
                       class="px-2 py-1.5 font-mono font-semibold"
                       :class="carRemaining(car) > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'"

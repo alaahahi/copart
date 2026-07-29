@@ -340,14 +340,32 @@ const copyVinToClipboard = async (vin) => {
             </div>
             <div
               v-if="hasMoney(car.paid)"
-              class="flex items-center justify-between gap-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800"
+              class="flex flex-col gap-1 rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800"
             >
-              <dt class="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-200">
-                {{ $t("paid") }}
-              </dt>
-              <dd class="font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {{ money(car.paid) }}
-              </dd>
+              <div class="flex items-center justify-between gap-2">
+                <dt class="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-200">
+                  {{ $t("paid") }}
+                </dt>
+                <dd class="font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {{ money(car.paid) }}
+                </dd>
+              </div>
+              <ul
+                v-if="Array.isArray(car.payment_allocations) && car.payment_allocations.length"
+                class="space-y-0.5 border-t border-slate-200 pt-1 text-[10px] text-slate-600 dark:border-slate-600 dark:text-slate-300"
+              >
+                <li class="font-semibold text-sky-700 dark:text-sky-300">{{ $t("paid_from_sources") }}</li>
+                <li
+                  v-for="(row, ai) in car.payment_allocations"
+                  :key="`alloc-${car.id}-${ai}`"
+                >
+                  <template v-if="row.source === 'from_balance'">{{ $t("allocation_from_balance") }}</template>
+                  <template v-else-if="row.source === 'legacy_balance'">{{ $t("allocation_legacy") }}</template>
+                  <template v-else>{{ $t("allocation_direct") }}</template>
+                  · {{ money(row.amount) }}
+                  <span v-if="row.transaction_id"> · #{{ row.transaction_id }}</span>
+                </li>
+              </ul>
             </div>
 
             <!-- Sales / client: remaining -->

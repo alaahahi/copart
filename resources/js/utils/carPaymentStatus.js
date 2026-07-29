@@ -1,15 +1,20 @@
 import { asNumber } from "@/utils/formatMoney";
 
 /**
- * Remaining balance on a car (sales total − paid).
+ * Remaining balance on a car: total_s − paid − discount.
  * @param {Record<string, unknown>|null|undefined} car
- * @param {{ totalKey?: string, paidKey?: string }} [options]
+ * @param {{ totalKey?: string, paidKey?: string, discountKey?: string }} [options]
  * @returns {number}
  */
 export function carRemaining(car, options = {}) {
   const totalKey = options.totalKey ?? "total_s";
   const paidKey = options.paidKey ?? "paid";
-  return asNumber(car?.[totalKey]) - asNumber(car?.[paidKey]);
+  const discountKey = options.discountKey ?? "discount";
+  return (
+    asNumber(car?.[totalKey]) -
+    asNumber(car?.[paidKey]) -
+    asNumber(car?.[discountKey])
+  );
 }
 
 /**
