@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\DeactivateLedgerAccountRequest;
 use App\Http\Requests\DisburseExpenseRequest;
 use App\Http\Requests\StoreLedgerAccountRequest;
+use App\Http\Requests\ToggleLedgerAccountAccountingRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
 use App\Http\Requests\UpdatePurchasesVaultRequest;
 use App\Http\Requests\UpdateReceiptsVaultRequest;
@@ -92,6 +93,7 @@ class LedgerController extends Controller
 
     /**
      * List expense (+ commission-like) COA accounts for Vaults UI.
+     * Pass ?for_accounting=1 to return only accounts with show_in_accounting (Accounting purple chips).
      */
     public function expenseCommissionAccounts(Request $request, LedgerService $ledger)
     {
@@ -99,6 +101,7 @@ class LedgerController extends Controller
 
         $ownerId = (int) Auth::user()->owner_id;
         $currency = $request->get('currency', '$') === 'IQD' ? 'IQD' : '$';
+        $onlyShowInAccounting = $request->boolean('for_accounting');
 
         $ledger->ensureSystemAccounts($ownerId);
 
@@ -109,12 +112,46 @@ class LedgerController extends Controller
             ->value('id');
 
         return Response::json([
-            'accounts' => $ledger->listExpenseCommissionAccounts($ownerId, $currency),
+            'accounts' => $ledger->listExpenseCommissionAccounts($ownerId, $currency, $onlyShowInAccounting),
             'suggest_expense_code' => $ledger->suggestExpenseAccountCode($ownerId, 'expense'),
             'suggest_commission_code' => $ledger->suggestExpenseAccountCode($ownerId, 'commission'),
             // Must be int|null — never optional() (JSON-encodes as {})
             'expense_parent_id' => $expenseParentId !== null ? (int) $expenseParentId : null,
             'currency' => $currency,
+        ], 200);
+    }
+
+    /**
+     * Toggle show_in_accounting on an expense/commission COA (Accounting purple shortcuts).
+     */
+    public function toggleAccountAccounting(
+        ToggleLedgerAccountAccountingRequest $request,
+        LedgerAccount $account,
+        LedgerService $ledger
+    ) {
+        $ownerId = (int) Auth::user()->owner_id;
+        if ((int) $account->owner_id !== $ownerId) {
+            abort(403, 'غير مسموح');
+        }
+
+        $show = $request->has('show_in_accounting')
+            ? (bool) $request->boolean('show_in_accounting')
+            : null;
+
+        try {
+            $updated = $ledger->toggleShowInAccounting($account, $show);
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر تحديث عرض الحساب في المحاسبة'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم تحديث عرض الحساب في المحاسبة',
+            'show_in_accounting' => (bool) $updated->show_in_accounting,
+            'account' => $this->accountPayload($updated),
         ], 200);
     }
 
@@ -676,6 +713,7 @@ class LedgerController extends Controller
             'parent_id' => $account->parent_id,
             'is_system' => (bool) $account->is_system,
             'is_active' => (bool) $account->is_active,
+            'show_in_accounting' => (bool) $account->show_in_accounting,
             'has_movements' => $hasMovements,
             'can_edit_code' => ! $account->is_system && ! $hasMovements,
         ];

@@ -7,6 +7,10 @@ const props = defineProps({
     type: String,
     default: "https://intellij-app.com/",
   },
+  product: {
+    type: String,
+    default: "HAULF",
+  },
   brand: {
     type: String,
     default: "IntelliJ App",
@@ -22,7 +26,7 @@ const year = computed(() => new Date().getFullYear());
     class="intellij-credit text-center text-xs text-slate-500 dark:text-slate-400 print:hidden"
     dir="rtl"
   >
-    © {{ year }} · {{ t("poweredBy") }}
+    © {{ year }} {{ product }} · {{ t("poweredBy") }}
     <a
       :href="url"
       target="_blank"

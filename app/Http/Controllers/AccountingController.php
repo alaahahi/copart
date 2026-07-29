@@ -126,7 +126,7 @@ class AccountingController extends Controller
         $ledger = app(LedgerService::class);
         $ledger->ensureSystemAccounts((int) $owner_id);
         // Ensure مشتريات سيارات COA + move car costs off مصاريف عامة (no vault chips on this page).
-        $expenseShortcuts = $ledger->listExpenseCommissionAccounts((int) $owner_id);
+        $expenseShortcuts = $ledger->listExpenseCommissionAccounts((int) $owner_id, '$', true);
         $expenseParentId = LedgerAccount::query()
             ->where('owner_id', (int) $owner_id)
             ->where('code', LedgerService::CODE_EXPENSE)

@@ -35,6 +35,7 @@ class StoreLedgerAccountRequest extends FormRequest
                 Rule::exists('ledger_accounts', 'id')->where(fn ($q) => $q->where('owner_id', $ownerId)->where('is_active', true)),
             ],
             'is_active' => ['sometimes', 'boolean'],
+            'show_in_accounting' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -50,6 +51,7 @@ class StoreLedgerAccountRequest extends FormRequest
             'currency.in' => 'العملة غير صالحة.',
             'parent_id.integer' => 'معرف الحساب الأب يجب أن يكون رقماً صحيحاً.',
             'parent_id.exists' => 'الحساب الأب غير موجود.',
+            'show_in_accounting.boolean' => 'قيمة عرض بالمحاسبة غير صالحة.',
         ];
     }
 

@@ -218,7 +218,8 @@ class LedgerService
      *   type:string,
      *   currency?:?string,
      *   parent_id?:?int,
-     *   is_active?:bool
+     *   is_active?:bool,
+     *   show_in_accounting?:bool
      * }  $data
      */
     public function createAccount(int $ownerId, array $data): LedgerAccount
@@ -235,6 +236,10 @@ class LedgerService
             ? (int) $data['parent_id']
             : null;
         $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
+        // Default ON — new expense/commission accounts appear as Accounting purple chips.
+        $showInAccounting = array_key_exists('show_in_accounting', $data)
+            ? (bool) $data['show_in_accounting']
+            : true;
         $english = trim((string) ($data['name'] ?? ''));
         if ($english === '') {
             $english = $nameAr;
@@ -270,6 +275,7 @@ class LedgerService
             'parent_id' => $parent?->id,
             'is_system' => false,
             'is_active' => $isActive,
+            'show_in_accounting' => $showInAccounting,
         ]);
 
         Log::info('Ledger account created', [
@@ -373,6 +379,10 @@ class LedgerService
 
         if (array_key_exists('is_active', $data) && ! $account->is_system) {
             $updates['is_active'] = (bool) $data['is_active'];
+        }
+
+        if (array_key_exists('show_in_accounting', $data)) {
+            $updates['show_in_accounting'] = (bool) $data['show_in_accounting'];
         }
 
         $account->forceFill($updates)->save();
@@ -725,10 +735,14 @@ class LedgerService
     /**
      * Expense (+ optional commission-like income) COA rows for the Vaults «مصاريف وعمولات» tab.
      *
+     * @param  bool  $onlyShowInAccounting  When true, only accounts flagged for Accounting purple chips.
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    public function listExpenseCommissionAccounts(int $ownerId, string $currency = '$'): \Illuminate\Support\Collection
-    {
+    public function listExpenseCommissionAccounts(
+        int $ownerId,
+        string $currency = '$',
+        bool $onlyShowInAccounting = false
+    ): \Illuminate\Support\Collection {
         $this->ensureSystemAccounts($ownerId);
         // Ensure مشتريات سيارات exists and pull mis-posted car costs off 5100.
         $this->resolveCarPurchasesExpenseAccount($ownerId);
@@ -737,6 +751,7 @@ class LedgerService
         $accounts = LedgerAccount::query()
             ->where('owner_id', $ownerId)
             ->where('is_active', true)
+            ->when($onlyShowInAccounting, fn ($q) => $q->where('show_in_accounting', true))
             ->where(function ($q) {
                 $q->where('type', 'expense')
                     ->orWhere(function ($inner) {
@@ -773,6 +788,7 @@ class LedgerService
                 'type' => $account->type,
                 'kind' => $kind,
                 'is_system' => (bool) $account->is_system,
+                'show_in_accounting' => (bool) $account->show_in_accounting,
                 'has_movements' => $hasMovements,
                 'can_disburse' => $account->type === 'expense',
                 'balance' => $account->balance($currency),
@@ -780,6 +796,30 @@ class LedgerService
                 'currency' => $currency,
             ];
         })->values();
+    }
+
+    /**
+     * Toggle Accounting purple-chip visibility for an expense/commission COA account.
+     */
+    public function toggleShowInAccounting(LedgerAccount $account, ?bool $show = null): LedgerAccount
+    {
+        if (! in_array($account->type, ['expense', 'income'], true)) {
+            throw new InvalidArgumentException('عرض بالمحاسبة متاح لحسابات المصاريف والعمولات فقط.');
+        }
+
+        $account->show_in_accounting = $show !== null
+            ? $show
+            : ! (bool) $account->show_in_accounting;
+        $account->save();
+
+        Log::info('Ledger account show_in_accounting toggled', [
+            'account_id' => $account->id,
+            'code' => $account->code,
+            'show_in_accounting' => (bool) $account->show_in_accounting,
+            'by' => Auth::id(),
+        ]);
+
+        return $account->fresh() ?? $account;
     }
 
     /**
@@ -919,6 +959,7 @@ class LedgerService
                 'parent_id' => $parent?->id,
                 'is_system' => true,
                 'is_active' => true,
+                'show_in_accounting' => true,
             ]
         );
 

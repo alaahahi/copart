@@ -2,12 +2,13 @@
 @php
     $intellijYear = $year ?? date('Y');
     $intellijUrl = $url ?? 'https://intellij-app.com/';
+    $intellijProduct = $product ?? 'HAULF';
     $intellijBrand = $brand ?? 'IntelliJ App';
     $intellijPoweredBy = $poweredBy ?? 'بواسطة';
     $asPlain = !empty($plain);
 @endphp
 <span class="intellij-credit" dir="rtl">
-    © {{ $intellijYear }} · {{ $intellijPoweredBy }}
+    © {{ $intellijYear }} {{ $intellijProduct }} · {{ $intellijPoweredBy }}
     @if($asPlain)
         <span class="intellij-credit__brand">{{ $intellijBrand }}</span>
         <span class="intellij-credit__url">({{ $intellijUrl }})</span>

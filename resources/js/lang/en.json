@@ -464,6 +464,7 @@
     "vault_modal_create_hint": "Cash vault only (cash/bank/safe) — a cash asset account in the COA",
     "vault_modal_edit_hint": "Update cash vault details and COA link",
     "show_in_accounting_hint": "Shows as an orange shortcut on the Accounting page to open the vault ledger",
+    "show_expense_in_accounting_hint": "Shows as a purple shortcut on the Accounting page to open the expense/commission account",
     "optional": "optional",
     "notes": "Notes",
     "search_name_phone_vin": "Search by name / phone / VIN",

@@ -195,7 +195,9 @@ function openModalAddExpenseAccount() {
 
 async function refreshExpenseShortcuts() {
   try {
-    const { data } = await axios.get('/api/ledgerExpenseAccounts');
+    const { data } = await axios.get('/api/ledgerExpenseAccounts', {
+      params: { for_accounting: 1 },
+    });
     localExpenseShortcuts.value = data.accounts || [];
     localSuggestExpenseCode.value = data.suggest_expense_code || '5101';
     localSuggestCommissionCode.value = data.suggest_commission_code || '5201';

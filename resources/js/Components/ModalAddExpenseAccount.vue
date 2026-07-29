@@ -70,6 +70,7 @@ const submit = () => {
     type: 'expense',
     currency: null,
     is_active: true,
+    show_in_accounting: true,
   };
   // Only send a real integer parent; backend defaults expense/commission under 5100
   if (Number.isFinite(parentId) && parentId > 0) {

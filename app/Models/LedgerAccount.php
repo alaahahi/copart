@@ -20,12 +20,14 @@ class LedgerAccount extends Model
         'party_id',
         'is_system',
         'is_active',
+        'show_in_accounting',
         'parent_id',
     ];
 
     protected $casts = [
         'is_system' => 'boolean',
         'is_active' => 'boolean',
+        'show_in_accounting' => 'boolean',
     ];
 
     public function lines(): HasMany

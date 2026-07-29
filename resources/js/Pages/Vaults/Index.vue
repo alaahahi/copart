@@ -164,8 +164,9 @@ function confirmDel(V) {
 }
 
 async function toggleAccounting(row) {
-  const key = row.vault_id || row.id;
-  if (!key || togglingIds.value.includes(key)) return;
+  const key = `v-${row.vault_id || row.id}`;
+  if (!row.vault_id && !row.id) return;
+  if (togglingIds.value.includes(key)) return;
 
   const next = !(row.show_in_accounting ?? row.show_in_dashboard ?? false);
   const prev = row.show_in_accounting ?? row.show_in_dashboard ?? false;
@@ -173,7 +174,7 @@ async function toggleAccounting(row) {
   row.show_in_accounting = next;
   row.show_in_dashboard = next;
   try {
-    const response = await axios.post(`/api/vaults/${key}/toggleAccounting`, {
+    const response = await axios.post(`/api/vaults/${row.vault_id || row.id}/toggleAccounting`, {
       show_in_accounting: next,
     });
     row.show_in_accounting = response.data.show_in_accounting;
@@ -181,6 +182,27 @@ async function toggleAccounting(row) {
   } catch (error) {
     row.show_in_accounting = prev;
     row.show_in_dashboard = prev;
+    console.error(error);
+  } finally {
+    togglingIds.value = togglingIds.value.filter((id) => id !== key);
+  }
+}
+
+async function toggleExpenseAccounting(row) {
+  const key = `a-${row.id}`;
+  if (!row.id || togglingIds.value.includes(key)) return;
+
+  const next = !row.show_in_accounting;
+  const prev = !!row.show_in_accounting;
+  togglingIds.value.push(key);
+  row.show_in_accounting = next;
+  try {
+    const response = await axios.post(`/api/ledgerAccounts/${row.id}/toggleAccounting`, {
+      show_in_accounting: next,
+    });
+    row.show_in_accounting = !!response.data.show_in_accounting;
+  } catch (error) {
+    row.show_in_accounting = prev;
     console.error(error);
   } finally {
     togglingIds.value = togglingIds.value.filter((id) => id !== key);
@@ -375,7 +397,7 @@ function walletUserId(row) {
                           type="checkbox"
                           role="switch"
                           :checked="!!(row.show_in_accounting ?? row.show_in_dashboard)"
-                          :disabled="togglingIds.includes(row.vault_id || row.id)"
+                          :disabled="togglingIds.includes(`v-${row.vault_id || row.id}`)"
                           @change="toggleAccounting(row)"
                         />
                         <span class="vaults-switch-track" aria-hidden="true">
@@ -436,6 +458,7 @@ function walletUserId(row) {
                     <th>{{ $t('name') }}</th>
                     <th>{{ $t('classification') }}</th>
                     <th>{{ $t('balance') }}</th>
+                    <th :title="$t('show_expense_in_accounting_hint')">{{ $t('show_in_accounting') }}</th>
                     <th>{{ $t('execute') }}</th>
                   </tr>
                 </thead>
@@ -454,6 +477,26 @@ function walletUserId(row) {
                     <td>{{ $t(accountKindKey(row)) }}</td>
                     <td class="cell-balance" dir="ltr">{{ formatBalance(row.balance) }}</td>
                     <td>
+                      <label
+                        class="vaults-switch"
+                        :title="row.show_in_accounting
+                          ? 'معروضة في المحاسبة'
+                          : 'مخفية عن اختصارات المحاسبة'"
+                      >
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          :checked="!!row.show_in_accounting"
+                          :disabled="togglingIds.includes(`a-${row.id}`)"
+                          @change="toggleExpenseAccounting(row)"
+                        />
+                        <span class="vaults-switch-track" aria-hidden="true">
+                          <span class="vaults-switch-thumb" />
+                        </span>
+                        <span class="sr-only">{{ $t('show_in_accounting') }}</span>
+                      </label>
+                    </td>
+                    <td>
                       <div class="vaults-actions">
                         <Link
                           class="action-btn action-wallet"
@@ -466,7 +509,7 @@ function walletUserId(row) {
                     </td>
                   </tr>
                   <tr v-if="!loading && !filteredExpenseAccounts.length">
-                    <td colspan="6" class="py-8 text-slate-500 dark:text-slate-300">
+                    <td colspan="7" class="py-8 text-slate-500 dark:text-slate-300">
                       {{ $t('no_expense_accounts') }}
                     </td>
                   </tr>
