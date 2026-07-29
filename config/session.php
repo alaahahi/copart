@@ -31,7 +31,9 @@ return [
     |
     */
 
-    'lifetime' => env('SESSION_LIFETIME', 120),
+    // 43200 minutes = 30 days (idle lifetime). Keep expire_on_close false so the
+    // session cookie survives browser restarts within that window.
+    'lifetime' => (int) env('SESSION_LIFETIME', 43200),
 
     'expire_on_close' => false,
 

@@ -1037,10 +1037,26 @@ class AccountingController extends Controller
 
         $desc=trans('text.addPayment').' '.$amount.' '.$car->car_type.' رقم الشانص'.' '.$car->vin.' '.$note;
         // Parent posts ONE journal: Dr receipts-vault cash / Cr AR. Child legs are UI mirrors only.
-        $receiptsUserId = app(\App\Services\VaultService::class)->receiptsCashUserId((int) $owner_id);
-        $tran=$this->increaseWallet($amount,$desc,$receiptsUserId,$car->client_id,'App\Models\User',0,$discount??0,'$',0,0,'in',$details);
-        $this->increaseWallet($amount, $desc,$this->accounting->mainAccount()->id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'in',$details);
-        $transaction=$this->decreaseWallet($amount+$discount, $desc,$car->client_id,$car_id,'App\Models\Car',1,$discount??0,'$',$this->currentDate,$tran->id,'out',$details);
+        $vaults = app(VaultService::class);
+        try {
+            $vaults->ensureMainBoxVault((int) $owner_id);
+            $receiptsUserId = $vaults->receiptsCashUserId((int) $owner_id);
+        } catch (\Throwable $e) {
+            $receiptsUserId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        }
+
+        $tran = $this->increaseWallet($amount, $desc, $receiptsUserId, $car->client_id, 'App\Models\User', 0, $discount ?? 0, '$', 0, 0, 'in', $details);
+        if (!$tran || ! is_object($tran)) {
+            return Response::json(['message' => 'فشل تسجيل الدفعة — قاصة الاستلام غير متاحة'], 500);
+        }
+
+        // Optional الخزينة (main@account.com) mirror — never assume it exists after vaults migration.
+        $mirrorAccountId = (int) ($this->accounting->mainAccount()?->id ?? 0);
+        if ($mirrorAccountId > 0) {
+            $this->increaseWallet($amount, $desc, $mirrorAccountId, $car_id, 'App\Models\Car', 1, $discount ?? 0, '$', $this->currentDate, $tran->id, 'in', $details);
+        }
+
+        $transaction = $this->decreaseWallet($amount + $discount, $desc, $car->client_id, $car_id, 'App\Models\Car', 1, $discount ?? 0, '$', $this->currentDate, $tran->id, 'out', $details);
 
         $car->increment('paid',$amount);
         if($discount ?? 0){
@@ -1095,10 +1111,24 @@ class AccountingController extends Controller
 
             // Parent posts ONE journal against قاصة استلام دفعات الزبائن.
             $ownerId = (int) Auth::user()->owner_id;
-            $receiptsUserId = app(\App\Services\VaultService::class)->receiptsCashUserId($ownerId);
-            $tran = $this->increaseWallet($amount_o, $desc, $receiptsUserId, $client_id, 'App\Models\User', 0, $discount, '$');
+            $vaults = app(VaultService::class);
+            try {
+                $vaults->ensureMainBoxVault($ownerId);
+                $receiptsUserId = $vaults->receiptsCashUserId($ownerId);
+            } catch (\Throwable $e) {
+                $receiptsUserId = (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
+            }
 
-            $this->increaseWallet($amount_o, $desc, $this->accounting->mainAccount()->id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
+            $tran = $this->increaseWallet($amount_o, $desc, $receiptsUserId, $client_id, 'App\Models\User', 0, $discount, '$');
+            if (!$tran || ! is_object($tran)) {
+                return Response::json(['message' => 'فشل تسجيل الدفعة — قاصة الاستلام غير متاحة'], 500);
+            }
+
+            // Optional الخزينة mirror — skip when mainAccount was never seeded / soft-deleted.
+            $mirrorAccountId = (int) ($this->accounting->mainAccount()?->id ?? 0);
+            if ($mirrorAccountId > 0) {
+                $this->increaseWallet($amount_o, $desc, $mirrorAccountId, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
+            }
 
             $transaction = $this->decreaseWallet((int) $amount_o + (int) $discount, $desc, $client_id, $client_id, 'App\Models\User', 1, $discount, '$', $this->currentDate, $tran->id);
 

@@ -46,7 +46,15 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Global PAT expiry in minutes (null = use per-token expires_at from createToken).
+    'expiration' => env('SANCTUM_TOKEN_EXPIRATION') !== null
+        ? (int) env('SANCTUM_TOKEN_EXPIRATION')
+        : null,
+
+    // ERP token-pair TTLs (minutes). Access is short-lived; refresh lasts ~1 month.
+    'access_token_ttl_minutes' => (int) env('SANCTUM_ACCESS_TOKEN_TTL_MINUTES', 1440),
+
+    'refresh_token_ttl_minutes' => (int) env('SANCTUM_REFRESH_TOKEN_TTL_MINUTES', 43200),
 
     /*
     |--------------------------------------------------------------------------

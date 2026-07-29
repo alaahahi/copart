@@ -14,7 +14,8 @@ defineProps({
 const form = useForm({
     email: '',
     password: '',
-    remember: false
+    // Default on: pairs with SESSION_LIFETIME=43200 + remember cookie (30 days).
+    remember: true
 });
 
 const submit = () => {

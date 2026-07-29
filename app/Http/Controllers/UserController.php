@@ -28,6 +28,7 @@ use App\Services\LedgerService;
 use App\Services\SystemWalletService;
 use App\Services\VaultService;
 use App\Services\AccountingCacheService;
+use App\Services\Auth\SanctumTokenPairService;
 use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
@@ -584,17 +585,36 @@ class UserController extends Controller
              }
              $user->append(['token']);
              if(!$user->is_band){
+                $sanctumPair = app(SanctumTokenPairService::class)->issue($user);
                 if( $user->type_id == $this->userChief){
                     if($request->public_key){
                         $user->update(['public_key' => $request->public_key,'device' =>  $request->device,'publickey_receiver'=> $publickey_receiver]);
                     }
-                    return Response::json(['status' => 200,'massage' => 'user found','data' => $user,'token'=> Crypt::encryptString($user->first()->id)],200); 
+                    return Response::json([
+                        'status' => 200,
+                        'massage' => 'user found',
+                        'data' => $user,
+                        'token'=> Crypt::encryptString($user->first()->id),
+                        'access_token' => $sanctumPair['access_token'],
+                        'refresh_token' => $sanctumPair['refresh_token'],
+                        'access_expires_at' => $sanctumPair['access_expires_at'],
+                        'refresh_expires_at' => $sanctumPair['refresh_expires_at'],
+                    ],200); 
                 }else{
                     if($publickey_receiver){
                     if($request->public_key){
                         $user->update(['public_key' => $request->public_key,'device' => $request->device,'publickey_receiver'=> $publickey_receiver]);
                     }
-                       return Response::json(['status' => 200,'massage' => 'user found','data' => $user,'token'=> Crypt::encryptString($user->first()->id)],200); 
+                       return Response::json([
+                        'status' => 200,
+                        'massage' => 'user found',
+                        'data' => $user,
+                        'token'=> Crypt::encryptString($user->first()->id),
+                        'access_token' => $sanctumPair['access_token'],
+                        'refresh_token' => $sanctumPair['refresh_token'],
+                        'access_expires_at' => $sanctumPair['access_expires_at'],
+                        'refresh_expires_at' => $sanctumPair['refresh_expires_at'],
+                    ],200); 
                     }else
                     return Response::json(['status' => 407,'massage' => 'user found but publickey for parent notfound'],407); 
 

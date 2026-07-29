@@ -26,9 +26,14 @@ use App\Http\Controllers\AccountTransferController;
 use App\Http\Controllers\TraderProfitController;
 use App\Http\Controllers\AuctionController;
 use App\Http\Controllers\VaultController;
+use App\Http\Controllers\Auth\RefreshTokenController;
 
 
 use App\Models\SystemConfig;
+
+// Public auth endpoints (must stay outside auth:sanctum).
+Route::post('auth/refresh', RefreshTokenController::class)->name('api.auth.refresh');
+
 Route::get('/clear-config-cache', function () {
 
     

@@ -6,6 +6,7 @@ use App\Models\UserType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Providers\RouteServiceProvider;
+use App\Services\Auth\SanctumTokenPairService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,14 @@ class AuthenticatedSessionController extends Controller
         if(!$user_id){
             $request->authenticate();
             $request->session()->regenerate();
+
+            $user = $request->user();
+            if ($user) {
+                $pair = app(SanctumTokenPairService::class)->issue($user);
+                $request->session()->put('sanctum_access_token', $pair['access_token']);
+                $request->session()->put('sanctum_refresh_token', $pair['refresh_token']);
+            }
+
             return redirect()->intended(RouteServiceProvider::HOME);
         }else
 
@@ -58,6 +67,11 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request)
     {
+        $user = Auth::guard('web')->user();
+        if ($user) {
+            app(SanctumTokenPairService::class)->revokePair($user);
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

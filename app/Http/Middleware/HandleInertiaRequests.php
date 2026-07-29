@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Models\SystemConfig;
+use App\Services\Auth\SanctumTokenPairService;
 use App\Services\SystemBrandingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tightenco\Ziggy\Ziggy;
 
 class HandleInertiaRequests extends Middleware
@@ -36,14 +38,8 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request)
     {
-        $accessToken = null;
-
-        // Check if the user is authenticated
         $user = $request->user();
-        if ($user) {
-            // If using Laravel Passport, get the access token
-            $accessToken = $user->createToken('Token Name')->accessToken;
-        }
+        $accessToken = $this->resolveSessionAccessToken($request, $user);
 
         $branding = SystemConfig::query()
             ->select(['app_logo', 'app_cover', 'first_title_ar'])
@@ -59,7 +55,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'auth' => [
                 'user' => $user,
-                'accessToken' => $accessToken?->token,
+                'accessToken' => $accessToken,
             ],
             'ziggy' => function () use ($request) {
                 return array_merge((new Ziggy)->toArray(), [
@@ -71,5 +67,33 @@ class HandleInertiaRequests extends Middleware
                 'success' => session('success'),
             ],
         ]);
+    }
+
+    /**
+     * Prefer the session-stored Sanctum access token; re-issue when missing/expired
+     * while the web session is still authenticated (SPA silent refresh).
+     */
+    private function resolveSessionAccessToken(Request $request, $user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $plain = $request->session()->get('sanctum_access_token');
+        if (is_string($plain) && $plain !== '') {
+            $token = PersonalAccessToken::findToken($plain);
+            if ($token
+                && $token->name === SanctumTokenPairService::ACCESS_TOKEN_NAME
+                && (! $token->expires_at || ! $token->expires_at->isPast())
+            ) {
+                return $plain;
+            }
+        }
+
+        $pair = app(SanctumTokenPairService::class)->issue($user);
+        $request->session()->put('sanctum_access_token', $pair['access_token']);
+        $request->session()->put('sanctum_refresh_token', $pair['refresh_token']);
+
+        return $pair['access_token'];
     }
 }
