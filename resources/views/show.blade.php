@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <div class="erp-report-table-wrap">
+    <div class="erp-report-table-wrap erp-report-table-wrap--fit">
         <table class="erp-report-table erp-report-table--dense">
             <thead>
                 <tr>

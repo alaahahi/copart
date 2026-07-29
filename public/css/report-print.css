@@ -319,19 +319,57 @@ table.erp-report-table .text-start-rtl {
     text-align: right;
 }
 
-/* Compact wide statement tables */
+/*
+ * Compact wide statement tables (كشف حساب): fit A4 portrait
+ * without a horizontal scrollbar on the dedicated print page.
+ * Other reports keep .erp-report-table-wrap { overflow-x: auto }.
+ */
+.erp-report-table-wrap--fit {
+    overflow-x: hidden;
+}
+
+/* Slightly tighter page gutters when packing many columns onto A4 */
+.erp-report-page:has(.erp-report-table-wrap--fit) {
+    padding-left: 10px;
+    padding-right: 10px;
+    overflow-x: hidden;
+}
+
 table.erp-report-table.erp-report-table--dense {
-    font-size: 10.5px;
+    font-size: 8.5px;
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
 }
 
 table.erp-report-table.erp-report-table--dense thead th {
-    font-size: 10px;
-    padding: 6px 4px;
+    font-size: 8px;
+    padding: 4px 2px;
+    white-space: normal;
+    line-height: 1.2;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 table.erp-report-table.erp-report-table--dense tbody td,
 table.erp-report-table.erp-report-table--dense tbody th {
-    padding: 5px 3px;
+    padding: 3px 2px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+table.erp-report-table.erp-report-table--dense .num,
+table.erp-report-table.erp-report-table--dense td.num {
+    white-space: nowrap;
+    font-size: 8px;
+    padding-left: 1px;
+    padding-right: 1px;
+}
+
+table.erp-report-table.erp-report-table--dense .text-start-rtl {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* Footer */
@@ -379,14 +417,41 @@ table.erp-report-table.erp-report-table--dense tbody th {
         max-height: none !important;
     }
 
-    /* Screen keeps overflow-x:auto for wide tables; print must flow across pages */
-    .erp-report-table-wrap {
+    /* Screen may scroll wide tables; print must never show scrollbars / clip width */
+    .erp-report-table-wrap,
+    .erp-report-table-wrap--fit {
         overflow: visible !important;
+        overflow-x: visible !important;
+        max-width: 100% !important;
         max-height: none !important;
     }
 
     table.erp-report-table {
         overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    table.erp-report-table.erp-report-table--dense {
+        font-size: 7.5px !important;
+        table-layout: fixed !important;
+    }
+
+    table.erp-report-table.erp-report-table--dense thead th {
+        font-size: 7px !important;
+        padding: 3px 1px !important;
+        white-space: normal !important;
+    }
+
+    table.erp-report-table.erp-report-table--dense tbody td,
+    table.erp-report-table.erp-report-table--dense tbody th {
+        padding: 2px 1px !important;
+    }
+
+    table.erp-report-table.erp-report-table--dense .num,
+    table.erp-report-table.erp-report-table--dense td.num {
+        font-size: 7.5px !important;
+        white-space: nowrap;
     }
 
     .erp-report-header {
