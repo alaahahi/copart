@@ -1,6 +1,7 @@
 <script setup>
 import { usePage } from '@inertiajs/inertia-vue3';
 import { computed } from 'vue';
+import IntelliJCredit from '@/Components/IntelliJCredit.vue';
 import { resolvePublicAsset } from '@/utils/resolvePublicAsset';
 
 const page = usePage();
@@ -26,6 +27,12 @@ const logoUrl = computed(() =>
 
         <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg dark:bg-slate-800 dark:border dark:border-slate-700">
             <slot />
+        </div>
+
+        <div class="mt-auto w-full px-4 py-4 sm:mt-8">
+          <div class="rounded-xl bg-slate-950/55 px-3 py-2 backdrop-blur">
+            <IntelliJCredit />
+          </div>
         </div>
     </div>
 </template>

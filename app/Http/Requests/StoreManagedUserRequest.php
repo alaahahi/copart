@@ -20,7 +20,7 @@ class StoreManagedUserRequest extends FormRequest
     public function rules(): array
     {
         $assignableTypeIds = UserType::query()
-            ->where('name', '!=', 'client')
+            ->where('name', 'admin')
             ->pluck('id')
             ->all();
 
@@ -47,7 +47,7 @@ class StoreManagedUserRequest extends FormRequest
             'password.required' => 'كلمة المرور مطلوبة.',
             'password.confirmed' => 'تأكيد كلمة المرور غير متطابق.',
             'type_id.required' => 'الصلاحية مطلوبة.',
-            'type_id.in' => 'نوع المستخدم غير مسموح.',
+            'type_id.in' => 'يُسمح فقط بصلاحية مدير من هذه الصفحة.',
         ];
     }
 }

@@ -7,6 +7,7 @@ import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import { Link, usePage } from "@inertiajs/inertia-vue3";
 import { useI18n } from "vue-i18n";
 import DarkModeToggle from "@/Components/DarkToggle.vue";
+import IntelliJCredit from "@/Components/IntelliJCredit.vue";
 import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
 
 const showingNavigationDropdown = ref(false);
@@ -64,7 +65,7 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
 
 <template>
   <div>
-    <div class="min-h-screen bg-slate-100 text-slate-900 dark:bg-[#0b1220] dark:text-slate-100 print:bg-white print:text-slate-900">
+    <div class="flex min-h-screen flex-col bg-slate-100 text-slate-900 dark:bg-[#0b1220] dark:text-slate-100 print:bg-white print:text-slate-900">
       <nav class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:border-slate-800 dark:bg-slate-900/95 print:hidden">
         <div class="max-w-8xl mx-auto px-4 sm:px-4 lg:px-6">
           <div class="flex min-h-[72px] items-center justify-between gap-4">
@@ -317,9 +318,13 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
         </div>
       </header>
 
-      <main class="min-h-[calc(100vh-4.5rem)] bg-slate-100 dark:bg-[#0b1220] print:bg-white">
+      <main class="flex-1 bg-slate-100 dark:bg-[#0b1220] print:bg-white">
         <slot />
       </main>
+
+      <footer class="border-t border-slate-200/80 bg-white/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80 print:hidden">
+        <IntelliJCredit />
+      </footer>
     </div>
   </div>
 </template>

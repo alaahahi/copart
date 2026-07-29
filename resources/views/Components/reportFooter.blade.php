@@ -12,5 +12,6 @@
 @endphp
 <footer class="erp-report-footer" dir="rtl">
     <span class="erp-report-footer__company">{{ $footerCompany }}</span>
+    @include('Components.intellijCredit', ['plain' => true])
     <span>صفحة للطباعة · A4</span>
 </footer>

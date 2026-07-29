@@ -55,4 +55,7 @@
             @endisset
         </div>
     </div>
+    <div class="erp-report-header__credit">
+        @include('Components.intellijCredit', ['plain' => true])
+    </div>
 </header>

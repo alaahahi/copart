@@ -22,7 +22,7 @@ class UpdateManagedUserRequest extends FormRequest
         $userId = is_object($managedUser) ? $managedUser->id : $managedUser;
 
         $assignableTypeIds = UserType::query()
-            ->where('name', '!=', 'client')
+            ->where('name', 'admin')
             ->pluck('id')
             ->all();
 
@@ -56,7 +56,7 @@ class UpdateManagedUserRequest extends FormRequest
             'email.required' => 'اسم المستخدم مطلوب.',
             'email.unique' => 'اسم المستخدم هذا غير متاح.',
             'type_id.required' => 'الصلاحية مطلوبة.',
-            'type_id.in' => 'نوع المستخدم غير مسموح.',
+            'type_id.in' => 'يُسمح فقط بصلاحية مدير من هذه الصفحة.',
         ];
     }
 }

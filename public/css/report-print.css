@@ -187,6 +187,33 @@ body.erp-report {
     font-weight: 600;
 }
 
+.erp-report-header__credit {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed #e2e8f0;
+    text-align: center;
+    font-size: 10px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.intellij-credit__brand {
+    font-weight: 600;
+    color: #475569;
+}
+
+.intellij-credit__url {
+    color: #94a3b8;
+    direction: ltr;
+    unicode-bidi: embed;
+}
+
+.intellij-credit__link {
+    color: #334155;
+    font-weight: 600;
+    text-decoration: none;
+}
+
 /* Filters / meta strip */
 .erp-report-meta {
     display: flex;
@@ -467,8 +494,21 @@ table.erp-report-table.erp-report-table--dense .text-start-rtl {
 
     .erp-report-header__app-sub,
     .erp-report-header__subtitle,
-    .erp-report-header__meta {
+    .erp-report-header__meta,
+    .erp-report-header__credit {
         color: #1e293b !important;
+    }
+
+    .erp-report-header__credit {
+        border-top-color: #94a3b8;
+    }
+
+    .intellij-credit__brand {
+        color: #0f172a !important;
+    }
+
+    .intellij-credit__url {
+        color: #475569 !important;
     }
 
     .erp-report-meta {

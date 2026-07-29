@@ -21,6 +21,11 @@ const modal = ref(null); // 'create' | 'edit' | 'password' | 'delete' | null
 const selected = ref(null);
 const saving = ref(false);
 
+/** Settings UI: مدير (admin) only — never حساب/محاسبة */
+const managerTypes = computed(() =>
+  (props.userTypes || []).filter((type) => type.name === "admin")
+);
+
 const flashSuccess = computed(() => page.props.value?.flash?.success || "");
 
 watch(
@@ -65,7 +70,7 @@ function typeLabel(name) {
 function openCreate() {
   createForm.reset();
   createForm.clearErrors();
-  createForm.type_id = props.userTypes[0]?.id || "";
+  createForm.type_id = managerTypes.value[0]?.id || "";
   modal.value = "create";
 }
 
@@ -434,7 +439,7 @@ function doSearch() {
                   class="w-full rounded-lg border border-slate-600 bg-slate-950 text-white px-3 py-2 text-sm"
                 >
                   <option
-                    v-for="type in userTypes"
+                    v-for="type in managerTypes"
                     :key="type.id"
                     :value="type.id"
                   >
@@ -495,7 +500,7 @@ function doSearch() {
                   class="w-full rounded-lg border border-slate-600 bg-slate-950 text-white px-3 py-2 text-sm"
                 >
                   <option
-                    v-for="type in userTypes"
+                    v-for="type in managerTypes"
                     :key="type.id"
                     :value="type.id"
                   >
