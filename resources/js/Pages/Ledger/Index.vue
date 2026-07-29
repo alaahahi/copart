@@ -1,16 +1,23 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import ModalLedgerAccount from "@/Components/ModalLedgerAccount.vue";
-import { Head } from "@inertiajs/inertia-vue3";
+import { Head, usePage } from "@inertiajs/inertia-vue3";
 import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
 import { formatMoney as formatMoneyAmount } from "@/utils/formatMoney";
+
+const VALID_TABS = ["tree", "trial", "ledger", "journals", "transfer", "profits", "receipts"];
+const REPORT_TABS = ["tree", "trial", "ledger", "journals"];
+
+const page = usePage();
+const isAdmin = computed(() => Number(page.props.value?.auth?.user?.type_id) === 1);
 
 const tab = ref("tree");
 const currency = ref("$");
 const from = ref(getFirstDayOfMonth());
 const to = ref(getTodayDate());
 const q = ref("");
+const ledgerAccountQ = ref("");
 const loading = ref(false);
 const errorMsg = ref("");
 const successMsg = ref("");
@@ -34,11 +41,13 @@ const editingAccount = ref(null);
 const savingAccount = ref(false);
 const deactivatingId = ref(null);
 
-/** قاصة استلام دفعات الزبائن (from vaults table) */
+/** قاصة استلام دفعات الزبائن — نقد فقط (from vaults table) */
 const receiptsVaultId = ref("");
 const receiptsVaultOptions = ref([]);
 const receiptsVaultSaving = ref(false);
 const receiptsVaultLabel = ref("");
+
+const previousTab = ref("tree");
 
 const TREE_COLLAPSE_KEY = "ledger_tree_collapsed_groups";
 const collapsedGroups = ref(loadCollapsedGroups());
@@ -143,6 +152,51 @@ const treeAccountCount = computed(() =>
   treeGroups.value.reduce((n, g) => n + (g.accounts?.length || 0), 0)
 );
 
+const flatAccounts = computed(() => {
+  const list = [];
+  for (const g of treeGroups.value) {
+    for (const a of g.accounts || []) {
+      list.push({ ...a, type_label: typeLabel(a.type) });
+    }
+  }
+  if (!list.length && parentOptions.value.length) {
+    return parentOptions.value.map((a) => ({
+      ...a,
+      type_label: typeLabel(a.type),
+      balance: null,
+    }));
+  }
+  return list;
+});
+
+const filteredLedgerAccounts = computed(() => {
+  const term = ledgerAccountQ.value.trim().toLowerCase();
+  const all = flatAccounts.value;
+  if (!term) return all;
+  const filtered = all.filter((a) => {
+    const hay = `${a.code || ""} ${a.name || ""} ${a.type_label || ""}`.toLowerCase();
+    return hay.includes(term);
+  });
+  if (selectedAccountId.value) {
+    const sel = all.find((a) => a.id === selectedAccountId.value);
+    if (sel && !filtered.some((a) => a.id === sel.id)) {
+      return [sel, ...filtered];
+    }
+  }
+  return filtered;
+});
+
+const closingBalance = computed(() => {
+  if (ledgerRows.value.length) {
+    return ledgerRows.value[ledgerRows.value.length - 1].balance;
+  }
+  return openingBalance.value;
+});
+
+const trialBalanced = computed(
+  () => Math.abs(Number(totalDebit.value) - Number(totalCredit.value)) < 0.005
+);
+
 function getTodayDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -166,6 +220,70 @@ function typeLabel(type) {
     expense: "مصاريف",
   };
   return map[type] || type;
+}
+
+function tabBtnClass(name) {
+  const active = tab.value === name;
+  if (REPORT_TABS.includes(name)) {
+    return active
+      ? "bg-emerald-600 text-white shadow-sm"
+      : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
+  }
+  return active
+    ? "bg-sky-600 text-white shadow-sm"
+    : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
+}
+
+function readQueryState() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    if (VALID_TABS.includes(t)) {
+      if (t === "receipts" && !isAdmin.value) {
+        tab.value = "tree";
+      } else {
+        tab.value = t;
+      }
+    }
+    const a = params.get("account");
+    if (a && !Number.isNaN(Number(a)) && Number(a) > 0) {
+      selectedAccountId.value = Number(a);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function syncQuery() {
+  try {
+    const params = new URLSearchParams();
+    params.set("tab", tab.value);
+    if (selectedAccountId.value) {
+      params.set("account", String(selectedAccountId.value));
+    }
+    if (currency.value && currency.value !== "$") {
+      params.set("currency", currency.value);
+    }
+    const qs = params.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState({}, "", url);
+  } catch {
+    /* ignore */
+  }
+}
+
+function setTab(next) {
+  if (!VALID_TABS.includes(next)) return;
+  if (next === "receipts" && !isAdmin.value) return;
+  if (tab.value !== next && REPORT_TABS.includes(tab.value)) {
+    previousTab.value = tab.value;
+  }
+  tab.value = next;
+}
+
+function goBackFromLedger() {
+  const back = previousTab.value && previousTab.value !== "ledger" ? previousTab.value : "tree";
+  setTab(back);
 }
 
 function flashSuccess(msg) {
@@ -211,13 +329,29 @@ async function loadTrial() {
 
 async function openAccount(accountId) {
   if (showAccountModal.value) return;
-  selectedAccountId.value = accountId;
-  tab.value = "ledger";
-  await loadAccountLedger();
+  const id = Number(accountId);
+  if (!id) return;
+  if (tab.value !== "ledger") {
+    previousTab.value = tab.value;
+  }
+  selectedAccountId.value = id;
+  if (tab.value !== "ledger") {
+    tab.value = "ledger";
+  }
+}
+
+async function ensureAccountOptions() {
+  if (treeGroups.value.length || parentOptions.value.length) return;
+  await loadTree();
 }
 
 async function loadAccountLedger() {
-  if (!selectedAccountId.value) return;
+  if (!selectedAccountId.value) {
+    accountMeta.value = null;
+    openingBalance.value = 0;
+    ledgerRows.value = [];
+    return;
+  }
   loading.value = true;
   errorMsg.value = "";
   try {
@@ -522,23 +656,36 @@ async function saveReceiptsVault() {
 async function refresh() {
   if (tab.value === "tree") await loadTree();
   else if (tab.value === "trial") await loadTrial();
-  else if (tab.value === "ledger") await loadAccountLedger();
-  else if (tab.value === "journals") await loadJournals();
+  else if (tab.value === "ledger") {
+    await ensureAccountOptions();
+    await loadAccountLedger();
+  } else if (tab.value === "journals") await loadJournals();
   else if (tab.value === "transfer") await loadTransferAccounts();
+  else if (tab.value === "receipts") await loadReceiptsVault();
   else if (tab.value === "profits") {
     await loadProfitsSummary();
     await loadTraderRows();
   }
 }
 
-watch(currency, () => refresh());
+watch(currency, () => {
+  syncQuery();
+  refresh();
+});
 watch([from, to], () => {
   if (tab.value === "trial" || tab.value === "ledger") refresh();
 });
 watch(tab, () => {
   showAccountModal.value = false;
   editingAccount.value = null;
+  syncQuery();
   refresh();
+});
+watch(selectedAccountId, (id, prev) => {
+  syncQuery();
+  if (tab.value === "ledger" && id && id !== prev) {
+    loadAccountLedger();
+  }
 });
 watch(profitsCurrency, () => loadProfitsSummary());
 watch([() => postForm.value.period_from, () => postForm.value.period_to, () => postForm.value.currency], () => {
@@ -546,8 +693,16 @@ watch([() => postForm.value.period_from, () => postForm.value.period_to, () => p
 });
 
 onMounted(() => {
+  readQueryState();
+  // currency from query (optional)
+  try {
+    const c = new URLSearchParams(window.location.search).get("currency");
+    if (c === "IQD" || c === "$") currency.value = c;
+  } catch {
+    /* ignore */
+  }
   refresh();
-  loadReceiptsVault();
+  if (isAdmin.value) loadReceiptsVault();
 });
 </script>
 
@@ -561,125 +716,82 @@ onMounted(() => {
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">دفتر الأستاذ</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">شجرة الحسابات · ميزان · حركة · قيود</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                  تقارير محاسبة (شجرة · ميزان · كشف · يومية) · نقد وإعداد (تحويل · أرباح · قاصة استلام)
+                </p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="rounded-lg px-4 py-2 text-sm font-semibold"
-                  :class="tab === 'tree' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                  @click="tab = 'tree'"
-                >
+              <button
+                type="button"
+                class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                @click="refresh"
+              >
+                تحديث
+              </button>
+            </div>
+
+            <!-- مجموعات التبويب: تقارير vs نقد/إعداد -->
+            <div class="mt-4 flex flex-col gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">تقارير</span>
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('tree')" @click="setTab('tree')">
                   شجرة الحسابات
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg px-4 py-2 text-sm font-semibold"
-                  :class="tab === 'trial' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                  @click="tab = 'trial'"
-                >
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('trial')" @click="setTab('trial')">
                   ميزان المراجعة
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg px-4 py-2 text-sm font-semibold"
-                  :class="tab === 'journals' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                  @click="tab = 'journals'"
-                >
-                  آخر القيود
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('ledger')" @click="setTab('ledger')">
+                  كشف حساب
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg px-4 py-2 text-sm font-semibold"
-                  :class="tab === 'transfer' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                  @click="tab = 'transfer'"
-                >
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('journals')" @click="setTab('journals')">
+                  اليومية
+                </button>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-bold uppercase tracking-wide text-sky-600 dark:text-sky-300">نقد / إعداد</span>
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('transfer')" @click="setTab('transfer')">
                   تحويل نقدي
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg px-4 py-2 text-sm font-semibold"
-                  :class="tab === 'profits' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                  @click="tab = 'profits'"
-                >
+                <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-semibold" :class="tabBtnClass('profits')" @click="setTab('profits')">
                   أرباح التجار
                 </button>
                 <button
+                  v-if="isAdmin"
                   type="button"
-                  class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white"
-                  @click="refresh"
+                  class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+                  :class="tabBtnClass('receipts')"
+                  @click="setTab('receipts')"
                 >
-                  تحديث
+                  قاصة استلام الدفعات
                 </button>
               </div>
             </div>
 
             <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
               <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">العملة</label>
-                <select v-model="currency" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">العملة</label>
+                <select v-model="currency" class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
                   <option value="$">USD</option>
                   <option value="IQD">IQD</option>
                 </select>
               </div>
               <div v-if="tab === 'trial' || tab === 'ledger'">
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من</label>
-                <input v-model="from" type="date" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">من</label>
+                <input v-model="from" type="date" class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
               </div>
               <div v-if="tab === 'trial' || tab === 'ledger'">
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى</label>
-                <input v-model="to" type="date" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">إلى</label>
+                <input v-model="to" type="date" class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
               </div>
               <div class="md:col-span-2" v-if="tab === 'trial' || tab === 'tree'">
-                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">بحث</label>
+                <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">بحث في الحسابات</label>
                 <input
                   v-model="q"
                   type="text"
-                  placeholder="رمز أو اسم الحساب"
-                  class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  placeholder="رمز أو اسم الحساب — Enter للبحث"
+                  class="w-full rounded-lg border-slate-300 bg-white text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:placeholder-slate-400"
                   @keyup.enter="refresh"
                 />
               </div>
-            </div>
-
-            <!-- قاصة استلام دفعات الزبائن -->
-            <div
-              v-if="tab === 'tree' && $page.props.auth.user.type_id == 1"
-              class="mt-4 rounded-xl border border-emerald-700/50 bg-slate-900 p-4 text-slate-100"
-            >
-              <div class="flex flex-wrap items-end gap-3">
-                <div class="min-w-[16rem] flex-1">
-                  <label class="mb-1 block text-xs font-semibold text-slate-200">
-                    قاصة نقد استلام دفعات الزبائن
-                  </label>
-                  <p class="mb-2 text-xs text-slate-400">
-                    كل دفعات التجار/السيارات تُرحَّل نقداً إلى هذه القاصة النقدية (صندوق/بنك/خزنة). افتراضي: الصندوق الرئيسي.
-                  </p>
-                  <select
-                    v-model="receiptsVaultId"
-                    class="w-full rounded-lg border border-slate-600 bg-slate-950 text-white"
-                  >
-                    <option
-                      v-for="v in receiptsVaultOptions"
-                      :key="v.id"
-                      :value="String(v.id)"
-                    >
-                      {{ v.name }}{{ v.is_main_box ? ' (الصندوق)' : '' }}
-                    </option>
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  class="min-h-[2.5rem] rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                  :disabled="receiptsVaultSaving || !receiptsVaultId"
-                  @click="saveReceiptsVault"
-                >
-                  {{ receiptsVaultSaving ? 'جاري الحفظ...' : 'حفظ الربط' }}
-                </button>
-              </div>
-              <p v-if="receiptsVaultLabel" class="mt-2 text-xs text-emerald-300">
-                الحالي: {{ receiptsVaultLabel }}
-              </p>
             </div>
 
             <div v-if="errorMsg" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
@@ -805,9 +917,14 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <div v-if="!treeGroups.length" class="py-10 text-center text-slate-500">لا توجد حسابات</div>
+                <div v-if="!treeGroups.length" class="rounded-lg border border-dashed border-slate-300 px-4 py-10 text-center dark:border-slate-600">
+                  <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد حسابات في شجرة الدليل</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    شجرة الحسابات (COA) فقط — أضف حساباً أو غيّر كلمة البحث. اضغط على أي صف لفتح كشف الحساب.
+                  </p>
+                </div>
                 <p class="text-center text-[11px] text-slate-500 dark:text-slate-400">
-                  إضافة حساب · تعديل (اسم/أب/رمز إن لم تُرحَّل عليه قيود) · إيقاف بدل الحذف · الحسابات النظامية مقفلة
+                  دليل حسابات محاسبي · إضافة / تعديل / إيقاف · اضغط الصف لفتح كشف الحساب · الحسابات النظامية مقفلة
                 </p>
               </div>
 
@@ -823,10 +940,19 @@ onMounted(() => {
             </template>
 
             <template v-else-if="tab === 'trial'">
-              <div class="mb-3 flex flex-wrap gap-4 text-sm font-semibold">
-                <span class="text-slate-700 dark:text-slate-200">إجمالي المدين: {{ formatMoney(totalDebit) }} {{ currencyLabel }}</span>
-                <span class="text-slate-700 dark:text-slate-200">إجمالي الدائن: {{ formatMoney(totalCredit) }} {{ currencyLabel }}</span>
+              <div class="mb-3 flex flex-wrap items-center gap-4 text-sm font-semibold">
+                <span class="text-slate-700 dark:text-slate-100">إجمالي المدين: {{ formatMoney(totalDebit) }} {{ currencyLabel }}</span>
+                <span class="text-slate-700 dark:text-slate-100">إجمالي الدائن: {{ formatMoney(totalCredit) }} {{ currencyLabel }}</span>
+                <span
+                  class="rounded px-2 py-0.5 text-xs font-bold"
+                  :class="trialBalanced ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'"
+                >
+                  {{ trialBalanced ? 'متوازن' : 'غير متوازن' }}
+                </span>
               </div>
+              <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                ميزان المراجعة من قيود اليومية ضمن الفترة — اضغط الصف أو «حركة» لفتح كشف الحساب.
+              </p>
               <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
                 <table class="w-full text-center text-sm">
                   <thead class="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-white">
@@ -844,7 +970,8 @@ onMounted(() => {
                     <tr
                       v-for="row in trialRows"
                       :key="row.id"
-                      class="border-t border-slate-200 dark:border-slate-700 dark:text-slate-200"
+                      class="cursor-pointer border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800/80"
+                      @click="openAccount(row.id)"
                     >
                       <td class="px-3 py-2 font-mono">{{ row.code }}</td>
                       <td class="px-3 py-2 font-semibold">{{ row.name }}</td>
@@ -853,13 +980,20 @@ onMounted(() => {
                       <td class="px-3 py-2">{{ formatMoney(row.credit) }}</td>
                       <td class="px-3 py-2 font-bold">{{ formatMoney(row.balance) }}</td>
                       <td class="px-3 py-2">
-                        <button type="button" class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white" @click="openAccount(row.id)">
+                        <button
+                          type="button"
+                          class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white"
+                          @click.stop="openAccount(row.id)"
+                        >
                           حركة
                         </button>
                       </td>
                     </tr>
                     <tr v-if="!trialRows.length">
-                      <td colspan="7" class="px-3 py-8 text-slate-500">لا توجد حركات ضمن الفلتر</td>
+                      <td colspan="7" class="px-3 py-10 text-slate-500 dark:text-slate-400">
+                        <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد حركات ضمن الفلتر</p>
+                        <p class="mt-1 text-sm">غيّر الفترة أو العملة أو البحث — الميزان يعرض فقط الحسابات التي لها قيود في الفترة.</p>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -867,24 +1001,91 @@ onMounted(() => {
             </template>
 
             <template v-else-if="tab === 'ledger'">
-              <div class="mb-3">
+              <nav class="mb-3 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <button type="button" class="font-semibold text-emerald-600 hover:underline dark:text-emerald-300" @click="setTab('tree')">
+                  شجرة الحسابات
+                </button>
+                <span aria-hidden="true">/</span>
+                <button
+                  v-if="previousTab === 'trial'"
+                  type="button"
+                  class="font-semibold text-emerald-600 hover:underline dark:text-emerald-300"
+                  @click="setTab('trial')"
+                >
+                  ميزان المراجعة
+                </button>
+                <span v-if="previousTab === 'trial'" aria-hidden="true">/</span>
+                <span class="font-semibold text-slate-800 dark:text-slate-100">كشف حساب</span>
                 <button
                   type="button"
-                  class="mb-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400"
-                  @click="tab = 'tree'"
+                  class="mr-auto rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  @click="goBackFromLedger"
                 >
-                  ← رجوع للشجرة
+                  ← رجوع
                 </button>
-              </div>
-              <div v-if="accountMeta" class="mb-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
-                <div class="font-bold text-slate-900 dark:text-white">
-                  {{ accountMeta.code }} — {{ accountMeta.name }}
+              </nav>
+
+              <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="md:col-span-2">
+                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">اختيار الحساب</label>
+                  <select
+                    :value="selectedAccountId || ''"
+                    class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                    @change="selectedAccountId = Number($event.target.value) || null"
+                  >
+                    <option value="" disabled>اختر حساباً من دليل الحسابات…</option>
+                    <option
+                      v-for="acc in filteredLedgerAccounts"
+                      :key="acc.id"
+                      :value="acc.id"
+                    >
+                      {{ acc.code }} — {{ acc.name }} ({{ acc.type_label }})
+                    </option>
+                  </select>
                 </div>
-                <div class="text-sm text-slate-600 dark:text-slate-300">
-                  رصيد افتتاحي: {{ formatMoney(openingBalance) }} {{ currencyLabel }}
+                <div>
+                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">تصفية القائمة</label>
+                  <input
+                    v-model="ledgerAccountQ"
+                    type="text"
+                    placeholder="رمز أو اسم…"
+                    class="w-full rounded-lg border-slate-300 bg-white text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-950 dark:text-white dark:placeholder-slate-400"
+                  />
                 </div>
               </div>
-              <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+
+              <div
+                v-if="accountMeta"
+                class="mb-3 rounded-lg border border-slate-600 bg-slate-900 p-4 text-slate-100"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div class="font-mono text-xs text-slate-300">{{ accountMeta.code }}</div>
+                    <div class="text-lg font-bold text-white">{{ accountMeta.name }}</div>
+                    <div class="mt-1 text-sm text-slate-300">
+                      النوع: {{ typeLabel(accountMeta.type) }} · الفترة: {{ from }} → {{ to }}
+                    </div>
+                  </div>
+                  <div class="text-left">
+                    <div class="text-xs text-slate-400">الرصيد الختامي</div>
+                    <div class="font-mono text-xl font-bold text-emerald-300">
+                      {{ formatMoney(closingBalance) }} {{ currencyLabel }}
+                    </div>
+                    <div class="mt-1 text-xs text-slate-400">
+                      افتتاحي: {{ formatMoney(openingBalance) }} {{ currencyLabel }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="!selectedAccountId" class="rounded-lg border border-dashed border-slate-300 px-4 py-12 text-center dark:border-slate-600">
+                <p class="font-semibold text-slate-700 dark:text-slate-200">لم يُختر حساب بعد</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  اختر حساباً من القائمة أعلاه، أو من شجرة الحسابات / ميزان المراجعة بنقرة واحدة.
+                </p>
+              </div>
+
+              <div v-else class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
                 <table class="w-full text-center text-sm">
                   <thead class="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-white">
                     <tr>
@@ -900,7 +1101,7 @@ onMounted(() => {
                     <tr
                       v-for="row in ledgerRows"
                       :key="row.id"
-                      class="border-t border-slate-200 dark:border-slate-700 dark:text-slate-200"
+                      class="border-t border-slate-200 dark:border-slate-700 dark:text-slate-100"
                     >
                       <td class="px-3 py-2">{{ row.date }}</td>
                       <td class="px-3 py-2 font-mono text-xs">{{ row.voucher_no }}</td>
@@ -910,7 +1111,10 @@ onMounted(() => {
                       <td class="px-3 py-2 font-bold">{{ formatMoney(row.balance) }}</td>
                     </tr>
                     <tr v-if="!ledgerRows.length">
-                      <td colspan="6" class="px-3 py-8 text-slate-500">لا توجد قيود لهذا الحساب</td>
+                      <td colspan="6" class="px-3 py-10 text-slate-500 dark:text-slate-400">
+                        <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قيود لهذا الحساب في الفترة</p>
+                        <p class="mt-1 text-sm">جرّب توسيع الفترة أو تأكد من العملة — الرصيد الافتتاحي يظهر أعلاه إن وُجد.</p>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -918,6 +1122,9 @@ onMounted(() => {
             </template>
 
             <template v-else-if="tab === 'journals'">
+              <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                آخر قيود اليومية (مدين/دائن) من سجل القيود المحاسبية — ليست تحويلات نقدية مباشرة.
+              </p>
               <div class="space-y-3">
                 <div
                   v-for="entry in journals"
@@ -926,12 +1133,12 @@ onMounted(() => {
                 >
                   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div class="font-bold text-slate-900 dark:text-white">{{ entry.voucher_no }}</div>
-                    <div class="text-sm text-slate-500">{{ entry.entry_date }} · {{ entry.source }}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">{{ entry.entry_date }} · {{ entry.source }}</div>
                   </div>
                   <div class="mb-2 text-sm text-slate-600 dark:text-slate-300">{{ entry.memo }}</div>
                   <table class="w-full text-center text-xs">
                     <thead>
-                      <tr class="text-slate-500">
+                      <tr class="text-slate-500 dark:text-slate-400">
                         <th class="py-1">الحساب</th>
                         <th class="py-1">مدين</th>
                         <th class="py-1">دائن</th>
@@ -939,7 +1146,11 @@ onMounted(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(line, idx) in entry.lines" :key="idx" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
+                      <tr
+                        v-for="(line, idx) in entry.lines"
+                        :key="idx"
+                        class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-100"
+                      >
                         <td class="py-1">{{ line.code }} — {{ line.account }}</td>
                         <td class="py-1">{{ formatMoney(line.debit) }}</td>
                         <td class="py-1">{{ formatMoney(line.credit) }}</td>
@@ -948,91 +1159,104 @@ onMounted(() => {
                     </tbody>
                   </table>
                 </div>
-                <div v-if="!journals.length" class="py-8 text-center text-slate-500">لا توجد قيود بعد</div>
+                <div
+                  v-if="!journals.length"
+                  class="rounded-lg border border-dashed border-slate-300 px-4 py-10 text-center dark:border-slate-600"
+                >
+                  <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قيود بعد</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    تظهر هنا القيود بعد عمليات الدفع والتحويل والمصاريف وغيرها.
+                  </p>
+                </div>
               </div>
             </template>
 
-            <!-- حركة بين الحسابات -->
+            <!-- تحويل نقدي بين القاصات فقط -->
             <template v-else-if="tab === 'transfer'">
               <div class="mx-auto max-w-3xl space-y-6">
-                <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <h2 class="mb-4 text-base font-bold text-slate-900 dark:text-white">تحويل نقدي بين القاصات</h2>
-                  <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                    تحويل نقد فقط بين قاصات نقدية (نقد/بنك/خزنة) — ليس بين حسابات مصاريف.
+                <div class="rounded-xl border border-sky-700/40 bg-slate-900 p-4 text-slate-100">
+                  <h2 class="mb-2 text-base font-bold text-white">تحويل نقدي بين القاصات</h2>
+                  <p class="text-sm text-slate-300">
+                    لنقل نقد بين قاصات نقدية فقط (صندوق / بنك / خزنة).
+                    <span class="font-semibold text-amber-300">ليس لتسجيل مصروف أو إيراد</span>
+                    — المصاريف من شاشة القاصات/المصروف، والتقارير من تبويبات «تقارير».
                   </p>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                   <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitTransfer">
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">من قاصة نقدية</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">من قاصة نقدية</label>
                       <select
                         v-model="transferForm.from_user_id"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                       >
-                        <option value="" disabled>اختر الحساب المرسل</option>
+                        <option value="" disabled>اختر القاصة المرسلة</option>
                         <option v-for="acc in transferAccounts" :key="acc.id" :value="acc.id">
                           {{ acc.name }}
                         </option>
                       </select>
-                      <p v-if="transferForm.from_user_id" class="mt-1 text-xs text-slate-500">
+                      <p v-if="transferForm.from_user_id" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         الرصيد: {{ accountBalanceLabel(transferForm.from_user_id, transferForm.currency) }} {{ transferForm.currency === '$' ? 'USD' : 'IQD' }}
                       </p>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">إلى قاصة نقدية</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">إلى قاصة نقدية</label>
                       <select
                         v-model="transferForm.to_user_id"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                       >
-                        <option value="" disabled>اختر الحساب المستقبل</option>
+                        <option value="" disabled>اختر القاصة المستقبلة</option>
                         <option v-for="acc in transferAccounts" :key="acc.id" :value="acc.id">
                           {{ acc.name }}
                         </option>
                       </select>
-                      <p v-if="transferForm.to_user_id" class="mt-1 text-xs text-slate-500">
+                      <p v-if="transferForm.to_user_id" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         الرصيد: {{ accountBalanceLabel(transferForm.to_user_id, transferForm.currency) }} {{ transferForm.currency === '$' ? 'USD' : 'IQD' }}
                       </p>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">المبلغ</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">المبلغ</label>
                       <input
                         v-model="transferForm.amount"
                         type="number"
                         min="0.01"
                         step="0.01"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">العملة</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">العملة</label>
                       <select
                         v-model="transferForm.currency"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                       >
                         <option value="$">USD</option>
                         <option value="IQD">IQD</option>
                       </select>
                     </div>
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">التاريخ</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">التاريخ</label>
                       <input
                         v-model="transferForm.entry_date"
                         type="date"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                       />
                     </div>
                     <div class="md:col-span-2">
-                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">ملاحظات</label>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">ملاحظات</label>
                       <input
                         v-model="transferForm.notes"
                         type="text"
-                        class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                        class="w-full rounded-lg border-slate-300 bg-white text-slate-900 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
                         placeholder="سبب التحويل (اختياري)"
                       />
                     </div>
                     <div class="md:col-span-2">
                       <button
                         type="submit"
-                        class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                        class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                         :disabled="transferSubmitting"
                       >
                         {{ transferSubmitting ? "جاري التنفيذ..." : "تنفيذ التحويل" }}
@@ -1043,25 +1267,28 @@ onMounted(() => {
 
                 <div class="rounded-xl border border-slate-200 dark:border-slate-700">
                   <div class="border-b border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                    <span class="text-sm font-bold text-slate-900 dark:text-white">أرصدة القاصات الحالية</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">أرصدة القاصات النقدية الحالية</span>
                   </div>
                   <div v-if="transferLoading" class="py-6 text-center text-slate-500">جاري التحميل...</div>
                   <table v-else class="w-full text-center text-sm">
                     <thead class="bg-slate-50 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
                       <tr>
-                        <th class="px-3 py-2">الحساب</th>
+                        <th class="px-3 py-2">القاصة</th>
                         <th class="px-3 py-2">USD</th>
                         <th class="px-3 py-2">IQD</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="acc in transferAccounts" :key="acc.id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-200">
+                      <tr v-for="acc in transferAccounts" :key="acc.id" class="border-t border-slate-100 dark:border-slate-800 dark:text-slate-100">
                         <td class="px-3 py-2 text-right font-semibold">{{ acc.name }}</td>
                         <td class="px-3 py-2 font-mono">{{ formatMoney(acc.balance) }}</td>
                         <td class="px-3 py-2 font-mono">{{ formatMoneyAmount(acc.balance_dinar, "IQD") }}</td>
                       </tr>
                       <tr v-if="!transferAccounts.length">
-                        <td colspan="3" class="px-3 py-8 text-slate-500">لا توجد حسابات</td>
+                        <td colspan="3" class="px-3 py-10 text-slate-500 dark:text-slate-400">
+                          <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قاصات نقدية</p>
+                          <p class="mt-1 text-sm">أضف قاصة نقد/بنك/خزنة من شاشة القاصات أولاً.</p>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -1246,6 +1473,57 @@ onMounted(() => {
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </template>
+
+            <!-- قاصة استلام الدفعات — نقد فقط / إعداد -->
+            <template v-else-if="tab === 'receipts'">
+              <div class="mx-auto max-w-2xl space-y-4">
+                <div class="rounded-xl border border-sky-700/40 bg-slate-900 p-4 text-slate-100">
+                  <h2 class="text-base font-bold text-white">قاصة استلام دفعات الزبائن</h2>
+                  <p class="mt-2 text-sm text-slate-300">
+                    إعداد تشغيلي: كل دفعات التجار/السيارات تُرحَّل نقداً إلى قاصة نقدية (صندوق/بنك/خزنة).
+                    <span class="font-semibold text-amber-300">ليس تقريراً محاسبياً</span>
+                    ولا علاقة له بشجرة الحسابات أو ميزان المراجعة.
+                  </p>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-200">
+                    القاصة النقدية لاستلام الدفعات
+                  </label>
+                  <select
+                    v-model="receiptsVaultId"
+                    class="w-full rounded-lg border border-slate-300 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                  >
+                    <option
+                      v-for="v in receiptsVaultOptions"
+                      :key="v.id"
+                      :value="String(v.id)"
+                    >
+                      {{ v.name }}{{ v.is_main_box ? ' (الصندوق)' : '' }}
+                    </option>
+                  </select>
+                  <p v-if="receiptsVaultLabel" class="mt-2 text-xs text-emerald-600 dark:text-emerald-300">
+                    الحالي: {{ receiptsVaultLabel }}
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    :disabled="receiptsVaultSaving || !receiptsVaultId"
+                    @click="saveReceiptsVault"
+                  >
+                    {{ receiptsVaultSaving ? 'جاري الحفظ...' : 'حفظ الربط' }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="!receiptsVaultOptions.length"
+                  class="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-600"
+                >
+                  <p class="font-semibold text-slate-700 dark:text-slate-200">لا توجد قاصات نقدية</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">أضف قاصة نقد/بنك من شاشة القاصات أولاً.</p>
                 </div>
               </div>
             </template>

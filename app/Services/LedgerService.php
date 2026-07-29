@@ -225,6 +225,8 @@ class LedgerService
         $type = (string) ($data['type'] ?? '');
         $currency = $this->normalizeAccountCurrency($data['currency'] ?? null);
         $parentId = isset($data['parent_id']) && $data['parent_id'] !== '' && $data['parent_id'] !== null
+            && ! is_array($data['parent_id']) && ! is_object($data['parent_id'])
+            && is_numeric($data['parent_id'])
             ? (int) $data['parent_id']
             : null;
         $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
@@ -243,6 +245,12 @@ class LedgerService
 
         if (LedgerAccount::query()->where('owner_id', $ownerId)->where('code', $code)->exists()) {
             throw new InvalidArgumentException('رمز الحساب مستخدم مسبقاً.');
+        }
+
+        // مصروف/عمولة بلا أب → تحت «مصاريف عامة» 5100 تلقائياً
+        if ($parentId === null && $type === 'expense') {
+            $expenseRoot = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+            $parentId = $expenseRoot ? (int) $expenseRoot->id : null;
         }
 
         $parent = $this->resolveParentAccount($ownerId, $parentId, $type);

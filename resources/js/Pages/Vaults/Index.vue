@@ -76,7 +76,10 @@ async function loadExpenseAccounts() {
     expenseAccounts.value = data.accounts || [];
     suggestExpenseCode.value = data.suggest_expense_code || '5101';
     suggestCommissionCode.value = data.suggest_commission_code || '5201';
-    expenseParentId.value = data.expense_parent_id || null;
+    const rawParent = data.expense_parent_id;
+    const parsedParent = Number(rawParent);
+    expenseParentId.value =
+      Number.isFinite(parsedParent) && parsedParent > 0 ? parsedParent : null;
   } catch (error) {
     loadError.value = error?.response?.data?.message || 'تعذر تحميل حسابات المصاريف';
     console.error(error);
@@ -198,8 +201,10 @@ async function confirmExpenseAccountSave(payload) {
   } catch (error) {
     const errors = error?.response?.data?.errors || {};
     const msg = error?.response?.data?.message
+      || errors.parent_id?.[0]
       || errors.code?.[0]
       || errors.name_ar?.[0]
+      || Object.values(errors)[0]?.[0]
       || 'تعذر إنشاء حساب المصروف';
     expenseAccountModalRef.value?.setError?.(msg);
     console.error(error);

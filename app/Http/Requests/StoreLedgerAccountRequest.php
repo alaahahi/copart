@@ -48,6 +48,7 @@ class StoreLedgerAccountRequest extends FormRequest
             'type.required' => 'نوع الحساب مطلوب.',
             'type.in' => 'نوع الحساب غير صالح.',
             'currency.in' => 'العملة غير صالحة.',
+            'parent_id.integer' => 'معرف الحساب الأب يجب أن يكون رقماً صحيحاً.',
             'parent_id.exists' => 'الحساب الأب غير موجود.',
         ];
     }
@@ -62,8 +63,20 @@ class StoreLedgerAccountRequest extends FormRequest
             $this->merge(['currency' => null]);
         }
 
-        if ($this->input('parent_id') === '' || $this->input('parent_id') === '0') {
+        $parentId = $this->input('parent_id');
+        // Frontend may send "", "0", {}, or non-numeric junk — treat as null
+        if (
+            $parentId === ''
+            || $parentId === '0'
+            || $parentId === 0
+            || $parentId === false
+            || is_array($parentId)
+            || is_object($parentId)
+            || (is_string($parentId) && ! ctype_digit(trim($parentId)))
+        ) {
             $this->merge(['parent_id' => null]);
+        } elseif ($parentId !== null && is_numeric($parentId)) {
+            $this->merge(['parent_id' => (int) $parentId]);
         }
     }
 }

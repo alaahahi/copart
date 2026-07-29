@@ -56,15 +56,20 @@ const submit = () => {
   if (!canSubmit()) return;
   errorMsg.value = '';
   const nameAr = form.value.name_ar.trim();
+  const parentRaw = props.expenseParentId;
+  const parentId = Number(parentRaw);
   const payload = {
     code: String(form.value.code).trim().toUpperCase(),
     name_ar: nameAr,
     name: nameAr,
     type: 'expense',
     currency: null,
-    parent_id: props.expenseParentId || null,
     is_active: true,
   };
+  // Only send a real integer parent; backend defaults expense/commission under 5100
+  if (Number.isFinite(parentId) && parentId > 0) {
+    payload.parent_id = parentId;
+  }
   emit('save', payload);
 };
 

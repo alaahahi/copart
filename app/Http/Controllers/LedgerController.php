@@ -96,16 +96,20 @@ class LedgerController extends Controller
         $ownerId = (int) Auth::user()->owner_id;
         $currency = $request->get('currency', '$') === 'IQD' ? 'IQD' : '$';
 
+        $ledger->ensureSystemAccounts($ownerId);
+
+        $expenseParentId = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('code', LedgerService::CODE_EXPENSE)
+            ->where('is_active', true)
+            ->value('id');
+
         return Response::json([
             'accounts' => $ledger->listExpenseCommissionAccounts($ownerId, $currency),
             'suggest_expense_code' => $ledger->suggestExpenseAccountCode($ownerId, 'expense'),
             'suggest_commission_code' => $ledger->suggestExpenseAccountCode($ownerId, 'commission'),
-            'expense_parent_id' => optional(
-                \App\Models\LedgerAccount::query()
-                    ->where('owner_id', $ownerId)
-                    ->where('code', LedgerService::CODE_EXPENSE)
-                    ->value('id')
-            ),
+            // Must be int|null — never optional() (JSON-encodes as {})
+            'expense_parent_id' => $expenseParentId !== null ? (int) $expenseParentId : null,
             'currency' => $currency,
         ], 200);
     }
@@ -659,8 +663,9 @@ class LedgerController extends Controller
 
         $ownerId = (int) Auth::user()->owner_id;
         $current = $vaults->resolveReceiptsVault($ownerId);
+        // قاصة الاستلام = نقد فقط (صندوق/بنك/خزنة) — لا نعرض مصاريف/إيرادات COA
         $options = $vaults->listForOwner($ownerId)
-            ->filter(fn (Vault $v) => (int) ($v->legacy_user_id ?? 0) > 0)
+            ->filter(fn (Vault $v) => $v->isCashBox() && (int) ($v->legacy_user_id ?? 0) > 0)
             ->map(fn (Vault $v) => [
                 'id' => (int) $v->id,
                 'name' => $v->name,

@@ -199,55 +199,23 @@ class Car extends Model
     }
 
     /**
-     * Dashboard / traders list debt:
-     * SUM(cars.total_s - discount) − SUM(account payments on the client wallet).
-     *
-     * Uses wallet payment movements (type=out, is_pay=1), NOT car.paid — so an
-     * undistributed payment still reduces the shown debt correctly.
+     * Per-client USD balance from ledger AR only (wallets table removed).
+     * Correlated on outer users.id — same SQL as LedgerService::clientBalanceSqlSubquery.
      */
-    public static function clientRemainingBalanceSqlSubquery(): \Closure
+    public static function clientRemainingBalanceSqlSubquery(int $ownerId): \Closure
     {
-        return function ($subquery) {
-            $subquery->selectRaw(
-                "ROUND(
-                    COALESCE(
-                        (
-                            SELECT SUM(COALESCE(c.total_s, 0) - COALESCE(c.discount, 0))
-                            FROM car AS c
-                            WHERE c.client_id = users.id
-                              AND c.deleted_at IS NULL
-                        ),
-                        0
-                    )
-                    -
-                    COALESCE(
-                        (
-                            SELECT -SUM(t.amount)
-                            FROM transactions AS t
-                            INNER JOIN wallets AS w ON w.id = t.wallet_id
-                            WHERE w.user_id = users.id
-                              AND t.type = 'out'
-                              AND t.is_pay = 1
-                              AND t.amount < 0
-                              AND t.currency = '$'
-                              AND t.deleted_at IS NULL
-                        ),
-                        0
-                    )
-                , 2)"
-            );
-        };
+        return \App\Services\LedgerService::clientBalanceSqlSubquery($ownerId, '$');
     }
 
     /**
-     * Base per-client remaining query (same formula as clientRemainingBalanceSqlSubquery).
+     * Base per-client remaining query (ledger AR balance).
      * Does not filter by balance — callers wrap / filter as needed.
      */
     public static function clientsRemainingBaseQuery(int $ownerId, int $clientTypeId): \Illuminate\Database\Query\Builder
     {
         $query = \Illuminate\Support\Facades\DB::table('users')
             ->select('users.id', 'users.name', 'users.phone', 'users.created_at', 'users.show_in_dashboard')
-            ->selectSub(self::clientRemainingBalanceSqlSubquery(), 'balance')
+            ->selectSub(self::clientRemainingBalanceSqlSubquery($ownerId), 'balance')
             ->where('users.owner_id', $ownerId)
             ->where('users.type_id', $clientTypeId)
             ->whereNull('users.deleted_at');
@@ -291,7 +259,7 @@ class Car extends Model
         )->get();
     }
 
-    /** Sum of (cars − account payments) across all clients of a tenant. */
+    /** Sum of ledger AR balances across all clients of a tenant. */
     public static function sumClientsRemaining(int $ownerId, int $clientTypeId): float
     {
         $total = \Illuminate\Support\Facades\DB::query()

@@ -110,7 +110,6 @@ class UserController extends Controller
         $isTradersQasa = in_array($q, ['traders_qasa', 'show_in_dashboard'], true);
         $isSystemQasa = $q === 'system_qasa';
         $isTraders = $q === 'traders';
-        $useQasaBalance = $isTradersQasa || $isSystemQasa;
 
         // قاصات النظام → dedicated vaults table (not fake trader users)
         if ($isSystemQasa) {
@@ -160,11 +159,9 @@ class UserController extends Controller
                     ->where('car.total_s', 0)
                     ->whereNull('car.deleted_at');
             }, 'car_total_un_pay')
-            // تجار بقاصة → رصيد الدفتر؛ الباقي → متبقي السيارات
+            // رصيد العميل من دفتر الأستاذ فقط (بدون جدول wallets)
             ->selectSub(
-                $useQasaBalance
-                    ? LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$')
-                    : Car::clientRemainingBalanceSqlSubquery(),
+                LedgerService::clientBalanceSqlSubquery((int) $owner_id, '$'),
                 'balance'
             )
             ->where('users.owner_id', $owner_id)
