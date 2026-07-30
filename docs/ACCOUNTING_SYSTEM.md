@@ -148,11 +148,24 @@ Vault::CASH_TYPES = ['cash', 'bank', 'safe']
 
 ### 3.2 زيادة مديونية عميل (دين بيع/شحن) — `postClientDebtIncrease`
 
-يُستدعى عبر `postWalletIncrease` عندما `walletPostingKind = client`:
+يُستدعى عبر `postWalletIncrease` عندما `walletPostingKind = client` (مسارات عامة غير تسعير بيع السيارة):
 
 | مدين | دائن |
 |------|------|
 | AR `1200-{clientId}` | إيراد `4100` |
+
+### 3.2.1 تسعير بيع سيارة (updateCarsS) — `postCarSaleClientDebt`
+
+عند تعديل `total_s` يجب **ألا** يُرحَّل كامل المبلغ كإيراد. الربح فقط → `4100`؛ التكلفة تُسترد على مصروف مشتريات السيارات:
+
+| مدين | دائن |
+|------|------|
+| AR `1200-{clientId}` = Δ`total_s` | مشتريات سيارات `5110` = استرداد التكلفة (Δمبيعات − Δربح) |
+| | إيراد `4100` = Δ`profit` فقط (`total_s − total` عبر `CarService::computeProfit`) |
+
+- مرآة العمليات: `AccountingController::adjustCarSaleClientDebt`
+- لا يمس نقد القاصة ولا دفعات العميل (AR/Cash منفصلة)
+- إصلاح تاريخي اختياري: `php artisan ledger:repair-car-sale-revenue` (افتراضي dry-run؛ `--execute` للترحيل)
 
 ### 3.3 وصل قبض مباشر على الصندوق — `postCashReceipt`
 

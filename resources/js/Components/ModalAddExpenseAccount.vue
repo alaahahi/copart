@@ -9,6 +9,7 @@ const props = defineProps({
   suggestExpenseCode: { type: String, default: '5101' },
   suggestCommissionCode: { type: String, default: '5201' },
   expenseParentId: { type: [Number, String], default: null },
+  incomeParentId: { type: [Number, String], default: null },
 });
 
 const emit = defineEmits(['close', 'save']);
@@ -16,7 +17,7 @@ const emit = defineEmits(['close', 'save']);
 const defaultForm = () => ({
   name_ar: '',
   code: '',
-  kind: 'expense', // expense | commission — both COA type=expense
+  kind: 'expense', // expense | income (عمولة/إيراد → type=income)
   notes: '',
 });
 
@@ -40,15 +41,15 @@ watch(
 watch(
   () => form.value.kind,
   (kind) => {
-    form.value.code = kind === 'commission'
+    form.value.code = kind === 'income'
       ? (props.suggestCommissionCode || '5201')
       : (props.suggestExpenseCode || '5101');
   }
 );
 
 const title = computed(() =>
-  form.value.kind === 'commission'
-    ? t('add_commission_account_title')
+  form.value.kind === 'income'
+    ? t('add_income_account_title')
     : t('add_expense_account_title')
 );
 
@@ -61,18 +62,18 @@ const submit = () => {
   if (!canSubmit()) return;
   errorMsg.value = '';
   const nameAr = form.value.name_ar.trim();
-  const parentRaw = props.expenseParentId;
+  const isIncome = form.value.kind === 'income';
+  const parentRaw = isIncome ? props.incomeParentId : props.expenseParentId;
   const parentId = Number(parentRaw);
   const payload = {
     code: String(form.value.code).trim().toUpperCase(),
     name_ar: nameAr,
     name: nameAr,
-    type: 'expense',
+    type: isIncome ? 'income' : 'expense',
     currency: null,
     is_active: true,
     show_in_accounting: true,
   };
-  // Only send a real integer parent; backend defaults expense/commission under 5100
   if (Number.isFinite(parentId) && parentId > 0) {
     payload.parent_id = parentId;
   }
@@ -91,82 +92,84 @@ defineExpose({
 </script>
 
 <template>
-  <Transition name="erp-modal">
-    <div
-      v-if="show"
-      class="erp-modal-mask"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-expense-account-title"
-      @click.self="close"
-    >
-      <div class="erp-modal-panel">
-        <header class="erp-modal-header">
-          <div class="erp-modal-header-text">
-            <p class="erp-modal-eyebrow">{{ $t('coa_eyebrow') }}</p>
-            <h2 id="add-expense-account-title" class="erp-modal-title">{{ title }}</h2>
-            <p class="erp-modal-subtitle">
-              {{ $t('expense_account_modal_subtitle') }}
-            </p>
-          </div>
-          <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
-          </button>
-        </header>
+  <Teleport to="body">
+    <Transition name="erp-modal">
+      <div
+        v-if="show"
+        class="erp-modal-mask"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-expense-account-title"
+        @click.self="close"
+      >
+        <div class="erp-modal-panel">
+          <header class="erp-modal-header">
+            <div class="erp-modal-header-text">
+              <p class="erp-modal-eyebrow">{{ $t('coa_eyebrow') }}</p>
+              <h2 id="add-expense-account-title" class="erp-modal-title">{{ title }}</h2>
+              <p class="erp-modal-subtitle">
+                {{ $t('expense_account_modal_subtitle') }}
+              </p>
+            </div>
+            <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </header>
 
-        <div class="erp-modal-body">
-          <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
+          <div class="erp-modal-body">
+            <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
 
-          <div class="erp-field">
-            <span class="erp-label">{{ $t('classification') }}</span>
-            <div class="kind-row">
-              <label class="kind-chip" :class="{ active: form.kind === 'expense' }">
-                <input v-model="form.kind" type="radio" value="expense" class="sr-only" />
-                {{ $t('expense_kind') }}
-              </label>
-              <label class="kind-chip" :class="{ active: form.kind === 'commission' }">
-                <input v-model="form.kind" type="radio" value="commission" class="sr-only" />
-                {{ $t('commission_kind') }}
-              </label>
+            <div class="erp-field">
+              <span class="erp-label">{{ $t('classification') }}</span>
+              <div class="kind-row">
+                <label class="kind-chip" :class="{ active: form.kind === 'expense' }">
+                  <input v-model="form.kind" type="radio" value="expense" class="sr-only" />
+                  {{ $t('expense_kind') }}
+                </label>
+                <label class="kind-chip" :class="{ active: form.kind === 'income' }">
+                  <input v-model="form.kind" type="radio" value="income" class="sr-only" />
+                  {{ $t('income_kind') }}
+                </label>
+              </div>
+            </div>
+
+            <div class="erp-field">
+              <label class="erp-label" for="exp-acc-name">{{ $t('name') }}</label>
+              <input
+                id="exp-acc-name"
+                v-model="form.name_ar"
+                type="text"
+                :placeholder="form.kind === 'income' ? $t('income_kind_placeholder') : $t('expense_kind')"
+                class="erp-input"
+                @keyup.enter="submit"
+              />
+            </div>
+
+            <div class="erp-field">
+              <label class="erp-label" for="exp-acc-code">{{ $t('account_code') }}</label>
+              <input
+                id="exp-acc-code"
+                v-model="form.code"
+                type="text"
+                dir="ltr"
+                class="erp-input"
+                @keyup.enter="submit"
+              />
             </div>
           </div>
 
-          <div class="erp-field">
-            <label class="erp-label" for="exp-acc-name">{{ $t('name') }}</label>
-            <input
-              id="exp-acc-name"
-              v-model="form.name_ar"
-              type="text"
-              :placeholder="form.kind === 'commission' ? $t('commission_kind') : $t('expense_kind')"
-              class="erp-input"
-              @keyup.enter="submit"
-            />
-          </div>
-
-          <div class="erp-field">
-            <label class="erp-label" for="exp-acc-code">{{ $t('account_code') }}</label>
-            <input
-              id="exp-acc-code"
-              v-model="form.code"
-              type="text"
-              dir="ltr"
-              class="erp-input"
-              @keyup.enter="submit"
-            />
-          </div>
+          <footer class="erp-modal-footer">
+            <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">{{ $t('cancel') }}</button>
+            <button type="button" class="erp-btn erp-btn-primary" :disabled="!canSubmit()" @click="submit">
+              {{ saving ? $t('saving') : $t('create_account') }}
+            </button>
+          </footer>
         </div>
-
-        <footer class="erp-modal-footer">
-          <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">{{ $t('cancel') }}</button>
-          <button type="button" class="erp-btn erp-btn-primary" :disabled="!canSubmit()" @click="submit">
-            {{ saving ? $t('saving') : $t('create_account') }}
-          </button>
-        </footer>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>

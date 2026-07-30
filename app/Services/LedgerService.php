@@ -257,10 +257,14 @@ class LedgerService
             throw new InvalidArgumentException('رمز الحساب مستخدم مسبقاً.');
         }
 
-        // مصروف/عمولة بلا أب → تحت «مصاريف عامة» 5100 تلقائياً
+        // مصروف بلا أب → تحت «مصاريف عامة» 5100 · إيراد/عمولة بلا أب → تحت «إيرادات الشحن» 4100
         if ($parentId === null && $type === 'expense') {
             $expenseRoot = $this->systemAccount($ownerId, self::CODE_EXPENSE);
             $parentId = $expenseRoot ? (int) $expenseRoot->id : null;
+        }
+        if ($parentId === null && $type === 'income') {
+            $revenueRoot = $this->systemAccount($ownerId, self::CODE_REVENUE);
+            $parentId = $revenueRoot ? (int) $revenueRoot->id : null;
         }
 
         $parent = $this->resolveParentAccount($ownerId, $parentId, $type);
@@ -444,6 +448,61 @@ class LedgerService
         return $account->fresh();
     }
 
+    /**
+     * Hard-delete an unused non-system COA account (no SoftDeletes on ledger_accounts).
+     * Blocked when journal lines exist, children exist, or account is system-critical.
+     */
+    public function deleteUnusedAccount(int $ownerId, int $accountId): array
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail($accountId);
+
+        if ($account->is_system) {
+            throw new RuntimeException('لا يمكن حذف الحسابات النظامية.');
+        }
+
+        $protectedCodes = [
+            self::CODE_CASH_USD,
+            self::CODE_CASH_IQD,
+            self::CODE_TREASURY_USD,
+            self::CODE_TREASURY_IQD,
+            self::CODE_REVENUE,
+            self::CODE_EXPENSE,
+            self::CODE_CAR_PURCHASES,
+            self::CODE_OPENING,
+            self::CODE_TRADER_PROFITS,
+        ];
+        if (in_array((string) $account->code, $protectedCodes, true)) {
+            throw new RuntimeException('لا يمكن حذف حساب أساسي في دليل الحسابات.');
+        }
+
+        if ($account->lines()->exists()) {
+            throw new RuntimeException('لا يمكن حذف الحساب لوجود حركات عليه في قيود اليومية.');
+        }
+
+        if ($account->children()->exists()) {
+            throw new RuntimeException('لا يمكن حذف الحساب لوجود حسابات فرعية تابعة له.');
+        }
+
+        $snapshot = [
+            'id' => (int) $account->id,
+            'code' => $account->code,
+            'name' => $account->name_ar ?: $account->name,
+            'type' => $account->type,
+            'owner_id' => $ownerId,
+        ];
+
+        $account->delete();
+
+        Log::info('Ledger account deleted (unused)', [
+            ...$snapshot,
+            'by' => Auth::id(),
+        ]);
+
+        return $snapshot;
+    }
+
     protected function normalizeAccountCode(string $code): string
     {
         $code = strtoupper(trim($code));
@@ -582,7 +641,10 @@ class LedgerService
     }
 
     /**
-     * Client debt increases (increaseWallet on trader): Debit AR / Credit Revenue
+     * Client debt increases (increaseWallet on trader): Debit AR / Credit Revenue.
+     *
+     * Generic wallet path only — car sales pricing must use {@see postCarSaleClientDebt}
+     * so 4100 receives profit only (cost recovers against مشتريات سيارات).
      */
     public function postClientDebtIncrease(int $ownerId, int $clientId, float $amount, string $currency, string $memo, $reference = null): JournalEntry
     {
@@ -601,6 +663,208 @@ class LedgerService
             ['account_id' => $ar->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
             ['account_id' => $revenue->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
         ]);
+    }
+
+    /**
+     * Recognize / adjust client AR for car sales pricing (updateCarsS).
+     *
+     * | مدين | دائن |
+     * | AR `1200-{client}` = sales_delta | مشتريات سيارات `5110` = cost_recovery |
+     * | (أو العكس عند التخفيض) | إيرادات الشحن `4100` = profit only |
+     *
+     * Invariant: sales_delta === cost_recovery_delta + revenue_delta
+     * Does not touch cash / client payments.
+     */
+    public function postCarSaleClientDebt(
+        int $ownerId,
+        int $clientId,
+        float $salesDelta,
+        float $costRecoveryDelta,
+        float $revenueDelta,
+        string $currency,
+        string $memo,
+        $reference = null
+    ): ?JournalEntry {
+        $salesDelta = round($salesDelta, 2);
+        $costRecoveryDelta = round($costRecoveryDelta, 2);
+        $revenueDelta = round($revenueDelta, 2);
+
+        if (abs($salesDelta) < 0.005 && abs($costRecoveryDelta) < 0.005 && abs($revenueDelta) < 0.005) {
+            return null;
+        }
+
+        if (round($salesDelta - $costRecoveryDelta - $revenueDelta, 2) !== 0.0) {
+            throw new InvalidArgumentException(
+                "تقسيم دين بيع السيارة غير متوازن: مبيعات {$salesDelta} ≠ تكلفة {$costRecoveryDelta} + ربح {$revenueDelta}"
+            );
+        }
+
+        $ar = $this->clientReceivableAccount($ownerId, $clientId);
+        $revenue = $this->systemAccount($ownerId, self::CODE_REVENUE);
+        $purchases = $this->resolveCarPurchasesExpenseAccount($ownerId);
+
+        $lines = [];
+
+        if ($salesDelta > 0) {
+            $lines[] = ['account_id' => $ar->id, 'debit' => $salesDelta, 'credit' => 0, 'currency' => $currency, 'memo' => $memo];
+        } elseif ($salesDelta < 0) {
+            $lines[] = ['account_id' => $ar->id, 'debit' => 0, 'credit' => abs($salesDelta), 'currency' => $currency, 'memo' => $memo];
+        }
+
+        if ($costRecoveryDelta > 0) {
+            $lines[] = ['account_id' => $purchases->id, 'debit' => 0, 'credit' => $costRecoveryDelta, 'currency' => $currency, 'memo' => $memo];
+        } elseif ($costRecoveryDelta < 0) {
+            $lines[] = ['account_id' => $purchases->id, 'debit' => abs($costRecoveryDelta), 'credit' => 0, 'currency' => $currency, 'memo' => $memo];
+        }
+
+        if ($revenueDelta > 0) {
+            $lines[] = ['account_id' => $revenue->id, 'debit' => 0, 'credit' => $revenueDelta, 'currency' => $currency, 'memo' => $memo];
+        } elseif ($revenueDelta < 0) {
+            $lines[] = ['account_id' => $revenue->id, 'debit' => abs($revenueDelta), 'credit' => 0, 'currency' => $currency, 'memo' => $memo];
+        }
+
+        if (count($lines) < 2) {
+            throw new InvalidArgumentException('قيد بيع السيارة يحتاج سطرين على الأقل بعد التقسيم.');
+        }
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'car_sale',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], $lines);
+    }
+
+    /**
+     * Safe repair: historical «تعديل مصاريف» posts credited full sales to 4100.
+     * Moves excess (posted revenue − car profit) from 4100 → credit مشتريات سيارات.
+     * AR / cash untouched. Idempotent when excess ≈ 0.
+     *
+     * @return array{repaired: int, skipped: int, warnings: list<string>, dry_run: bool, details: list<array<string, mixed>>}
+     */
+    public function repairOverstatedCarSaleRevenue(?int $ownerId = null, bool $dryRun = true): array
+    {
+        $carService = app(CarService::class);
+        $query = \App\Models\Car::query()
+            ->where('total_s', '>', 0)
+            ->where('total', '>', 0);
+
+        if ($ownerId) {
+            $query->where('owner_id', $ownerId);
+        }
+
+        $repaired = 0;
+        $skipped = 0;
+        $warnings = [];
+        $details = [];
+
+        foreach ($query->cursor() as $car) {
+            $this->ensureSystemAccounts((int) $car->owner_id);
+            $revenue = $this->systemAccount((int) $car->owner_id, self::CODE_REVENUE);
+            $purchases = $this->resolveCarPurchasesExpenseAccount((int) $car->owner_id);
+
+            $vin = trim((string) ($car->vin ?? ''));
+            $memoNeedle = 'تعديل مصاريف';
+
+            $lines = \App\Models\JournalLine::query()
+                ->where('ledger_account_id', $revenue->id)
+                ->whereHas('entry', function ($q) use ($car, $memoNeedle, $vin) {
+                    $q->where('owner_id', $car->owner_id)
+                        ->where(function ($mq) use ($memoNeedle) {
+                            $mq->where('memo', 'like', '%'.$memoNeedle.'%')
+                                ->orWhere('memo', 'like', '%تصحيح إيراد شحن%');
+                        })
+                        ->where(function ($cq) use ($vin, $car, $memoNeedle) {
+                            $cq->where(function ($rq) use ($car, $memoNeedle) {
+                                $rq->where('reference_type', Transactions::class)
+                                    ->whereIn('reference_id', function ($sub) use ($car, $memoNeedle) {
+                                        $sub->select('id')
+                                            ->from('transactions')
+                                            ->where('morphed_id', $car->id)
+                                            ->where('description', 'like', '%'.$memoNeedle.'%');
+                                    });
+                            });
+                            if ($vin !== '') {
+                                $cq->orWhere('memo', 'like', '%'.$vin.'%');
+                            }
+                        });
+                })
+                ->with('entry:id,memo,owner_id,source')
+                ->get();
+
+            $netCredit = 0.0;
+            foreach ($lines as $line) {
+                $netCredit += (float) $line->credit - (float) $line->debit;
+            }
+
+            $expectedProfit = $carService->computeProfit((float) $car->total_s, (float) $car->total);
+            $excess = round($netCredit - $expectedProfit, 2);
+
+            if ($excess <= 0.009) {
+                $skipped++;
+                continue;
+            }
+
+            $cost = round((float) $car->total, 2);
+            $toMove = round(min($excess, $cost), 2);
+            if ($toMove <= 0.009) {
+                $skipped++;
+                continue;
+            }
+
+            if ($excess > $cost + 0.009) {
+                $warnings[] = "سيارة #{$car->id} VIN {$vin}: فائض إيراد {$excess} أكبر من التكلفة {$cost} — يُنقل {$toMove} فقط؛ راجع يدوياً.";
+            }
+
+            $corrMemo = 'تصحيح إيراد شحن — ربح فقط للسيارة '.($car->car_type ?? '').' '.$vin;
+
+            $details[] = [
+                'car_id' => $car->id,
+                'vin' => $vin,
+                'posted_revenue' => round($netCredit, 2),
+                'expected_profit' => round($expectedProfit, 2),
+                'excess' => $excess,
+                'moved' => $toMove,
+            ];
+
+            if ($dryRun) {
+                $repaired++;
+                continue;
+            }
+
+            $this->post([
+                'owner_id' => (int) $car->owner_id,
+                'entry_date' => now()->toDateString(),
+                'memo' => $corrMemo,
+                'source' => 'car_sale_repair',
+                'currency' => '$',
+                'reference_type' => \App\Models\Car::class,
+                'reference_id' => $car->id,
+            ], [
+                ['account_id' => $revenue->id, 'debit' => $toMove, 'credit' => 0, 'currency' => '$', 'memo' => $corrMemo],
+                ['account_id' => $purchases->id, 'debit' => 0, 'credit' => $toMove, 'currency' => '$', 'memo' => $corrMemo],
+            ]);
+
+            Log::info('Repaired overstated car sale revenue', [
+                'car_id' => $car->id,
+                'owner_id' => $car->owner_id,
+                'moved' => $toMove,
+                'by' => Auth::id(),
+            ]);
+
+            $repaired++;
+        }
+
+        return [
+            'repaired' => $repaired,
+            'skipped' => $skipped,
+            'warnings' => $warnings,
+            'dry_run' => $dryRun,
+            'details' => $details,
+        ];
     }
 
     /**
@@ -649,19 +913,30 @@ class LedgerService
     }
 
     /**
-     * Cash-box receipt (وصل قبض): Debit Cash / Credit Revenue.
+     * Cash-box receipt (وصل قبض): Debit Cash / Credit COA (revenue or expense refund).
      * Optional $cashUserId routes to that user's cash vault ledger (not always 1100).
+     * Optional $coaAccountId posts to a specific expense/income COA (else system 4100 revenue).
      */
-    public function postCashReceipt(int $ownerId, float $amount, string $currency, string $memo, $reference = null, ?int $cashUserId = null): JournalEntry
-    {
+    public function postCashReceipt(
+        int $ownerId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?int $cashUserId = null,
+        ?int $coaAccountId = null,
+        ?string $entryDate = null
+    ): JournalEntry {
         $cash = $cashUserId
             ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
             : $this->cashAccount($ownerId, $currency);
-        $revenue = $this->systemAccount($ownerId, self::CODE_REVENUE);
+        $contra = $coaAccountId
+            ? $this->resolveExpenseOrIncomeAccount($ownerId, $coaAccountId)
+            : $this->systemAccount($ownerId, self::CODE_REVENUE);
 
         return $this->post([
             'owner_id' => $ownerId,
-            'entry_date' => now()->toDateString(),
+            'entry_date' => $entryDate ?: now()->toDateString(),
             'memo' => $memo,
             'source' => 'cash_box',
             'currency' => $currency,
@@ -669,14 +944,14 @@ class LedgerService
             'reference_id' => $reference?->id ?? null,
         ], [
             ['account_id' => $cash->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
-            ['account_id' => $revenue->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $contra->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
         ]);
     }
 
     /**
-     * Cash-box payment (وصل سحب): Debit Expense / Credit Cash.
+     * Cash-box payment (وصل صرف): Debit expense/income COA / Credit Cash.
      * Optional $cashUserId routes to that user's cash vault ledger.
-     * Optional $expenseAccountId posts to a specific expense COA (else system 5100).
+     * Optional $expenseAccountId posts to a specific expense/income COA (else system 5100).
      */
     public function postCashDisbursement(
         int $ownerId,
@@ -691,7 +966,7 @@ class LedgerService
         $cash = $cashUserId
             ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
             : $this->cashAccount($ownerId, $currency);
-        $expense = $this->resolveExpenseAccount($ownerId, $expenseAccountId);
+        $coa = $this->resolveExpenseOrIncomeAccount($ownerId, $expenseAccountId);
 
         return $this->post([
             'owner_id' => $ownerId,
@@ -702,28 +977,46 @@ class LedgerService
             'reference_type' => $reference ? get_class($reference) : null,
             'reference_id' => $reference?->id ?? null,
         ], [
-            ['account_id' => $expense->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $coa->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
             ['account_id' => $cash->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
         ]);
     }
 
     /**
      * Resolve an owner expense COA, or fall back to system General Expenses (5100).
+     * Prefer resolveExpenseOrIncomeAccount when the Vaults screen may post to income (عمولة).
      */
     public function resolveExpenseAccount(int $ownerId, ?int $expenseAccountId = null): LedgerAccount
     {
         if ($expenseAccountId) {
+            $account = $this->resolveExpenseOrIncomeAccount($ownerId, $expenseAccountId);
+            if ($account->type !== 'expense') {
+                throw new InvalidArgumentException('الحساب المحدد ليس حساب مصروف في دليل الحسابات.');
+            }
+
+            return $account;
+        }
+
+        return $this->systemAccount($ownerId, self::CODE_EXPENSE);
+    }
+
+    /**
+     * Resolve expense or income COA for Vaults قبض/صرف on مصاريف وعمولات accounts.
+     */
+    public function resolveExpenseOrIncomeAccount(int $ownerId, ?int $accountId = null): LedgerAccount
+    {
+        if ($accountId) {
             $account = LedgerAccount::query()
                 ->where('owner_id', $ownerId)
-                ->where('id', $expenseAccountId)
+                ->where('id', $accountId)
                 ->where('is_active', true)
                 ->first();
 
             if (! $account) {
-                throw new InvalidArgumentException('حساب المصروف غير موجود.');
+                throw new InvalidArgumentException('الحساب غير موجود في دليل الحسابات.');
             }
-            if ($account->type !== 'expense') {
-                throw new InvalidArgumentException('الحساب المحدد ليس حساب مصروف في دليل الحسابات.');
+            if (! in_array($account->type, ['expense', 'income'], true)) {
+                throw new InvalidArgumentException('الحساب يجب أن يكون مصروفاً أو إيراداً.');
             }
 
             return $account;
@@ -755,13 +1048,16 @@ class LedgerService
             ->where(function ($q) {
                 $q->where('type', 'expense')
                     ->orWhere(function ($inner) {
+                        // Non-system income: commissions (عمولة / 52xx) + other vaults-tab revenue COAs
                         $inner->where('type', 'income')
                             ->where('is_system', false)
                             ->where(function ($n) {
                                 $n->where('name_ar', 'like', '%عمول%')
                                     ->orWhere('name', 'like', '%commission%')
                                     ->orWhere('name', 'like', '%Commission%')
-                                    ->orWhere('code', 'like', '42%');
+                                    ->orWhere('code', 'like', '52%')
+                                    ->orWhere('code', 'like', '42%')
+                                    ->orWhere('show_in_accounting', true);
                             });
                     });
             })
@@ -772,13 +1068,18 @@ class LedgerService
         return $accounts->map(function (LedgerAccount $account) use ($currency) {
             $hasMovements = ((int) ($account->lines_count ?? 0)) > 0;
             $label = $account->name_ar ?: $account->name;
-            $kind = $account->type === 'income' ? 'commission' : 'expense';
-            if ($account->type === 'expense' && (
+            $kind = $account->type === 'income' ? 'income' : 'expense';
+            if (
                 str_contains((string) $account->name_ar, 'عمول')
                 || stripos((string) $account->name, 'commission') !== false
-            )) {
+                || preg_match('/^52/', (string) $account->code)
+            ) {
                 $kind = 'commission';
             }
+
+            $canDelete = ! $hasMovements
+                && ! (bool) $account->is_system
+                && ! $account->children()->exists();
 
             return [
                 'id' => $account->id,
@@ -790,12 +1091,57 @@ class LedgerService
                 'is_system' => (bool) $account->is_system,
                 'show_in_accounting' => (bool) $account->show_in_accounting,
                 'has_movements' => $hasMovements,
-                'can_disburse' => $account->type === 'expense',
+                // Vaults detail page always allows قبض + صرف for expense/income COAs
+                'can_disburse' => true,
+                'can_receive' => true,
+                'can_delete' => $canDelete,
                 'balance' => $account->balance($currency),
                 'balance_dinar' => $account->balance('IQD'),
                 'currency' => $currency,
             ];
         })->values();
+    }
+
+    /**
+     * One-time / safe reclassify: commission-named or 52xx expense COAs → income under 4100.
+     *
+     * @return int Number of accounts updated
+     */
+    public function reclassifyCommissionAccountsToIncome(?int $ownerId = null): int
+    {
+        $query = LedgerAccount::query()
+            ->where('type', 'expense')
+            ->where('is_system', false)
+            ->where(function ($q) {
+                $q->where('name_ar', 'like', '%عمول%')
+                    ->orWhere('name', 'like', '%commission%')
+                    ->orWhere('name', 'like', '%Commission%')
+                    ->orWhere('code', 'like', '52%');
+            });
+
+        if ($ownerId) {
+            $query->where('owner_id', $ownerId);
+        }
+
+        $updated = 0;
+        foreach ($query->get() as $account) {
+            $this->ensureSystemAccounts((int) $account->owner_id);
+            $revenueRoot = $this->systemAccount((int) $account->owner_id, self::CODE_REVENUE);
+            $account->type = 'income';
+            if ($revenueRoot) {
+                $account->parent_id = $revenueRoot->id;
+            }
+            $account->save();
+            $updated++;
+
+            Log::info('Reclassified commission COA to income', [
+                'account_id' => $account->id,
+                'code' => $account->code,
+                'owner_id' => $account->owner_id,
+            ]);
+        }
+
+        return $updated;
     }
 
     /**

@@ -621,24 +621,52 @@ class DashboardController extends Controller
         }
         $total_s = (($checkout_s+$shipping_dolar_s+ $coc_dolar_s+(int)($dinar_s / ($dolar_price_s))+$erbilTotalS) ??0);
         $profit = $carService->computeProfit((float) $total_s, (float) $car->total);
-        $descClient = trans('text.editExpenses').' '.$total_s-$car->total_s.' '.trans('text.for_car').$car->car_type.' '.$car->vin;
-        $this->accountingController->increaseWallet($total_s-$car->total_s, $descClient,$car->client_id,$car->id,'App\Models\User');
-            // Extract the relevant fields from the $request object
+        $split = $carService->computeSaleDebtSplit(
+            (float) ($car->total_s ?? 0),
+            (float) $total_s,
+            (float) ($car->total ?? 0)
+        );
+        $salesDelta = (float) $split['sales_delta'];
+        $descClient = trans('text.editExpenses').' '.$salesDelta.' '.trans('text.for_car').$car->car_type.' '.$car->vin;
+
+        DB::transaction(function () use (
+            $request,
+            $car,
+            $carService,
+            $owner_id,
+            $total_s,
+            $profit,
+            $split,
+            $salesDelta,
+            $descClient
+        ) {
+            if ($car->client_id && (
+                abs($salesDelta) >= 0.005
+                || abs((float) $split['cost_recovery_delta']) >= 0.005
+                || abs((float) $split['revenue_delta']) >= 0.005
+            )) {
+                $this->accountingController->adjustCarSaleClientDebt(
+                    $salesDelta,
+                    (float) $split['cost_recovery_delta'],
+                    (float) $split['revenue_delta'],
+                    $descClient,
+                    (int) $car->client_id,
+                    $car->id,
+                    'App\Models\Car'
+                );
+            }
+
             $dataToUpdate = $request->all();
-            // If 'purchase_price' and 'paid_amount' are calculated separately, add them to $dataToUpdate
-            $dataToUpdate['total_s']=$total_s;
-            $dataToUpdate['profit']=$profit;
-            // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
+            $dataToUpdate['total_s'] = $total_s;
+            $dataToUpdate['profit'] = $profit;
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
 
-            // Never trust frontend results — recompute from remaining (total_s − paid − discount).
             $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
             $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
             $dataToUpdate['results'] = $carService->resolveResultsStatus((float) $total_s, $paid, $discount);
 
-            // Update the car model
             $car->update($dataToUpdate);
-            
+        });
 
         return Response::json('ok', 200);    
     }

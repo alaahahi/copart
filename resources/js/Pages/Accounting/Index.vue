@@ -180,6 +180,10 @@ const props = defineProps({
     type: [Number, String],
     default: null
   },
+  incomeParentId: {
+    type: [Number, String],
+    default: null
+  },
 });
 
 const showModalExpenseAccount = ref(false);
@@ -188,6 +192,7 @@ const localExpenseShortcuts = ref([...(props.expenseShortcuts || [])]);
 const localSuggestExpenseCode = ref(props.suggestExpenseCode || '5101');
 const localSuggestCommissionCode = ref(props.suggestCommissionCode || '5201');
 const localExpenseParentId = ref(props.expenseParentId);
+const localIncomeParentId = ref(props.incomeParentId);
 
 function openModalAddExpenseAccount() {
   showModalExpenseAccount.value = true;
@@ -205,6 +210,10 @@ async function refreshExpenseShortcuts() {
     const parsedParent = Number(rawParent);
     localExpenseParentId.value =
       Number.isFinite(parsedParent) && parsedParent > 0 ? parsedParent : null;
+    const rawIncomeParent = data.income_parent_id;
+    const parsedIncomeParent = Number(rawIncomeParent);
+    localIncomeParentId.value =
+      Number.isFinite(parsedIncomeParent) && parsedIncomeParent > 0 ? parsedIncomeParent : null;
   } catch (error) {
     console.error(error);
   }
@@ -627,6 +636,7 @@ async function saveDescription(tran) {
       :suggest-expense-code="localSuggestExpenseCode"
       :suggest-commission-code="localSuggestCommissionCode"
       :expense-parent-id="localExpenseParentId"
+      :income-parent-id="localIncomeParentId"
       @save="confirmExpenseAccountSave"
       @close="showModalExpenseAccount = false"
     />

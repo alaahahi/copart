@@ -27,11 +27,15 @@ const expenseAccounts = ref([]);
 const suggestExpenseCode = ref('5101');
 const suggestCommissionCode = ref('5201');
 const expenseParentId = ref(null);
+const incomeParentId = ref(null);
 const formData = ref({});
 const q = ref('');
 const loading = ref(false);
 const loadError = ref('');
 const togglingIds = ref([]);
+const deletingExpenseId = ref(null);
+const showModalDelExpense = ref(false);
+const expenseToDelete = ref(null);
 
 const filteredVaults = computed(() => {
   const term = String(q.value || '').trim().toLowerCase();
@@ -80,6 +84,10 @@ async function loadExpenseAccounts() {
     const parsedParent = Number(rawParent);
     expenseParentId.value =
       Number.isFinite(parsedParent) && parsedParent > 0 ? parsedParent : null;
+    const rawIncomeParent = data.income_parent_id;
+    const parsedIncomeParent = Number(rawIncomeParent);
+    incomeParentId.value =
+      Number.isFinite(parsedIncomeParent) && parsedIncomeParent > 0 ? parsedIncomeParent : null;
   } catch (error) {
     loadError.value = error?.response?.data?.message || 'تعذر تحميل حسابات المصاريف';
     console.error(error);
@@ -250,8 +258,33 @@ function vaultTypeLabel(type) {
 }
 
 function accountKindKey(row) {
-  if (row.kind === 'commission' || row.type === 'income') return 'commission_kind';
+  if (row.type === 'income' || row.kind === 'income' || row.kind === 'commission') {
+    return 'income_kind';
+  }
   return 'expense_kind';
+}
+
+function openModalDelExpense(row = {}) {
+  expenseToDelete.value = row;
+  showModalDelExpense.value = true;
+}
+
+async function confirmDelExpense() {
+  const row = expenseToDelete.value;
+  if (!row?.id || deletingExpenseId.value) return;
+  deletingExpenseId.value = row.id;
+  try {
+    await axios.post('/api/ledgerExpenseAccountDelete', { id: row.id });
+    showModalDelExpense.value = false;
+    expenseToDelete.value = null;
+    await loadExpenseAccounts();
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || 'تعذر حذف الحساب';
+    showModalDelExpense.value = false;
+    console.error(error);
+  } finally {
+    deletingExpenseId.value = null;
+  }
 }
 
 function walletUserId(row) {
@@ -277,6 +310,7 @@ function walletUserId(row) {
       :suggest-expense-code="suggestExpenseCode"
       :suggest-commission-code="suggestCommissionCode"
       :expense-parent-id="expenseParentId"
+      :income-parent-id="incomeParentId"
       @save="confirmExpenseAccountSave"
       @close="showModalExpenseAccount = false"
     />
@@ -291,6 +325,22 @@ function walletUserId(row) {
         <h2 class="mb-5 dark:text-white text-center">
           هل متأكد من حذف القاصة {{ formData.name }} ؟
         </h2>
+      </template>
+    </ModalDelClient>
+
+    <ModalDelClient
+      :show="showModalDelExpense"
+      :formData="expenseToDelete || {}"
+      @a="confirmDelExpense"
+      @close="showModalDelExpense = false"
+    >
+      <template #header>
+        <h2 class="mb-5 dark:text-white text-center">
+          هل متأكد من حذف الحساب {{ expenseToDelete?.name }} ({{ expenseToDelete?.code }})؟
+        </h2>
+        <p class="mb-2 text-center text-sm text-slate-300 dark:text-slate-300">
+          يُحذف فقط إن لم تكن عليه أي حركات.
+        </p>
       </template>
     </ModalDelClient>
 
@@ -501,10 +551,20 @@ function walletUserId(row) {
                         <Link
                           class="action-btn action-wallet"
                           :href="route('expenseAccount', { id: row.id })"
-                          :title="row.can_disburse ? $t('expenses') : $t('accounting_account')"
+                          :title="$t('accounting_account')"
                         >
                           <wallet />
                         </Link>
+                        <button
+                          v-if="row.can_delete"
+                          type="button"
+                          class="action-btn action-del"
+                          :disabled="deletingExpenseId === row.id"
+                          :title="$t('delete')"
+                          @click="openModalDelExpense(row)"
+                        >
+                          <trash />
+                        </button>
                       </div>
                     </td>
                   </tr>

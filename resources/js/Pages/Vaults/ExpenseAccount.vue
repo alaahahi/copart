@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import ModalExpenseDisburse from '@/Components/ModalExpenseDisburse.vue';
+import ModalDelClient from '@/Components/ModalDelCar.vue';
 import print from '@/Components/icon/print.vue';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
@@ -18,11 +19,18 @@ const openingBalance = ref(0);
 const loading = ref(false);
 const loadError = ref('');
 const currency = ref('$');
-const showDisburse = ref(false);
-const disburseModalRef = ref(null);
+const showCashModal = ref(false);
+const cashModalMode = ref('disburse');
+const cashModalRef = ref(null);
+const showDeleteModal = ref(false);
+const deleting = ref(false);
 const flash = ref('');
 
-const canDisburse = computed(() => !!account.value?.can_disburse);
+const canDisburse = computed(() => account.value?.can_disburse !== false);
+const canReceive = computed(() => account.value?.can_receive !== false);
+const canDelete = computed(() => !!account.value?.can_delete);
+const typeLabel = computed(() => (account.value?.type === 'income' ? 'إيراد' : 'مصروف'));
+const pageTitle = computed(() => `${typeLabel.value} — ${account.value?.name || ''}`);
 
 const fallbackPrintUserId = computed(() => {
   const first = (props.cashVaults || []).find((v) => v?.id);
@@ -47,10 +55,10 @@ async function loadLedger() {
         ...account.value,
         ...data.account,
         name: data.account.name || account.value.name,
-        can_disburse: account.value.type === 'expense' || data.account.type === 'expense',
+        can_disburse: true,
+        can_receive: true,
       };
     }
-    // Refresh balances
     const list = await axios.get('/api/ledgerExpenseAccounts', {
       params: { currency: currency.value },
     });
@@ -58,7 +66,11 @@ async function loadLedger() {
     if (match) {
       account.value.balance = match.balance;
       account.value.balance_dinar = match.balance_dinar;
-      account.value.can_disburse = !!match.can_disburse;
+      account.value.can_disburse = match.can_disburse !== false;
+      account.value.can_receive = match.can_receive !== false;
+      account.value.can_delete = !!match.can_delete;
+      account.value.has_movements = !!match.has_movements;
+      account.value.type = match.type || account.value.type;
     }
   } catch (error) {
     loadError.value = error?.response?.data?.message || 'تعذر تحميل دفتر الحساب';
@@ -70,31 +82,57 @@ async function loadLedger() {
 
 onMounted(loadLedger);
 
-async function confirmDisburse(payload) {
-  disburseModalRef.value?.setSaving?.(true);
-  disburseModalRef.value?.setError?.('');
+function openCashModal(mode) {
+  cashModalMode.value = mode;
+  showCashModal.value = true;
+}
+
+async function confirmCashMove(payload) {
+  cashModalRef.value?.setSaving?.(true);
+  cashModalRef.value?.setError?.('');
+  const isReceive = cashModalMode.value === 'receive';
+  const url = isReceive ? '/api/ledgerExpenseReceive' : '/api/ledgerExpenseDisburse';
   try {
-    const { data } = await axios.post('/api/ledgerExpenseDisburse', {
+    const { data } = await axios.post(url, {
       ...payload,
       expense_ledger_account_id: account.value.id,
     });
-    showDisburse.value = false;
-    flash.value = data.message || 'تم صرف المصروف';
+    showCashModal.value = false;
+    flash.value = data.message || (isReceive ? 'تم تسجيل القبض' : 'تم تسجيل الصرف');
     if (data.expense_balance !== undefined) {
       account.value.balance = data.expense_balance;
     }
     if (data.expense_balance_dinar !== undefined) {
       account.value.balance_dinar = data.expense_balance_dinar;
     }
+    account.value.can_delete = false;
+    account.value.has_movements = true;
     await loadLedger();
   } catch (error) {
     const msg = error?.response?.data?.message
       || error?.response?.data?.errors?.amount?.[0]
-      || 'تعذر صرف المصروف';
-    disburseModalRef.value?.setError?.(msg);
+      || (isReceive ? 'تعذر تسجيل القبض' : 'تعذر تسجيل الصرف');
+    cashModalRef.value?.setError?.(msg);
     console.error(error);
   } finally {
-    disburseModalRef.value?.setSaving?.(false);
+    cashModalRef.value?.setSaving?.(false);
+  }
+}
+
+async function confirmDelete() {
+  if (!canDelete.value || deleting.value) return;
+  deleting.value = true;
+  try {
+    await axios.post('/api/ledgerExpenseAccountDelete', { id: account.value.id });
+    showDeleteModal.value = false;
+    window.location.href = route('vaults');
+  } catch (error) {
+    flash.value = '';
+    loadError.value = error?.response?.data?.message || 'تعذر حذف الحساب';
+    showDeleteModal.value = false;
+    console.error(error);
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -131,33 +169,48 @@ function rowVoucherTitle(row) {
 </script>
 
 <template>
-  <Head :title="`مصروف — ${account.name}`" />
+  <Head :title="pageTitle" />
   <AuthenticatedLayout>
     <ModalExpenseDisburse
-      ref="disburseModalRef"
-      :show="showDisburse"
+      ref="cashModalRef"
+      :show="showCashModal"
+      :mode="cashModalMode"
       :cash-vaults="cashVaults"
       :account-name="account.name"
-      @save="confirmDisburse"
-      @close="showDisburse = false"
+      :account-type="account.type"
+      @save="confirmCashMove"
+      @close="showCashModal = false"
     />
 
-    <div class="exp-page py-6 sm:py-8">
-      <div class="mx-auto sm:px-6 lg:px-8">
+    <ModalDelClient
+      :show="showDeleteModal"
+      :formData="account"
+      @a="confirmDelete"
+      @close="showDeleteModal = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-white">
+          هل متأكد من حذف الحساب «{{ account.name }}» ({{ account.code }})؟
+        </h2>
+        <p class="mb-2 text-center text-sm text-slate-300">
+          يُحذف فقط إن لم تكن عليه أي حركات في دفتر اليومية.
+        </p>
+      </template>
+    </ModalDelClient>
+
+    <div class="exp-page py-4 sm:py-6">
+      <div class="exp-shell mx-auto w-full px-3 sm:px-5 lg:px-6">
         <div class="exp-card overflow-hidden shadow-sm sm:rounded-xl">
-          <div class="p-4 sm:p-6">
-            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
+          <div class="p-4 sm:p-6 lg:p-8">
+            <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
                 <Link :href="route('vaults')" class="exp-back print:hidden">← العودة للقاصات / المصاريف</Link>
-                <h1 class="mt-2 text-xl font-bold text-slate-900 dark:text-white">
+                <h1 class="mt-2 text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
                   {{ account.name }}
                   <span class="exp-code" dir="ltr">{{ account.code }}</span>
                 </h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                  حساب في دليل الحسابات
-                  <template v-if="account.type === 'expense'">(مصروف)</template>
-                  <template v-else>(إيراد/عمولة)</template>
-                  — الرصيد من قيود اليومية
+                  حساب في دليل الحسابات ({{ typeLabel }}) — الرصيد من قيود اليومية
                 </p>
                 <p class="exp-print-meta mt-1 hidden text-xs text-slate-600 print:block" dir="rtl">
                   العملة: {{ currencyLabel }}
@@ -178,17 +231,34 @@ function rowVoucherTitle(row) {
                   {{ $t('print') }}
                 </button>
                 <button
+                  v-if="canReceive"
+                  type="button"
+                  class="exp-btn exp-btn-receive"
+                  @click="openCashModal('receive')"
+                >
+                  وصل قبض
+                </button>
+                <button
                   v-if="canDisburse"
                   type="button"
                   class="exp-btn exp-btn-primary"
-                  @click="showDisburse = true"
+                  @click="openCashModal('disburse')"
                 >
-                  صرف مصروف
+                  وصل صرف
+                </button>
+                <button
+                  v-if="canDelete"
+                  type="button"
+                  class="exp-btn exp-btn-danger"
+                  :disabled="deleting"
+                  @click="showDeleteModal = true"
+                >
+                  حذف الحساب
                 </button>
               </div>
             </div>
 
-            <div class="exp-kpis mb-5">
+            <div class="exp-kpis mb-6">
               <div class="exp-kpi">
                 <span class="exp-kpi-label">رصيد الحساب</span>
                 <span class="exp-kpi-value" dir="ltr">
@@ -248,7 +318,7 @@ function rowVoucherTitle(row) {
                     </td>
                   </tr>
                   <tr v-if="!loading && !rows.length">
-                    <td colspan="7" class="py-8 text-slate-500 dark:text-slate-300">
+                    <td colspan="7" class="py-10 text-slate-500 dark:text-slate-300">
                       لا توجد حركات على هذا الحساب بعد
                     </td>
                   </tr>
@@ -264,8 +334,11 @@ function rowVoucherTitle(row) {
               </table>
             </div>
 
-            <p v-if="canDisburse" class="mt-4 text-xs text-slate-500 dark:text-slate-400 print:hidden">
-              صرف مصروف = اختيار قاصة نقدية + مبلغ ← قيد: مدين هذا الحساب · دائن القاصة. لا يوجد تحويل بين حسابات المصاريف.
+            <p class="mt-4 text-xs text-slate-500 dark:text-slate-400 print:hidden">
+              وصل صرف = مدين هذا الحساب · دائن القاصة.
+              وصل قبض = مدين القاصة · دائن هذا الحساب
+              <template v-if="account.type === 'expense'"> (استرداد/تخفيض مصروف)</template>
+              <template v-else> (تسجيل إيراد)</template>.
             </p>
           </div>
         </div>
@@ -281,6 +354,11 @@ function rowVoucherTitle(row) {
   --c-head: #f1f5f9;
   --c-text: #0f172a;
   --c-muted: #64748b;
+  width: 100%;
+}
+
+.exp-shell {
+  max-width: min(100%, 96rem);
 }
 
 :global(.dark) .exp-page,
@@ -312,7 +390,7 @@ function rowVoucherTitle(row) {
 .exp-code {
   display: inline-block;
   margin-inline-start: 0.4rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--c-muted);
 }
@@ -346,12 +424,33 @@ function rowVoucherTitle(row) {
   color: #fff;
 }
 
+.exp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .exp-btn-primary {
   background: #059669;
 }
 
-.exp-btn-primary:hover {
+.exp-btn-primary:hover:not(:disabled) {
   background: #047857;
+}
+
+.exp-btn-receive {
+  background: #0284c7;
+}
+
+.exp-btn-receive:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.exp-btn-danger {
+  background: #e11d48;
+}
+
+.exp-btn-danger:hover:not(:disabled) {
+  background: #be123c;
 }
 
 .exp-btn-print {
@@ -390,27 +489,27 @@ function rowVoucherTitle(row) {
 
 .exp-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
 }
 
 .exp-kpi {
   border: 1px solid var(--c-border);
   border-radius: 0.65rem;
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.25rem;
   background: var(--c-head);
 }
 
 .exp-kpi-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--c-muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
 .exp-kpi-value {
-  font-size: 1.25rem;
+  font-size: 1.45rem;
   font-weight: 800;
   color: #059669;
   font-variant-numeric: tabular-nums;
@@ -421,12 +520,13 @@ function rowVoucherTitle(row) {
 }
 
 .exp-kpi-value.muted {
-  font-size: 1rem;
+  font-size: 1.1rem;
   color: var(--c-muted);
 }
 
 .exp-table-wrap {
   border: 1px solid var(--c-border);
+  min-height: 18rem;
 }
 
 .exp-table {
@@ -436,20 +536,20 @@ function rowVoucherTitle(row) {
 
 .exp-table thead th {
   background: var(--c-head);
-  padding: 0.7rem 0.5rem;
-  font-size: 0.8rem;
+  padding: 0.85rem 0.65rem;
+  font-size: 0.85rem;
   font-weight: 700;
   border-bottom: 1px solid var(--c-border);
 }
 
 .exp-table tbody td {
-  padding: 0.6rem 0.5rem;
+  padding: 0.75rem 0.65rem;
   border-bottom: 1px solid var(--c-border);
   vertical-align: middle;
 }
 
 .exp-table tfoot td {
-  padding: 0.65rem 0.5rem;
+  padding: 0.75rem 0.65rem;
   border-top: 2px solid var(--c-border);
   background: var(--c-head);
   vertical-align: middle;
@@ -461,7 +561,6 @@ function rowVoucherTitle(row) {
     margin: 12mm 10mm;
   }
 
-  /* Force light tokens even when html has .dark (dark: utilities + :global(.dark) vars) */
   :global(.dark) .exp-page,
   .dark .exp-page,
   .exp-page {
@@ -473,6 +572,11 @@ function rowVoucherTitle(row) {
     padding: 0 !important;
     background: #ffffff !important;
     color: #0f172a !important;
+  }
+
+  .exp-shell {
+    max-width: none !important;
+    padding: 0 !important;
   }
 
   .exp-card {
@@ -544,6 +648,7 @@ function rowVoucherTitle(row) {
     overflow: visible !important;
     border: 1px solid #94a3b8 !important;
     background: #ffffff !important;
+    min-height: 0 !important;
   }
 }
 </style>

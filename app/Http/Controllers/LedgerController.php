@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\DeactivateLedgerAccountRequest;
+use App\Http\Requests\DeleteLedgerAccountRequest;
 use App\Http\Requests\DisburseExpenseRequest;
+use App\Http\Requests\ReceiveExpenseRequest;
 use App\Http\Requests\StoreLedgerAccountRequest;
 use App\Http\Requests\ToggleLedgerAccountAccountingRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
@@ -83,7 +85,10 @@ class LedgerController extends Controller
                 'name_ar' => $account->name_ar,
                 'type' => $account->type,
                 'is_system' => (bool) $account->is_system,
-                'can_disburse' => $account->type === 'expense',
+                'can_disburse' => true,
+                'can_receive' => true,
+                'can_delete' => ! $account->is_system && ! $account->hasMovements() && ! $account->children()->exists(),
+                'has_movements' => $account->hasMovements(),
                 'balance' => $account->balance('$'),
                 'balance_dinar' => $account->balance('IQD'),
             ],
@@ -111,12 +116,19 @@ class LedgerController extends Controller
             ->where('is_active', true)
             ->value('id');
 
+        $incomeParentId = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('code', LedgerService::CODE_REVENUE)
+            ->where('is_active', true)
+            ->value('id');
+
         return Response::json([
             'accounts' => $ledger->listExpenseCommissionAccounts($ownerId, $currency, $onlyShowInAccounting),
             'suggest_expense_code' => $ledger->suggestExpenseAccountCode($ownerId, 'expense'),
             'suggest_commission_code' => $ledger->suggestExpenseAccountCode($ownerId, 'commission'),
             // Must be int|null — never optional() (JSON-encodes as {})
             'expense_parent_id' => $expenseParentId !== null ? (int) $expenseParentId : null,
+            'income_parent_id' => $incomeParentId !== null ? (int) $incomeParentId : null,
             'currency' => $currency,
         ], 200);
     }
@@ -156,7 +168,7 @@ class LedgerController extends Controller
     }
 
     /**
-     * صرف مصروف: Dr selected expense COA / Cr selected cash vault.
+     * صرف: Dr selected expense/income COA / Cr selected cash vault.
      */
     public function disburseExpense(DisburseExpenseRequest $request, LedgerService $ledger, VaultService $vaults)
     {
@@ -241,14 +253,14 @@ class LedgerController extends Controller
 
                 $ledger->syncWalletFromLedger($ownerId, $cashUserId);
 
-                $expense = $ledger->resolveExpenseAccount($ownerId, $expenseAccountId);
+                $coa = $ledger->resolveExpenseOrIncomeAccount($ownerId, $expenseAccountId);
 
                 return [
                     'transaction_id' => $transaction->id,
                     'journal_entry_id' => $journal->id,
                     'voucher_no' => $journal->voucher_no,
-                    'expense_balance' => $expense->balance($currency),
-                    'expense_balance_dinar' => $expense->balance('IQD'),
+                    'expense_balance' => $coa->balance($currency),
+                    'expense_balance_dinar' => $coa->balance('IQD'),
                 ];
             });
         } catch (InvalidArgumentException|RuntimeException $e) {
@@ -256,13 +268,155 @@ class LedgerController extends Controller
         } catch (Throwable $e) {
             report($e);
 
-            return Response::json(['message' => 'تعذر تسجيل صرف المصروف'], 500);
+            return Response::json(['message' => 'تعذر تسجيل صرف الحساب'], 500);
         }
 
         return Response::json([
-            'message' => 'تم صرف المصروف: مدين حساب المصروف / دائن القاصة النقدية',
+            'message' => 'تم الصرف: مدين هذا الحساب / دائن القاصة النقدية',
             ...$result,
         ], 201);
+    }
+
+    /**
+     * قبض: Dr selected cash vault / Cr selected expense/income COA.
+     */
+    public function receiveExpense(ReceiveExpenseRequest $request, LedgerService $ledger, VaultService $vaults)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+        $amount = round((float) $data['amount'], 2);
+        $currency = $data['currency'] === 'IQD' ? 'IQD' : '$';
+        $memo = trim((string) $data['memo']);
+        $coaAccountId = (int) $data['expense_ledger_account_id'];
+        $vaultId = (int) $data['cash_vault_id'];
+
+        $vault = Vault::query()->forOwner($ownerId)->findOrFail($vaultId);
+        if (! $vault->isCashBox()) {
+            return Response::json(['message' => 'المصدر يجب أن يكون قاصة نقدية (نقد/بنك/خزنة).'], 422);
+        }
+        $cashUserId = (int) ($vault->legacy_user_id ?? 0);
+        if ($cashUserId <= 0) {
+            return Response::json(['message' => 'القاصة غير مرتبطة بحساب تشغيلي.'], 422);
+        }
+
+        try {
+            $result = DB::transaction(function () use (
+                $ownerId,
+                $amount,
+                $currency,
+                $memo,
+                $coaAccountId,
+                $vault,
+                $cashUserId,
+                $data,
+                $ledger,
+                $vaults
+            ) {
+                $created = ! empty($data['entry_date'])
+                    ? Carbon::parse($data['entry_date'])->format('Y-m-d')
+                    : Carbon::now()->format('Y-m-d');
+
+                $txnAttrs = [
+                    'type' => 'inUserBox',
+                    'description' => $memo,
+                    'amount' => $amount,
+                    'is_pay' => 0,
+                    'morphed_id' => 0,
+                    'morphed_type' => '',
+                    'user_added' => Auth::id() ?? 0,
+                    'created' => $created,
+                    'discount' => 0,
+                    'currency' => $currency,
+                    'parent_id' => 0,
+                    'details' => [
+                        'expense_ledger_account_id' => $coaAccountId,
+                        'source' => 'expense_receipt',
+                    ],
+                ];
+
+                if (Schema::hasColumn('transactions', 'vault_id')) {
+                    $txnAttrs['vault_id'] = (int) $vault->id;
+                }
+                $walletId = $vaults->resolveWalletIdForLegacyUser($cashUserId);
+                if ($walletId) {
+                    $txnAttrs['wallet_id'] = $walletId;
+                } elseif (Schema::hasColumn('transactions', 'wallet_id')) {
+                    $txnAttrs['wallet_id'] = null;
+                }
+
+                $transaction = Transactions::create($txnAttrs);
+
+                $journal = $ledger->postCashReceipt(
+                    $ownerId,
+                    $amount,
+                    $currency,
+                    $memo,
+                    $transaction,
+                    $cashUserId,
+                    $coaAccountId,
+                    $created
+                );
+
+                if (Schema::hasColumn('transactions', 'journal_entry_id')) {
+                    $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+                }
+
+                $ledger->syncWalletFromLedger($ownerId, $cashUserId);
+
+                $coa = $ledger->resolveExpenseOrIncomeAccount($ownerId, $coaAccountId);
+
+                return [
+                    'transaction_id' => $transaction->id,
+                    'journal_entry_id' => $journal->id,
+                    'voucher_no' => $journal->voucher_no,
+                    'expense_balance' => $coa->balance($currency),
+                    'expense_balance_dinar' => $coa->balance('IQD'),
+                ];
+            });
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر تسجيل قبض الحساب'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم القبض: مدين القاصة النقدية / دائن هذا الحساب',
+            ...$result,
+        ], 201);
+    }
+
+    /**
+     * حذف حساب مصروف/إيراد بلا حركات من شاشة القاصات.
+     */
+    public function deleteUnusedExpenseAccount(DeleteLedgerAccountRequest $request, LedgerService $ledger)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $accountId = (int) $request->validated('id');
+
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->findOrFail($accountId);
+
+        if (! in_array($account->type, ['expense', 'income'], true)) {
+            return Response::json(['message' => 'الحساب ليس مصروفاً أو إيراداً.'], 422);
+        }
+
+        try {
+            $deleted = $ledger->deleteUnusedAccount($ownerId, $accountId);
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر حذف الحساب'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم حذف الحساب بنجاح',
+            'deleted' => $deleted,
+        ], 200);
     }
 
     public function chartOfAccounts(Request $request, LedgerService $ledger)

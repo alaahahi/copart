@@ -132,6 +132,11 @@ class AccountingController extends Controller
             ->where('code', LedgerService::CODE_EXPENSE)
             ->where('is_active', true)
             ->value('id');
+        $incomeParentId = LedgerAccount::query()
+            ->where('owner_id', (int) $owner_id)
+            ->where('code', LedgerService::CODE_REVENUE)
+            ->where('is_active', true)
+            ->value('id');
 
         // إسناد السحب إلى قاصة → قائمة القاصات فقط (legacy_user_id للتوافق مع API)
         $vaultService = app(VaultService::class);
@@ -161,6 +166,7 @@ class AccountingController extends Controller
             'suggestExpenseCode'=>$ledger->suggestExpenseAccountCode((int) $owner_id, 'expense'),
             'suggestCommissionCode'=>$ledger->suggestExpenseAccountCode((int) $owner_id, 'commission'),
             'expenseParentId'=>$expenseParentId !== null ? (int) $expenseParentId : null,
+            'incomeParentId'=>$incomeParentId !== null ? (int) $incomeParentId : null,
         ]);
     }
     public function wallet(Request $request)
@@ -1821,6 +1827,98 @@ class AccountingController extends Controller
             if ($isClientPaymentOnCashBox) {
                 $ledger->syncWalletFromLedger((int) $ownerId, (int) $morphed_id);
             }
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * Car sales pricing (updateCarsS): client AR moves by full sales delta;
+     * ledger credits 4100 with profit only and recovers cost on مشتريات سيارات.
+     * Does not post cash / client payments.
+     *
+     * @return \App\Models\Transactions|int|null
+     */
+    public function adjustCarSaleClientDebt(
+        float $salesDelta,
+        float $costRecoveryDelta,
+        float $revenueDelta,
+        string $desc,
+        int $clientId,
+        $morphedId = '',
+        $morphedType = '',
+        string $currency = '$',
+        $created = 0,
+        $ownerId = null
+    ) {
+        $ownerId = $ownerId ?? Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+
+        $salesDelta = round($salesDelta, 2);
+        $costRecoveryDelta = round($costRecoveryDelta, 2);
+        $revenueDelta = round($revenueDelta, 2);
+
+        if (abs($salesDelta) < 0.005 && abs($costRecoveryDelta) < 0.005 && abs($revenueDelta) < 0.005) {
+            return 0;
+        }
+
+        if (! User::find($clientId)) {
+            return null;
+        }
+
+        if ($created == 0) {
+            $created = $this->currentDate;
+        }
+
+        return DB::transaction(function () use (
+            $salesDelta,
+            $costRecoveryDelta,
+            $revenueDelta,
+            $desc,
+            $clientId,
+            $morphedId,
+            $morphedType,
+            $currency,
+            $created,
+            $ownerId
+        ) {
+            $type = $salesDelta >= 0 ? 'in' : 'out';
+            $transactionAttrs = $this->transactionAttrsForUser((int) $clientId, [
+                'type' => $type,
+                'description' => $desc,
+                'amount' => $salesDelta,
+                'is_pay' => 0,
+                'morphed_id' => $morphedId,
+                'morphed_type' => $morphedType,
+                'user_added' => 0,
+                'created' => $created,
+                'discount' => 0,
+                'currency' => $currency,
+                'parent_id' => 0,
+                'details' => [
+                    'sales_delta' => $salesDelta,
+                    'cost_recovery_delta' => $costRecoveryDelta,
+                    'revenue_delta' => $revenueDelta,
+                ],
+            ]);
+            $transaction = Transactions::create($transactionAttrs);
+
+            $ledger = app(LedgerService::class);
+            $journal = $ledger->postCarSaleClientDebt(
+                (int) $ownerId,
+                (int) $clientId,
+                $salesDelta,
+                $costRecoveryDelta,
+                $revenueDelta,
+                $currency === 'IQD' ? 'IQD' : '$',
+                (string) $desc,
+                $transaction
+            );
+
+            if ($journal && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $clientId);
 
             return $transaction;
         });

@@ -23,7 +23,7 @@ class DisburseExpenseRequest extends FormRequest
                 'integer',
                 Rule::exists('ledger_accounts', 'id')->where(
                     fn ($q) => $q->where('owner_id', $ownerId)
-                        ->where('type', 'expense')
+                        ->whereIn('type', ['expense', 'income'])
                         ->where('is_active', true)
                 ),
             ],
@@ -46,8 +46,8 @@ class DisburseExpenseRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'expense_ledger_account_id.required' => 'حساب المصروف مطلوب.',
-            'expense_ledger_account_id.exists' => 'حساب المصروف غير صالح.',
+            'expense_ledger_account_id.required' => 'الحساب مطلوب.',
+            'expense_ledger_account_id.exists' => 'الحساب غير صالح.',
             'cash_vault_id.required' => 'القاصة النقدية مطلوبة.',
             'cash_vault_id.exists' => 'القاصة النقدية غير صالحة.',
             'amount.required' => 'المبلغ مطلوب.',

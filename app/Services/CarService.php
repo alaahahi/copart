@@ -71,6 +71,39 @@ class CarService
     }
 
     /**
+     * Split a sales-price change into AR / cost-recovery / revenue deltas.
+     *
+     * Client AR must move by the full sales delta (what the trader owes).
+     * Shipping revenue (4100) must move by profit delta only.
+     * The remainder offsets car-purchase expense (5110) so cost is not booked as income.
+     *
+     * Invariant: sales_delta === cost_recovery_delta + revenue_delta
+     *
+     * @return array{sales_delta: float, revenue_delta: float, cost_recovery_delta: float, old_profit: float, new_profit: float}
+     */
+    public function computeSaleDebtSplit(?float $oldTotalS, ?float $newTotalS, ?float $costTotal): array
+    {
+        $old = (float) ($oldTotalS ?? 0);
+        $new = (float) ($newTotalS ?? 0);
+        $cost = (float) ($costTotal ?? 0);
+
+        $oldProfit = $this->computeProfit($old, $cost);
+        $newProfit = $this->computeProfit($new, $cost);
+
+        $salesDelta = round($new - $old, 2);
+        $revenueDelta = round($newProfit - $oldProfit, 2);
+        $costRecoveryDelta = round($salesDelta - $revenueDelta, 2);
+
+        return [
+            'sales_delta' => $salesDelta,
+            'revenue_delta' => $revenueDelta,
+            'cost_recovery_delta' => $costRecoveryDelta,
+            'old_profit' => round($oldProfit, 2),
+            'new_profit' => round($newProfit, 2),
+        ];
+    }
+
+    /**
      * Soft-delete a car row and renumber the remaining (non-deleted) cars'
      * display sequence ("no"). The car row and its full history (payments,
      * transactions, expenses, images) are preserved — this NEVER

@@ -3,11 +3,16 @@ import { ref, watch, computed } from 'vue';
 
 const props = defineProps({
   show: Boolean,
+  /** 'disburse' = صرف | 'receive' = قبض */
+  mode: { type: String, default: 'disburse' },
   cashVaults: { type: Array, default: () => [] },
   accountName: { type: String, default: '' },
+  accountType: { type: String, default: 'expense' },
 });
 
 const emit = defineEmits(['close', 'save']);
+
+const isReceive = computed(() => props.mode === 'receive');
 
 const defaultForm = () => ({
   cash_vault_id: '',
@@ -21,6 +26,19 @@ const form = ref(defaultForm());
 const saving = ref(false);
 const errorMsg = ref('');
 
+const title = computed(() => (isReceive.value ? 'وصل قبض' : 'وصل صرف'));
+const subtitle = computed(() =>
+  isReceive.value
+    ? 'مدين القاصة النقدية · دائن هذا الحساب'
+    : 'مدين هذا الحساب · دائن القاصة النقدية'
+);
+const vaultLabel = computed(() => (isReceive.value ? 'إلى القاصة النقدية' : 'من القاصة النقدية'));
+const defaultMemo = computed(() => {
+  const name = props.accountName || 'الحساب';
+  return isReceive.value ? `قبض — ${name}` : `صرف — ${name}`;
+});
+const confirmLabel = computed(() => (isReceive.value ? 'تأكيد القبض' : 'تأكيد الصرف'));
+
 watch(
   () => props.show,
   (isOpen) => {
@@ -31,9 +49,7 @@ watch(
       if (props.cashVaults?.length === 1) {
         form.value.cash_vault_id = props.cashVaults[0].vault_id;
       }
-      if (props.accountName) {
-        form.value.memo = `صرف مصروف — ${props.accountName}`;
-      }
+      form.value.memo = defaultMemo.value;
     }
   },
   { immediate: true }
@@ -58,6 +74,7 @@ const submit = () => {
     currency: form.value.currency,
     memo: form.value.memo.trim(),
     entry_date: form.value.entry_date || null,
+    mode: props.mode,
   });
 };
 
@@ -73,93 +90,104 @@ defineExpose({
 </script>
 
 <template>
-  <Transition name="erp-modal">
-    <div
-      v-if="show"
-      class="erp-modal-mask"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="expense-disburse-title"
-      @click.self="close"
-    >
-      <div class="erp-modal-panel">
-        <header class="erp-modal-header">
-          <div class="erp-modal-header-text">
-            <p class="erp-modal-eyebrow">قيد محاسبي صحيح</p>
-            <h2 id="expense-disburse-title" class="erp-modal-title">صرف مصروف</h2>
-            <p class="erp-modal-subtitle">
-              مدين حساب المصروف · دائن القاصة النقدية — لا تحويل بين حسابات المصاريف
-            </p>
-          </div>
-          <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
-          </button>
-        </header>
-
-        <div class="erp-modal-body">
-          <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
-
-          <div class="erp-field">
-            <label class="erp-label" for="disburse-vault">من القاصة النقدية</label>
-            <select id="disburse-vault" v-model="form.cash_vault_id" class="erp-input">
-              <option value="">اختر قاصة…</option>
-              <option
-                v-for="v in cashVaults"
-                :key="v.vault_id"
-                :value="v.vault_id"
+  <Teleport to="body">
+    <Transition name="erp-modal">
+      <div
+        v-if="show"
+        class="erp-modal-mask"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="isReceive ? 'expense-receive-title' : 'expense-disburse-title'"
+        @click.self="close"
+      >
+        <div class="erp-modal-panel">
+          <header class="erp-modal-header">
+            <div class="erp-modal-header-text">
+              <p class="erp-modal-eyebrow">قيد محاسبي صحيح</p>
+              <h2
+                :id="isReceive ? 'expense-receive-title' : 'expense-disburse-title'"
+                class="erp-modal-title"
               >
-                {{ v.name }} ({{ Number(v.balance || 0).toLocaleString() }} $)
-              </option>
-            </select>
-            <p v-if="selectedVault" class="erp-hint">
-              رصيد القاصة: {{ Number(selectedVault.balance || 0).toLocaleString() }} $
-            </p>
-          </div>
-
-          <div class="erp-field-grid">
-            <div class="erp-field">
-              <label class="erp-label" for="disburse-amount">المبلغ</label>
-              <input
-                id="disburse-amount"
-                v-model="form.amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                class="erp-input"
-                dir="ltr"
-              />
+                {{ title }}
+              </h2>
+              <p class="erp-modal-subtitle">{{ subtitle }}</p>
             </div>
+            <button type="button" class="erp-modal-close" aria-label="إغلاق" @click="close">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </header>
+
+          <div class="erp-modal-body">
+            <p v-if="errorMsg" class="erp-error">{{ errorMsg }}</p>
+
             <div class="erp-field">
-              <label class="erp-label" for="disburse-currency">العملة</label>
-              <select id="disburse-currency" v-model="form.currency" class="erp-input">
-                <option value="$">دولار</option>
-                <option value="IQD">دينار</option>
+              <label class="erp-label" for="cash-move-vault">{{ vaultLabel }}</label>
+              <select id="cash-move-vault" v-model="form.cash_vault_id" class="erp-input">
+                <option value="">اختر قاصة…</option>
+                <option
+                  v-for="v in cashVaults"
+                  :key="v.vault_id"
+                  :value="v.vault_id"
+                >
+                  {{ v.name }} ({{ Number(v.balance || 0).toLocaleString() }} $)
+                </option>
               </select>
+              <p v-if="selectedVault" class="erp-hint">
+                رصيد القاصة: {{ Number(selectedVault.balance || 0).toLocaleString() }} $
+              </p>
+            </div>
+
+            <div class="erp-field-grid">
+              <div class="erp-field">
+                <label class="erp-label" for="cash-move-amount">المبلغ</label>
+                <input
+                  id="cash-move-amount"
+                  v-model="form.amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  class="erp-input"
+                  dir="ltr"
+                />
+              </div>
+              <div class="erp-field">
+                <label class="erp-label" for="cash-move-currency">العملة</label>
+                <select id="cash-move-currency" v-model="form.currency" class="erp-input">
+                  <option value="$">دولار</option>
+                  <option value="IQD">دينار</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="erp-field">
+              <label class="erp-label" for="cash-move-date">التاريخ</label>
+              <input id="cash-move-date" v-model="form.entry_date" type="date" class="erp-input" dir="ltr" />
+            </div>
+
+            <div class="erp-field">
+              <label class="erp-label" for="cash-move-memo">البيان</label>
+              <textarea id="cash-move-memo" v-model="form.memo" rows="2" class="erp-input" />
             </div>
           </div>
 
-          <div class="erp-field">
-            <label class="erp-label" for="disburse-date">التاريخ</label>
-            <input id="disburse-date" v-model="form.entry_date" type="date" class="erp-input" dir="ltr" />
-          </div>
-
-          <div class="erp-field">
-            <label class="erp-label" for="disburse-memo">البيان</label>
-            <textarea id="disburse-memo" v-model="form.memo" rows="2" class="erp-input" />
-          </div>
+          <footer class="erp-modal-footer">
+            <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">إلغاء</button>
+            <button
+              type="button"
+              class="erp-btn"
+              :class="isReceive ? 'erp-btn-receive' : 'erp-btn-primary'"
+              :disabled="!canSubmit()"
+              @click="submit"
+            >
+              {{ saving ? 'جاري التسجيل…' : confirmLabel }}
+            </button>
+          </footer>
         </div>
-
-        <footer class="erp-modal-footer">
-          <button type="button" class="erp-btn erp-btn-ghost" :disabled="saving" @click="close">إلغاء</button>
-          <button type="button" class="erp-btn erp-btn-primary" :disabled="!canSubmit()" @click="submit">
-            {{ saving ? 'جاري التسجيل…' : 'تأكيد الصرف' }}
-          </button>
-        </footer>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -327,6 +355,15 @@ defineExpose({
 
 .erp-btn-primary:hover:not(:disabled) {
   background: #047857;
+}
+
+.erp-btn-receive {
+  background: #0284c7;
+  color: #fff;
+}
+
+.erp-btn-receive:hover:not(:disabled) {
+  background: #0369a1;
 }
 
 .erp-modal-enter-active,
