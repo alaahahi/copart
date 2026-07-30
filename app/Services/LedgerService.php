@@ -1632,6 +1632,109 @@ class LedgerService
     }
 
     /**
+     * رصيد افتتاحي: balanced journal vs Opening Capital (3900 / رأس المال الافتتاحي).
+     * Direction follows normal balance of the target account:
+     * - asset / expense → Dr account / Cr Opening
+     * - liability / equity / income → Dr Opening / Cr account
+     */
+    public function postOpeningBalance(
+        int $ownerId,
+        int $accountId,
+        float $amount,
+        string $currency,
+        string $memo,
+        ?string $entryDate = null
+    ): JournalEntry {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ الرصيد الافتتاحي يجب أن يكون أكبر من صفر.');
+        }
+
+        $currency = $currency === 'IQD' ? 'IQD' : '$';
+        $this->ensureSystemAccounts($ownerId);
+
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->find($accountId);
+
+        if (! $account) {
+            throw new InvalidArgumentException('الحساب غير موجود أو غير نشط.');
+        }
+
+        if ($account->code === self::CODE_OPENING) {
+            throw new InvalidArgumentException('لا يمكن تسجيل رصيد افتتاحي على حساب رأس المال الافتتاحي نفسه.');
+        }
+
+        $opening = $this->systemAccount($ownerId, self::CODE_OPENING);
+        $debitNature = in_array($account->type, ['asset', 'expense'], true);
+
+        $lines = $debitNature
+            ? [
+                ['account_id' => $account->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+                ['account_id' => $opening->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+            ]
+            : [
+                ['account_id' => $opening->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+                ['account_id' => $account->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+            ];
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => $entryDate ?? now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'opening_balance',
+            'currency' => $currency,
+        ], $lines);
+    }
+
+    /**
+     * قيد يدوي / حركة بين حسابات الدليل: صريح — حساب مدين + حساب دائن + مبلغ.
+     */
+    public function postManualJournal(
+        int $ownerId,
+        int $debitAccountId,
+        int $creditAccountId,
+        float $amount,
+        string $currency,
+        string $memo,
+        ?string $entryDate = null
+    ): JournalEntry {
+        if ($debitAccountId === $creditAccountId) {
+            throw new InvalidArgumentException('يجب اختيار حسابين مختلفين للمدين والدائن.');
+        }
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('مبلغ القيد يجب أن يكون أكبر من صفر.');
+        }
+
+        $currency = $currency === 'IQD' ? 'IQD' : '$';
+        $this->ensureSystemAccounts($ownerId);
+
+        $debitAccount = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->find($debitAccountId);
+        $creditAccount = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('is_active', true)
+            ->find($creditAccountId);
+
+        if (! $debitAccount || ! $creditAccount) {
+            throw new InvalidArgumentException('أحد الحسابات غير موجود أو غير نشط.');
+        }
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => $entryDate ?? now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'manual',
+            'currency' => $currency,
+        ], [
+            ['account_id' => $debitAccount->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $creditAccount->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
      * ترحيل أرباح التاجر (post trader profit to the Profits reserve):
      * Dr Shipping Revenue (4100) / Cr Trader Profits Reserve (3200).
      * This is an appropriation entry — it reclassifies revenue that has already

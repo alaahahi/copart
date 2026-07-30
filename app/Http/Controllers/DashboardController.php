@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\DeleteCarRequest;
 use App\Http\Requests\StoreCarRequest;
 use App\Models\Auction;
+use App\Models\ShippingRoute;
 use App\Services\CarService;
 use App\Services\DashboardActivityService;
 use App\Services\SystemWalletService;
@@ -76,8 +77,13 @@ class DashboardController extends Controller
         SystemWalletService::scopeExcludeSystemVaults($clientQuery);
         $client = $clientQuery->orderBy('name')->get();
         $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+        $shippingRoutes = ShippingRoute::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
 
-        return Inertia::render('purchases', ['client'=>$client, 'auctions'=>$auctions]);   
+        return Inertia::render('purchases', [
+            'client' => $client,
+            'auctions' => $auctions,
+            'shippingRoutes' => $shippingRoutes,
+        ]);   
     }
     public function sales(Request $request)
     {
@@ -89,8 +95,13 @@ class DashboardController extends Controller
         SystemWalletService::scopeExcludeSystemVaults($clientQuery);
         $client = $clientQuery->orderBy('name')->get(['id', 'name']);
         $auctions = Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+        $shippingRoutes = ShippingRoute::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
 
-        return Inertia::render('Sales', ['client' => $client, 'auctions' => $auctions]);
+        return Inertia::render('Sales', [
+            'client' => $client,
+            'auctions' => $auctions,
+            'shippingRoutes' => $shippingRoutes,
+        ]);
     }
     public function totalInfo(Request $request)
     {
@@ -446,6 +457,7 @@ class DashboardController extends Controller
             'vin'=> $request->vin,
             'car_number'=> $request->car_number,
             'auction_id'=> $carService->resolveAuctionId((int) $owner_id, $request->auction_id),
+            'shipping_route_id'=> $carService->resolveShippingRouteId((int) $owner_id, $request->shipping_route_id),
             'dinar'=> $request->dinar,
             'dolar_price'=> $request->dolar_price,
             'shipping_dolar'=> $request->shipping_dolar,
@@ -560,6 +572,7 @@ class DashboardController extends Controller
             );
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
+            $dataToUpdate['shipping_route_id'] = $carService->resolveShippingRouteId((int) $owner_id, $request->shipping_route_id);
             $cashUserId = $this->resolveCashUserId((int) $owner_id);
             if($total >$car->total){
                 $descClient = trans('text.addExpenses').' '.($total-$car->total).' '.trans('text.for_car').$car->car_type.' '.$car->vin;
@@ -660,6 +673,7 @@ class DashboardController extends Controller
             $dataToUpdate['total_s'] = $total_s;
             $dataToUpdate['profit'] = $profit;
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
+            $dataToUpdate['shipping_route_id'] = $carService->resolveShippingRouteId((int) $owner_id, $request->shipping_route_id);
 
             $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
             $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
@@ -736,10 +750,10 @@ class DashboardController extends Controller
         $to =$_GET['to'] ?? 0;
         $limit =$_GET['limit'] ?? 0;
         if($car_have_expenses||$car_have_expenses==1){
-            $data = Car::with('CarImages', 'client','carexpenses.user')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'client','carexpenses.user', 'shippingRoute')->where('owner_id', $owner_id);
             
         }else{
-            $data = Car::with('CarImages', 'client')->where('owner_id', $owner_id);
+            $data = Car::with('CarImages', 'client', 'shippingRoute')->where('owner_id', $owner_id);
         }
 
         if ($from && $to) {

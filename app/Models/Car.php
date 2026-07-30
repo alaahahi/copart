@@ -26,6 +26,7 @@ class Car extends Model
         'vin',
         'car_number',
         'auction_id',
+        'shipping_route_id',
         'dinar',
         'dolar_price',
         'dolar_custom',
@@ -120,6 +121,13 @@ class Car extends Model
     {
         return $this->belongsTo(Auction::class, 'auction_id');
     }
+
+    /** طريق الشحن (shipping route/method) selected for this car. */
+    public function shippingRoute()
+    {
+        return $this->belongsTo(ShippingRoute::class, 'shipping_route_id');
+    }
+
     public function Client()
     {
         return $this->belongsTo(User::class, 'client_id');

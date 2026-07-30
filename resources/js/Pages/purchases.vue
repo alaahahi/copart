@@ -24,7 +24,7 @@ import SearchInput from "@/Components/SearchInput.vue";
 import CarsGridView from "@/Components/CarsGridView.vue";
 import PinOtpInput from "@/Components/PinOtpInput.vue";
 
-defineProps({ client: Array, auctions: { type: Array, default: () => [] } });
+defineProps({ client: Array, auctions: { type: Array, default: () => [] }, shippingRoutes: { type: Array, default: () => [] } });
 
 const toast = useToast();
 const money = (v) => formatMoney(v, "$");
@@ -368,6 +368,7 @@ function rowProfit(row) {
     :show="showModalCar ? true : false"
     :client="client"
     :auctions="auctions"
+    :shippingRoutes="shippingRoutes"
     @a="confirmCar($event)"
     @close="showModalCar = false"
   >
@@ -379,6 +380,7 @@ function rowProfit(row) {
     :show="showModalEditCars ? true : false"
     :client="client"
     :auctions="auctions"
+    :shippingRoutes="shippingRoutes"
     @a="confirmUpdateCar($event)"
     @close="showModalEditCars = false"
   >

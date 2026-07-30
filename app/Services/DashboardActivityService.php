@@ -22,6 +22,7 @@ class DashboardActivityService
         'trader_profit_withdraw' => 'سحب أرباح تاجر',
         'manual' => 'قيد يدوي',
         'opening' => 'رصيد افتتاحي',
+        'opening_balance' => 'رصيد افتتاحي',
     ];
 
     /**

@@ -795,7 +795,7 @@ class AccountingController extends Controller
 
         if($from && $to ){
             $transactions = $this->transactionsQueryForUser($client)->whereBetween('created', [$from, $to]);
-            $cars = Car::with('CarImages')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
+            $cars = Car::with('CarImages', 'shippingRoute')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->whereBetween('date', [$from, $to])->count();
@@ -807,7 +807,7 @@ class AccountingController extends Controller
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
         }else{
             $transactions = $this->transactionsQueryForUser($client);
-            $cars =  Car::with('CarImages')->where('client_id',$client->id);
+            $cars =  Car::with('CarImages', 'shippingRoute')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->count();

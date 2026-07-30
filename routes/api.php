@@ -25,6 +25,7 @@ use App\Http\Controllers\SyncMonitorController;
 use App\Http\Controllers\AccountTransferController;
 use App\Http\Controllers\TraderProfitController;
 use App\Http\Controllers\AuctionController;
+use App\Http\Controllers\ShippingRouteController;
 use App\Http\Controllers\VaultController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 
@@ -181,6 +182,9 @@ Route::post('deletePaymentTag',[AccountingController::class, 'deletePaymentTag']
 Route::get('auctions',[AuctionController::class, 'index'])->name('auctions.index');
 Route::post('auctions',[AuctionController::class, 'store'])->name('auctions.store');
 Route::post('deleteAuction',[AuctionController::class, 'destroy'])->name('auctions.destroy');
+Route::get('shippingRoutes',[ShippingRouteController::class, 'index'])->name('shippingRoutes.index');
+Route::post('shippingRoutes',[ShippingRouteController::class, 'store'])->name('shippingRoutes.store');
+Route::post('deleteShippingRoute',[ShippingRouteController::class, 'destroy'])->name('shippingRoutes.destroy');
 Route::post('createDriverLoan',[AccountingController::class, 'createDriverLoan'])->name('createDriverLoan');
 Route::post('createDriverLoanRepayment',[AccountingController::class, 'createDriverLoanRepayment'])->name('createDriverLoanRepayment');
 Route::post('toggleShowInDashboard',[UserController::class, 'toggleShowInDashboard'])->name('toggleShowInDashboard');
@@ -226,6 +230,8 @@ Route::post('ledgerAccounts/{account}/toggleAccounting',[LedgerController::class
 Route::post('ledgerExpenseDisburse',[LedgerController::class, 'disburseExpense'])->name('ledgerExpenseDisburse');
 Route::post('ledgerExpenseReceive',[LedgerController::class, 'receiveExpense'])->name('ledgerExpenseReceive');
 Route::post('ledgerExpenseAccountDelete',[LedgerController::class, 'deleteUnusedExpenseAccount'])->name('ledgerExpenseAccountDelete');
+Route::post('ledgerOpeningBalance',[LedgerController::class, 'storeOpeningBalance'])->name('ledgerOpeningBalance');
+Route::post('ledgerManualJournal',[LedgerController::class, 'storeManualJournal'])->name('ledgerManualJournal');
 
 Route::get('accountTransfer/accounts',[AccountTransferController::class, 'accounts'])->name('accountTransfer.accounts');
 Route::post('accountTransfer',[AccountTransferController::class, 'store'])->name('accountTransfer.store');

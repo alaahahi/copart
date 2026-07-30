@@ -24,6 +24,7 @@ import SearchInput from "@/Components/SearchInput.vue";
 const props = defineProps({
   client: Array,
   auctions: { type: Array, default: () => [] },
+  shippingRoutes: { type: Array, default: () => [] },
 });
 
 const { t } = useI18n();
@@ -208,6 +209,7 @@ function rowClass(row) {
     :show="showModalEditCars ? true : false"
     :client="client"
     :auctions="auctions"
+    :shippingRoutes="shippingRoutes"
     @a="confirmUpdateCar($event)"
     @allocation-returned="onAllocationReturned"
     @close="showModalEditCars = false"

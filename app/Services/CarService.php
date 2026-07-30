@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Auction;
 use App\Models\Car;
+use App\Models\ShippingRoute;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,22 @@ class CarService
         }
 
         return Auction::where('id', $auctionId)->where('owner_id', $ownerId)->value('id');
+    }
+
+    /**
+     * Validate that a frontend-supplied shipping route id belongs to this
+     * tenant before it is persisted on a car — never trust frontend.
+     * Returns null when empty or foreign so the field stays optional.
+     */
+    public function resolveShippingRouteId(int $ownerId, $shippingRouteId): ?int
+    {
+        if (!$shippingRouteId) {
+            return null;
+        }
+
+        return ShippingRoute::where('id', $shippingRouteId)
+            ->where('owner_id', $ownerId)
+            ->value('id');
     }
 
     /**

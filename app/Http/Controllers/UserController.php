@@ -79,7 +79,16 @@ class UserController extends Controller
         }
         $client= user::find($id);
         $auctions = \App\Models\Auction::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
-        return Inertia::render('Clients/Show', ['url'=>$this->url,'client'=>$client,'clients'=>$clients,'client_id'=>$id,'q'=>$q,'auctions'=>$auctions]);
+        $shippingRoutes = \App\Models\ShippingRoute::where('owner_id', $owner_id)->orderBy('name')->get(['id', 'name']);
+        return Inertia::render('Clients/Show', [
+            'url' => $this->url,
+            'client' => $client,
+            'clients' => $clients,
+            'client_id' => $id,
+            'q' => $q,
+            'auctions' => $auctions,
+            'shippingRoutes' => $shippingRoutes,
+        ]);
     }
     public function show ()
     {

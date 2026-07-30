@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import ModalLedgerAccount from "@/Components/ModalLedgerAccount.vue";
+import ModalOpeningBalance from "@/Components/ModalOpeningBalance.vue";
+import ModalManualJournal from "@/Components/ModalManualJournal.vue";
 import { Head, usePage } from "@inertiajs/inertia-vue3";
 import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
@@ -40,6 +42,12 @@ const accountModalMode = ref("create");
 const editingAccount = ref(null);
 const savingAccount = ref(false);
 const deactivatingId = ref(null);
+
+const showOpeningModal = ref(false);
+const openingModalRef = ref(null);
+const openingPresetAccountId = ref(null);
+const showManualJournalModal = ref(false);
+const manualJournalRef = ref(null);
 
 /** قاصة استلام دفعات الزبائن — نقد فقط (from vaults table) */
 const receiptsVaultId = ref("");
@@ -655,6 +663,62 @@ async function deactivateAccount(acc, e) {
   }
 }
 
+async function openOpeningBalance(presetId = null) {
+  await ensureAccountOptions();
+  openingPresetAccountId.value = presetId ? Number(presetId) : selectedAccountId.value || null;
+  showOpeningModal.value = true;
+}
+
+async function openManualJournal() {
+  await ensureAccountOptions();
+  showManualJournalModal.value = true;
+}
+
+async function confirmOpeningBalance(payload) {
+  openingModalRef.value?.setSaving?.(true);
+  openingModalRef.value?.setError?.("");
+  try {
+    const { data } = await axios.post("/api/ledgerOpeningBalance", payload);
+    showOpeningModal.value = false;
+    flashSuccess(
+      (data.message || "تم تسجيل الرصيد الافتتاحي") +
+        (data.voucher_no ? ` · ${data.voucher_no}` : "")
+    );
+    await refresh();
+    if (selectedAccountId.value) {
+      await loadAccountLedger();
+    }
+  } catch (err) {
+    openingModalRef.value?.setError?.(
+      err?.response?.data?.message || "تعذر تسجيل الرصيد الافتتاحي"
+    );
+  } finally {
+    openingModalRef.value?.setSaving?.(false);
+  }
+}
+
+async function confirmManualJournal(payload) {
+  manualJournalRef.value?.setSaving?.(true);
+  manualJournalRef.value?.setError?.("");
+  try {
+    const { data } = await axios.post("/api/ledgerManualJournal", payload);
+    showManualJournalModal.value = false;
+    flashSuccess(
+      (data.message || "تم ترحيل القيد") + (data.voucher_no ? ` · ${data.voucher_no}` : "")
+    );
+    await refresh();
+    if (selectedAccountId.value) {
+      await loadAccountLedger();
+    }
+  } catch (err) {
+    manualJournalRef.value?.setError?.(
+      err?.response?.data?.message || "تعذر ترحيل القيد"
+    );
+  } finally {
+    manualJournalRef.value?.setSaving?.(false);
+  }
+}
+
 async function loadReceiptsVault() {
   try {
     const { data } = await axios.get("/api/ledgerReceiptsVault");
@@ -784,17 +848,41 @@ onMounted(() => {
               <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">دفتر الأستاذ</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                  تقارير محاسبة (شجرة · ميزان · كشف · يومية) · نقد وإعداد (تحويل · أرباح · قاصة استلام · قاصة مشتريات)
+                  شجرة الحسابات · رصيد افتتاحي · قيد بين الحسابات · ميزان · كشف · يومية · تحويل نقدي
                 </p>
               </div>
-              <button
-                type="button"
-                class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                @click="refresh"
-              >
-                تحديث
-              </button>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  class="rounded-lg border border-violet-500/60 bg-violet-950/40 px-3 py-2 text-sm font-semibold text-violet-200 hover:bg-violet-900/50"
+                  @click="openOpeningBalance()"
+                >
+                  رصيد افتتاحي
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-sky-500/60 bg-sky-950/40 px-3 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-900/50"
+                  @click="openManualJournal()"
+                >
+                  حركة بين الحسابات
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  @click="refresh"
+                >
+                  تحديث
+                </button>
+              </div>
             </div>
+
+            <p class="mt-3 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-xs leading-relaxed text-slate-200">
+              <span class="font-semibold text-violet-300">رصيد افتتاحي:</span>
+              يُرحَّل مقابل حساب «رأس المال الافتتاحي» (3900) حسب نوع الحساب.
+              <span class="mx-2 text-slate-500">·</span>
+              <span class="font-semibold text-sky-300">حركة بين الحسابات:</span>
+              قيد يدوي صريح (حساب مدين + حساب دائن). التحويل النقدي بين القاصات يبقى في تبويب «تحويل نقدي».
+            </p>
 
             <!-- مجموعات التبويب: تقارير vs نقد/إعداد -->
             <div class="mt-4 flex flex-col gap-3">
@@ -905,13 +993,29 @@ onMounted(() => {
                       {{ treeAccountCount }} حساب
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
-                    @click="openCreateAccount"
-                  >
-                    + إضافة حساب
-                  </button>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded-lg border border-violet-500/50 bg-violet-950/30 px-3 py-1.5 text-sm font-bold text-violet-200 hover:bg-violet-900/40"
+                      @click="openOpeningBalance()"
+                    >
+                      رصيد افتتاحي
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-sky-500/50 bg-sky-950/30 px-3 py-1.5 text-sm font-bold text-sky-200 hover:bg-sky-900/40"
+                      @click="openManualJournal()"
+                    >
+                      قيد بين حسابات
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
+                      @click="openCreateAccount"
+                    >
+                      + إضافة حساب
+                    </button>
+                  </div>
                 </div>
 
                 <div
@@ -973,6 +1077,15 @@ onMounted(() => {
                           {{ accountRowBalanceLabel(acc) }}
                         </span>
                         <button
+                          v-if="acc.code !== '3900'"
+                          type="button"
+                          class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 opacity-70 hover:bg-violet-50 hover:opacity-100 group-hover:opacity-100 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                          title="رصيد افتتاحي"
+                          @click.stop="openOpeningBalance(acc.id)"
+                        >
+                          افتتاحي
+                        </button>
+                        <button
                           type="button"
                           class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600 opacity-70 hover:bg-indigo-50 hover:opacity-100 group-hover:opacity-100 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
                           title="تعديل الحساب"
@@ -1002,7 +1115,7 @@ onMounted(() => {
                   </p>
                 </div>
                 <p class="text-center text-[11px] text-slate-500 dark:text-slate-400">
-                  دليل حسابات محاسبي · إضافة / تعديل / إيقاف · اضغط الصف لفتح كشف الحساب · الحسابات النظامية مقفلة
+                  دليل حسابات · إضافة / تعديل / إيقاف · رصيد افتتاحي · قيد بين حسابات · اضغط الصف لفتح كشف الحساب
                 </p>
               </div>
 
@@ -1142,6 +1255,22 @@ onMounted(() => {
                     <div class="text-lg font-bold text-white">{{ accountMeta.name }}</div>
                     <div class="mt-1 text-sm text-slate-300">
                       النوع: {{ typeLabel(accountMeta.type) }} · الفترة: {{ from }} → {{ to }}
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-500"
+                        @click="openOpeningBalance(selectedAccountId)"
+                      >
+                        رصيد افتتاحي لهذا الحساب
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-500"
+                        @click="openManualJournal()"
+                      >
+                        حركة بين الحسابات
+                      </button>
                     </div>
                   </div>
                   <div class="text-left">
@@ -1660,5 +1789,23 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <ModalOpeningBalance
+      ref="openingModalRef"
+      :show="showOpeningModal"
+      :accounts="flatAccounts"
+      :preset-account-id="openingPresetAccountId"
+      :default-currency="reportCurrency"
+      @close="showOpeningModal = false"
+      @save="confirmOpeningBalance"
+    />
+    <ModalManualJournal
+      ref="manualJournalRef"
+      :show="showManualJournalModal"
+      :accounts="flatAccounts"
+      :default-currency="reportCurrency"
+      @close="showManualJournalModal = false"
+      @save="confirmManualJournal"
+    />
   </AuthenticatedLayout>
 </template>

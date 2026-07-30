@@ -9,6 +9,7 @@ const props = defineProps({
   formData: Object,
   client: Array,
   auctions: { type: Array, default: () => [] },
+  shippingRoutes: { type: Array, default: () => [] },
 });
     
 function getTodayDate() {
@@ -344,6 +345,23 @@ function onSelect (items, lastSelectItem) {
                   class="car-input"
                   v-model="formData.date"
                 />
+              </div>
+              <div>
+                <label class="car-label" for="shipping_route_id">{{ $t("shipping_route") }}</label>
+                <select
+                  id="shipping_route_id"
+                  class="car-input"
+                  v-model="formData.shipping_route_id"
+                >
+                  <option :value="null">{{ $t("select_shipping_route") }}</option>
+                  <option
+                    v-for="r in shippingRoutes"
+                    :key="r.id"
+                    :value="r.id"
+                  >
+                    {{ r.name }}
+                  </option>
+                </select>
               </div>
             </div>
           </section>

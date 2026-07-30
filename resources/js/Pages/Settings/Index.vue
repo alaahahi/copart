@@ -31,6 +31,8 @@ const props = defineProps({
 
 const auctions = ref([]);
 const auctionsLoading = ref(false);
+const shippingRoutes = ref([]);
+const shippingRoutesLoading = ref(false);
 
 async function loadAuctions() {
   auctionsLoading.value = true;
@@ -68,7 +70,46 @@ async function removeAuction(item) {
   }
 }
 
-onMounted(loadAuctions);
+async function loadShippingRoutes() {
+  shippingRoutesLoading.value = true;
+  try {
+    const { data } = await axios.get("/api/shippingRoutes");
+    shippingRoutes.value = data || [];
+  } catch (e) {
+    toast.error(t("settingsFailed"));
+  } finally {
+    shippingRoutesLoading.value = false;
+  }
+}
+
+async function addShippingRoute(name) {
+  try {
+    const { data } = await axios.post("/api/shippingRoutes", { name });
+    shippingRoutes.value = [...shippingRoutes.value, data].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  } catch (e) {
+    toast.error(
+      e.response?.data?.message ||
+        e.response?.data?.errors?.name?.[0] ||
+        t("settingsFailed")
+    );
+  }
+}
+
+async function removeShippingRoute(item) {
+  try {
+    await axios.post("/api/deleteShippingRoute", { id: item.id });
+    shippingRoutes.value = shippingRoutes.value.filter((r) => r.id !== item.id);
+  } catch (e) {
+    toast.error(e.response?.data?.message || t("settingsFailed"));
+  }
+}
+
+onMounted(() => {
+  loadAuctions();
+  loadShippingRoutes();
+});
 
 const logoFields = [
   { key: "receipt_logo_left_1", labelKey: "logoLeft1" },
@@ -793,6 +834,27 @@ async function confirmSystemReset({ password, confirmation, done }) {
             :empty-label="$t('no_auctions')"
             @add="addAuction"
             @remove="removeAuction"
+          />
+        </section>
+
+        <section
+          class="bg-slate-900 shadow rounded-xl p-6 border border-slate-700/60"
+        >
+          <h3 class="text-lg font-bold mb-1 text-slate-100">
+            {{ $t("shipping_routes") }}
+          </h3>
+          <p class="text-sm text-slate-400 mb-4">
+            {{ $t("shipping_route") }}
+          </p>
+
+          <TagChipList
+            :items="shippingRoutes"
+            :loading="shippingRoutesLoading"
+            :placeholder="$t('shipping_route_name_placeholder')"
+            :add-label="$t('add_shipping_route')"
+            :empty-label="$t('no_shipping_routes')"
+            @add="addShippingRoute"
+            @remove="removeShippingRoute"
           />
         </section>
 

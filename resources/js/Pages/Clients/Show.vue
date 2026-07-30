@@ -231,7 +231,8 @@ const props = defineProps({
   client_id: String,
   client: Object,
   q:String,
-  auctions: { type: Array, default: () => [] }
+  auctions: { type: Array, default: () => [] },
+  shippingRoutes: { type: Array, default: () => [] }
 });
 
 /** Opaque status backgrounds so text stays readable in light and dark mode. */
@@ -567,6 +568,7 @@ function checkClientBalance(_v) {
       :show="showModalEditCars ? true : false"
       :client="clients"
       :auctions="auctions"
+      :shippingRoutes="shippingRoutes"
       @a="confirmUpdateCar($event)"
       @allocation-returned="getResultsSelect()"
       @close="showModalEditCars = false"

@@ -182,6 +182,12 @@ const copyVinToClipboard = async (vin) => {
               class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-100"
               dir="ltr"
             >LOT: {{ car.car_number }}</span>
+            <span
+              v-if="hasText(car.shipping_route?.name)"
+              class="rounded-md border border-slate-300 bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            >
+              {{ $t("shipping_route") }}: {{ car.shipping_route.name }}
+            </span>
           </div>
 
           <div

@@ -7,6 +7,8 @@ use App\Http\Requests\DeleteLedgerAccountRequest;
 use App\Http\Requests\DisburseExpenseRequest;
 use App\Http\Requests\ReceiveExpenseRequest;
 use App\Http\Requests\StoreLedgerAccountRequest;
+use App\Http\Requests\StoreManualJournalRequest;
+use App\Http\Requests\StoreOpeningBalanceRequest;
 use App\Http\Requests\ToggleLedgerAccountAccountingRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
 use App\Http\Requests\UpdatePurchasesVaultRequest;
@@ -1148,5 +1150,80 @@ class LedgerController extends Controller
                 'legacy_user_id' => (int) $vault->legacy_user_id,
             ],
         ], 200);
+    }
+
+    /**
+     * رصيد افتتاحي مقابل رأس المال الافتتاحي (3900).
+     */
+    public function storeOpeningBalance(StoreOpeningBalanceRequest $request, LedgerService $ledger)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+        $accountId = (int) $data['ledger_account_id'];
+        $amount = (float) $data['amount'];
+        $currency = $data['currency'] === 'IQD' ? 'IQD' : '$';
+        $memo = trim((string) ($data['memo'] ?? ''));
+        if ($memo === '') {
+            $account = LedgerAccount::query()->where('owner_id', $ownerId)->find($accountId);
+            $label = $account?->name_ar ?: $account?->name ?: (string) $accountId;
+            $memo = 'رصيد افتتاحي — '.$label;
+        }
+
+        try {
+            $entry = $ledger->postOpeningBalance(
+                $ownerId,
+                $accountId,
+                $amount,
+                $currency,
+                $memo,
+                $data['entry_date'] ?? null
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر تسجيل الرصيد الافتتاحي'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم تسجيل الرصيد الافتتاحي بنجاح',
+            'voucher_no' => $entry->voucher_no,
+            'entry_id' => $entry->id,
+        ], 201);
+    }
+
+    /**
+     * قيد يدوي: حساب مدين + حساب دائن.
+     */
+    public function storeManualJournal(StoreManualJournalRequest $request, LedgerService $ledger)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+        $currency = $data['currency'] === 'IQD' ? 'IQD' : '$';
+
+        try {
+            $entry = $ledger->postManualJournal(
+                $ownerId,
+                (int) $data['debit_account_id'],
+                (int) $data['credit_account_id'],
+                (float) $data['amount'],
+                $currency,
+                trim((string) $data['memo']),
+                $data['entry_date'] ?? null
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر ترحيل القيد'], 500);
+        }
+
+        return Response::json([
+            'message' => 'تم ترحيل القيد بين الحسابات بنجاح',
+            'voucher_no' => $entry->voucher_no,
+            'entry_id' => $entry->id,
+        ], 201);
     }
 }
