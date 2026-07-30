@@ -4734,45 +4734,25 @@
     "file": "assets/app.7e8e77c4.css",
     "src": "resources/js/app.css"
   },
+  "AuthenticatedLayout.css": {
+    "file": "assets/AuthenticatedLayout.2de53130.css",
+    "src": "AuthenticatedLayout.css"
+  },
   "ModalDel.css": {
     "file": "assets/ModalDel.6b361e01.css",
     "src": "ModalDel.css"
   },
-  "ModalDelCar.css": {
-    "file": "assets/ModalDelCar.6b361e01.css",
-    "src": "ModalDelCar.css"
+  "resources/js/Pages/Sales.css": {
+    "file": "assets/Sales.d9b6c4a0.css",
+    "src": "resources/js/Pages/Sales.css"
   },
   "resources/js/Pages/Users/Index.css": {
     "file": "assets/Index.804640dc.css",
     "src": "resources/js/Pages/Users/Index.css"
   },
-  "resources/js/Pages/Vaults/ExpenseAccount.css": {
-    "file": "assets/ExpenseAccount.53dfb419.css",
-    "src": "resources/js/Pages/Vaults/ExpenseAccount.css"
-  },
-  "resources/js/Pages/Accounting/Index.css": {
-    "file": "assets/Index.5f7bac65.css",
-    "src": "resources/js/Pages/Accounting/Index.css"
-  },
-  "AuthenticatedLayout.css": {
-    "file": "assets/AuthenticatedLayout.2de53130.css",
-    "src": "AuthenticatedLayout.css"
-  },
-  "style.css": {
-    "file": "assets/style.1ff9ffe7.css",
-    "src": "style.css"
-  },
-  "resources/js/Pages/Hospital/Index.css": {
-    "file": "assets/Index.7a8a3c05.css",
-    "src": "resources/js/Pages/Hospital/Index.css"
-  },
-  "ModaSave.css": {
-    "file": "assets/ModaSave.6b361e01.css",
-    "src": "ModaSave.css"
-  },
-  "resources/js/Pages/Clients/Index.css": {
-    "file": "assets/Index.858fdce7.css",
-    "src": "resources/js/Pages/Clients/Index.css"
+  "resources/js/Pages/Settings/Index.css": {
+    "file": "assets/Index.57718b55.css",
+    "src": "resources/js/Pages/Settings/Index.css"
   },
   "Uploader.css": {
     "file": "assets/Uploader.b147d8d4.css",
@@ -4782,45 +4762,9 @@
     "file": "assets/Modal.44266cb8.css",
     "src": "Modal.css"
   },
-  "resources/js/Pages/Sales.css": {
-    "file": "assets/Sales.d9b6c4a0.css",
-    "src": "resources/js/Pages/Sales.css"
-  },
-  "resources/js/Pages/Accounting/Wallet.css": {
-    "file": "assets/Wallet.65aed001.css",
-    "src": "resources/js/Pages/Accounting/Wallet.css"
-  },
-  "resources/js/Pages/Settings/Index.css": {
-    "file": "assets/Index.57718b55.css",
-    "src": "resources/js/Pages/Settings/Index.css"
-  },
   "resources/js/Pages/FormRegistration/AddDoctorResults.css": {
     "file": "assets/AddDoctorResults.9304e077.css",
     "src": "resources/js/Pages/FormRegistration/AddDoctorResults.css"
-  },
-  "ModalAddExpenseAccount.css": {
-    "file": "assets/ModalAddExpenseAccount.26606140.css",
-    "src": "ModalAddExpenseAccount.css"
-  },
-  "datetime.css": {
-    "file": "assets/datetime.cb233f0a.css",
-    "src": "datetime.css"
-  },
-  "resources/js/Pages/FormRegistration/EditDoctorResults.css": {
-    "file": "assets/EditDoctorResults.9304e077.css",
-    "src": "resources/js/Pages/FormRegistration/EditDoctorResults.css"
-  },
-  "resources/js/Pages/CompanyTreasury/Index.css": {
-    "file": "assets/Index.43e23bde.css",
-    "src": "resources/js/Pages/CompanyTreasury/Index.css"
-  },
-  "resources/js/Pages/Ledger/Index.css": {
-    "file": "assets/Index.cfc83c48.css",
-    "src": "resources/js/Pages/Ledger/Index.css"
-  },
-  "resources/js/Pages/Vaults/Index.css": {
-    "file": "assets/Index.cafd6e49.css",
-    "src": "resources/js/Pages/Vaults/Index.css"
   },
   "ModalAddCarExpenses.css": {
     "file": "assets/ModalAddCarExpenses.44266cb8.css",
@@ -4830,64 +4774,120 @@
     "file": "assets/ModalEditCar_S.a7c5a290.css",
     "src": "ModalEditCar_S.css"
   },
-  "resources/js/Pages/Hospital/Add.css": {
-    "file": "assets/Add.0023b404.css",
-    "src": "resources/js/Pages/Hospital/Add.css"
+  "resources/js/Pages/CompanyTreasury/Index.css": {
+    "file": "assets/Index.43e23bde.css",
+    "src": "resources/js/Pages/CompanyTreasury/Index.css"
   },
-  "index.css": {
-    "file": "assets/index.6e9897f3.css",
-    "src": "index.css"
+  "ModalAddExpenseAccount.css": {
+    "file": "assets/ModalAddExpenseAccount.26606140.css",
+    "src": "ModalAddExpenseAccount.css"
   },
-  "resources/js/Pages/Hospital/Edit.css": {
-    "file": "assets/Edit.a949a739.css",
-    "src": "resources/js/Pages/Hospital/Edit.css"
+  "resources/js/Pages/Hospital/Index.css": {
+    "file": "assets/Index.7a8a3c05.css",
+    "src": "resources/js/Pages/Hospital/Index.css"
   },
-  "resources/js/Pages/Clients/Show.css": {
-    "file": "assets/Show.8fd71286.css",
-    "src": "resources/js/Pages/Clients/Show.css"
+  "resources/js/Pages/Accounting/Wallet.css": {
+    "file": "assets/Wallet.65aed001.css",
+    "src": "resources/js/Pages/Accounting/Wallet.css"
   },
-  "resources/js/Pages/Dashboard.css": {
-    "file": "assets/Dashboard.df9d6cc0.css",
-    "src": "resources/js/Pages/Dashboard.css"
-  },
-  "resources/js/Pages/FormRegistrationCourt.css": {
-    "file": "assets/FormRegistrationCourt.7a8a3c05.css",
-    "src": "resources/js/Pages/FormRegistrationCourt.css"
-  },
-  "resources/js/Pages/Annual/Index.css": {
-    "file": "assets/Index.0a846f21.css",
-    "src": "resources/js/Pages/Annual/Index.css"
-  },
-  "ModalAddCarPayment.css": {
-    "file": "assets/ModalAddCarPayment.788eb08d.css",
-    "src": "ModalAddCarPayment.css"
-  },
-  "resources/js/Pages/purchases.css": {
-    "file": "assets/purchases.54383b96.css",
-    "src": "resources/js/Pages/purchases.css"
-  },
-  "resources/js/Pages/Auth/Login.css": {
-    "file": "assets/Login.11699ba3.css",
-    "src": "resources/js/Pages/Auth/Login.css"
+  "resources/js/Pages/FormRegistrationSaved.css": {
+    "file": "assets/FormRegistrationSaved.7a8a3c05.css",
+    "src": "resources/js/Pages/FormRegistrationSaved.css"
   },
   "resources/js/Pages/FormRegistrationCompleted.css": {
     "file": "assets/FormRegistrationCompleted.7a8a3c05.css",
     "src": "resources/js/Pages/FormRegistrationCompleted.css"
   },
-  "resources/js/Pages/CarConfig/Index.css": {
-    "file": "assets/Index.370aeecd.css",
-    "src": "resources/js/Pages/CarConfig/Index.css"
-  },
   "WebCamUI.css": {
     "file": "assets/WebCamUI.78715766.css",
     "src": "WebCamUI.css"
   },
+  "resources/js/Pages/Accounting/Index.css": {
+    "file": "assets/Index.5f7bac65.css",
+    "src": "resources/js/Pages/Accounting/Index.css"
+  },
+  "index.css": {
+    "file": "assets/index.6e9897f3.css",
+    "src": "index.css"
+  },
+  "resources/js/Pages/Clients/Show.css": {
+    "file": "assets/Show.8fd71286.css",
+    "src": "resources/js/Pages/Clients/Show.css"
+  },
+  "resources/js/Pages/Ledger/Index.css": {
+    "file": "assets/Index.cfc83c48.css",
+    "src": "resources/js/Pages/Ledger/Index.css"
+  },
+  "resources/js/Pages/Clients/Index.css": {
+    "file": "assets/Index.858fdce7.css",
+    "src": "resources/js/Pages/Clients/Index.css"
+  },
+  "ModaSave.css": {
+    "file": "assets/ModaSave.6b361e01.css",
+    "src": "ModaSave.css"
+  },
+  "resources/js/Pages/CarConfig/Index.css": {
+    "file": "assets/Index.370aeecd.css",
+    "src": "resources/js/Pages/CarConfig/Index.css"
+  },
+  "style.css": {
+    "file": "assets/style.1ff9ffe7.css",
+    "src": "style.css"
+  },
+  "ModalDelCar.css": {
+    "file": "assets/ModalDelCar.6b361e01.css",
+    "src": "ModalDelCar.css"
+  },
+  "resources/js/Pages/purchases.css": {
+    "file": "assets/purchases.54383b96.css",
+    "src": "resources/js/Pages/purchases.css"
+  },
+  "ModalAddCarPayment.css": {
+    "file": "assets/ModalAddCarPayment.788eb08d.css",
+    "src": "ModalAddCarPayment.css"
+  },
+  "resources/js/Pages/Hospital/Add.css": {
+    "file": "assets/Add.0023b404.css",
+    "src": "resources/js/Pages/Hospital/Add.css"
+  },
+  "resources/js/Pages/Annual/Index.css": {
+    "file": "assets/Index.0a846f21.css",
+    "src": "resources/js/Pages/Annual/Index.css"
+  },
+  "resources/js/Pages/Vaults/Index.css": {
+    "file": "assets/Index.cafd6e49.css",
+    "src": "resources/js/Pages/Vaults/Index.css"
+  },
+  "resources/js/Pages/FormRegistrationCourt.css": {
+    "file": "assets/FormRegistrationCourt.7a8a3c05.css",
+    "src": "resources/js/Pages/FormRegistrationCourt.css"
+  },
+  "resources/js/Pages/Auth/Login.css": {
+    "file": "assets/Login.11699ba3.css",
+    "src": "resources/js/Pages/Auth/Login.css"
+  },
+  "resources/js/Pages/Hospital/Edit.css": {
+    "file": "assets/Edit.a949a739.css",
+    "src": "resources/js/Pages/Hospital/Edit.css"
+  },
+  "resources/js/Pages/Dashboard.css": {
+    "file": "assets/Dashboard.df9d6cc0.css",
+    "src": "resources/js/Pages/Dashboard.css"
+  },
+  "resources/js/Pages/Vaults/ExpenseAccount.css": {
+    "file": "assets/ExpenseAccount.53dfb419.css",
+    "src": "resources/js/Pages/Vaults/ExpenseAccount.css"
+  },
+  "resources/js/Pages/FormRegistration/EditDoctorResults.css": {
+    "file": "assets/EditDoctorResults.9304e077.css",
+    "src": "resources/js/Pages/FormRegistration/EditDoctorResults.css"
+  },
+  "datetime.css": {
+    "file": "assets/datetime.cb233f0a.css",
+    "src": "datetime.css"
+  },
   "VueSearchSelect.css": {
     "file": "assets/VueSearchSelect.aad2bd49.css",
     "src": "VueSearchSelect.css"
-  },
-  "resources/js/Pages/FormRegistrationSaved.css": {
-    "file": "assets/FormRegistrationSaved.7a8a3c05.css",
-    "src": "resources/js/Pages/FormRegistrationSaved.css"
   }
 }
