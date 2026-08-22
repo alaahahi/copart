@@ -24,11 +24,14 @@ const HAND_TOKEN = "بيد";
 const total = computed(() => asNumber(props.formData?.total_s));
 const paid = computed(() => asNumber(props.formData?.paid));
 const discount = computed(() => asNumber(props.formData?.discount));
-const remaining = computed(() => Math.max(0, total.value - (paid.value + discount.value)));
+const damageCompensation = computed(() => asNumber(props.formData?.damage_compensation));
+const remaining = computed(() =>
+  Math.max(0, total.value - (paid.value + discount.value + damageCompensation.value))
+);
 
 const paidPercent = computed(() => {
   if (total.value <= 0) return 0;
-  const pct = ((paid.value + discount.value) / total.value) * 100;
+  const pct = ((paid.value + discount.value + damageCompensation.value) / total.value) * 100;
   return Math.min(100, Math.max(0, Math.round(pct)));
 });
 

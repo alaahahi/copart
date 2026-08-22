@@ -20,6 +20,7 @@ use App\Helpers\UploadHelper;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\DeleteCarRequest;
 use App\Http\Requests\StoreCarRequest;
+use App\Http\Requests\UpdateCarSalesRequest;
 use App\Models\Auction;
 use App\Models\ShippingRoute;
 use App\Services\CarService;
@@ -585,10 +586,12 @@ class DashboardController extends Controller
             // Payment color uses sales remaining (total_s), not purchase total.
             $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
             $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
+            $damageCompensation = (float) ($dataToUpdate['damage_compensation'] ?? $car->damage_compensation ?? 0);
             $dataToUpdate['results'] = $carService->resolveResultsStatus(
                 (float) ($dataToUpdate['total_s'] ?? $car->total_s ?? 0),
                 $paid,
-                $discount
+                $discount,
+                $damageCompensation
             );
 
             //$this->accountingController->increaseWallet(($total-$car->total), $descClient,$car->client_id,$car->id,'App\Models\User');
@@ -597,7 +600,7 @@ class DashboardController extends Controller
 
         return Response::json('ok', 200);    
     }
-    public function updateCarsS(Request $request, CarService $carService)
+    public function updateCarsS(UpdateCarSalesRequest $request, CarService $carService)
     {
         $owner_id=Auth::user()->owner_id;
 
@@ -642,6 +645,13 @@ class DashboardController extends Controller
         $salesDelta = (float) $split['sales_delta'];
         $descClient = trans('text.editExpenses').' '.$salesDelta.' '.trans('text.for_car').$car->car_type.' '.$car->vin;
 
+        $oldDamageCompensation = (float) ($car->damage_compensation ?? 0);
+        $newDamageCompensation = (float) ($request->input('damage_compensation', $oldDamageCompensation) ?? 0);
+        if ($newDamageCompensation < 0) {
+            $newDamageCompensation = 0;
+        }
+        $damageDelta = round($newDamageCompensation - $oldDamageCompensation, 2);
+
         DB::transaction(function () use (
             $request,
             $car,
@@ -651,7 +661,9 @@ class DashboardController extends Controller
             $profit,
             $split,
             $salesDelta,
-            $descClient
+            $descClient,
+            $newDamageCompensation,
+            $damageDelta
         ) {
             if ($car->client_id && (
                 abs($salesDelta) >= 0.005
@@ -672,14 +684,31 @@ class DashboardController extends Controller
             $dataToUpdate = $request->all();
             $dataToUpdate['total_s'] = $total_s;
             $dataToUpdate['profit'] = $profit;
+            $dataToUpdate['damage_compensation'] = $newDamageCompensation;
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
             $dataToUpdate['shipping_route_id'] = $carService->resolveShippingRouteId((int) $owner_id, $request->shipping_route_id);
 
             $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
             $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
-            $dataToUpdate['results'] = $carService->resolveResultsStatus((float) $total_s, $paid, $discount);
+            $dataToUpdate['results'] = $carService->resolveResultsStatus(
+                (float) $total_s,
+                $paid,
+                $discount,
+                $newDamageCompensation
+            );
 
             $car->update($dataToUpdate);
+
+            if ($car->client_id && abs($damageDelta) >= 0.005) {
+                $damageDesc = 'تعويض ضرر سيارة '.$car->car_type.' '.$car->vin.' (Δ '.$damageDelta.')';
+                $this->accountingController->adjustClientDamageCompensation(
+                    $damageDelta,
+                    $damageDesc,
+                    (int) $car->client_id,
+                    $car->id,
+                    'App\Models\Car'
+                );
+            }
         });
 
         return Response::json('ok', 200);    
@@ -890,7 +919,7 @@ class DashboardController extends Controller
         // Block delete when partially/fully paid or settled (incl. discount-only).
         $paid = (float) ($car->paid ?? 0);
         $totalS = (float) ($car->total_s ?? 0);
-        $remaining = $totalS - $paid - (float) ($car->discount ?? 0);
+        $remaining = $totalS - $paid - (float) ($car->discount ?? 0) - (float) ($car->damage_compensation ?? 0);
         if ($paid > 0.009 || ($totalS > 0.009 && $remaining <= 0.009)) {
             return Response::json([
                 'message' => 'لا يمكن حذف سيارة مدفوعة جزئياً أو بالكامل. أعد المبالغ للرصيد أو ألغِ الدفعات أولاً.',
@@ -923,7 +952,7 @@ class DashboardController extends Controller
             // Paid cash history stays; SoftDeletes keeps the car out of KPIs.
             $remainingAr = max(
                 0,
-                (int) ($car->total_s ?? 0) - (int) ($car->paid ?? 0) - (int) ($car->discount ?? 0)
+                (int) ($car->total_s ?? 0) - (int) ($car->paid ?? 0) - (int) ($car->discount ?? 0) - (int) ($car->damage_compensation ?? 0)
             );
             if ($remainingAr > 0 && $car->client_id) {
                 $this->accountingController->decreaseWallet(

@@ -361,8 +361,8 @@ class TransactionPaymentService
 
     protected function syncCarResults(Car $car): void
     {
-        $remaining = (float) $car->total_s - (float) $car->paid - (float) $car->discount;
-        if ((float) $car->paid + (float) $car->discount <= 0) {
+        $remaining = (float) $car->total_s - (float) $car->paid - (float) $car->discount - (float) ($car->damage_compensation ?? 0);
+        if ((float) $car->paid + (float) $car->discount + (float) ($car->damage_compensation ?? 0) <= 0) {
             $car->results = 0;
         } elseif ($remaining > 0) {
             $car->results = 1;

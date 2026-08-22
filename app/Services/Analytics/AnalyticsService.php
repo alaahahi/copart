@@ -97,13 +97,14 @@ class AnalyticsService
         ?int $results
     ): array {
         $cars = $this->carQuery($ownerId, $from, $to, $clientId, $results)->get([
-            'id', 'total', 'total_s', 'paid', 'discount', 'profit', 'results', 'client_id',
+            'id', 'total', 'total_s', 'paid', 'discount', 'damage_compensation', 'profit', 'results', 'client_id',
         ]);
 
         $sales = (float) $cars->sum('total_s');
         $cost = (float) $cars->sum('total');
         $paid = (float) $cars->sum('paid');
         $discount = (float) $cars->sum('discount');
+        $damageCompensation = (float) $cars->sum('damage_compensation');
         // Profit only for cars with sale pricing — purchase-only cost is not a "loss".
         $carService = app(CarService::class);
         $netProfit = (float) $cars->sum(fn ($c) => $carService->computeProfit(
@@ -134,7 +135,8 @@ class AnalyticsService
             'margin_pct' => $margin,
             'paid' => round($paid, 2),
             'discount' => round($discount, 2),
-            'remaining' => round($sales - $paid - $discount, 2),
+            'damage_compensation' => round($damageCompensation, 2),
+            'remaining' => round($sales - $paid - $discount - $damageCompensation, 2),
             'receivables' => round($receivables, 2),
             'cash_box' => round($cashBox, 2),
             'period_expenses' => round($periodExpenses, 2),
@@ -172,6 +174,7 @@ class AnalyticsService
                 DB::raw('COALESCE(SUM(CASE WHEN COALESCE(total_s, 0) > 0 THEN COALESCE(total_s, 0) - COALESCE(total, 0) ELSE 0 END), 0) as profit'),
                 DB::raw('COALESCE(SUM(paid), 0) as paid'),
                 DB::raw('COALESCE(SUM(discount), 0) as discount'),
+                DB::raw('COALESCE(SUM(damage_compensation), 0) as damage_compensation'),
             ])
             ->groupBy('client_id')
             ->get();
@@ -186,6 +189,7 @@ class AnalyticsService
             $profit = (float) $row->profit;
             $paid = (float) $row->paid;
             $discount = (float) $row->discount;
+            $damageCompensation = (float) ($row->damage_compensation ?? 0);
             $clientId = (int) $row->client_id;
             $ledgerBalance = $clientId
                 ? (float) $this->ledger->clientBalance($ownerId, $clientId, $currency)
@@ -200,7 +204,7 @@ class AnalyticsService
                 'profit' => round($profit, 2),
                 'margin_pct' => $sales > 0 ? round(($profit / $sales) * 100, 2) : 0.0,
                 'paid' => round($paid, 2),
-                'remaining' => round($sales - $paid - $discount, 2),
+                'remaining' => round($sales - $paid - $discount - $damageCompensation, 2),
                 'ledger_balance' => round($ledgerBalance, 2),
             ];
         })->sortByDesc('profit')->values();
@@ -397,7 +401,7 @@ class AnalyticsService
             $query->where('client_id', $clientId);
         }
 
-        $cars = $query->get(['id', 'total_s', 'paid', 'discount', 'date', 'created_at', 'client_id']);
+        $cars = $query->get(['id', 'total_s', 'paid', 'discount', 'damage_compensation', 'date', 'created_at', 'client_id']);
 
         $buckets = [
             '0_30' => 0.0,
@@ -417,7 +421,7 @@ class AnalyticsService
         $today = Carbon::today();
 
         foreach ($cars as $car) {
-            $remaining = max(0, (float) $car->total_s - (float) $car->paid - (float) $car->discount);
+            $remaining = max(0, (float) $car->total_s - (float) $car->paid - (float) $car->discount - (float) ($car->damage_compensation ?? 0));
             if ($remaining <= 0) {
                 continue;
             }

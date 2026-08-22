@@ -345,6 +345,67 @@ async function confirmSystemReset({ password, confirmation, done }) {
     if (typeof done === "function") done();
   }
 }
+
+// ─── Database Insights ───────────────────────────────────────────────────────
+const dbData    = ref(null);
+const dbLoading = ref(false);
+const vacuuming = ref(false);
+const dbColors  = ['#6366f1','#22c55e','#f59e0b','#3b82f6','#ec4899','#14b8a6','#fb923c','#a855f7','#ef4444','#64748b'];
+
+const dbTopTables = computed(() => (dbData.value?.tables ?? []).slice(0, 10));
+
+const dbChartGradient = computed(() => {
+  const tables = dbTopTables.value;
+  if (!tables.length) return '#334155';
+  const total = dbData.value?.db_size ?? tables.reduce((s, r) => s + (r.size_bytes ?? 0), 0);
+  let offset = 0;
+  const stops = [];
+  tables.forEach((row, idx) => {
+    const pct = total > 0 ? ((row.size_bytes ?? 0) / total) * 100 : 0;
+    const color = dbColors[idx % dbColors.length];
+    stops.push(`${color} ${offset.toFixed(2)}%`);
+    offset += pct;
+    stops.push(`${color} ${offset.toFixed(2)}%`);
+  });
+  if (offset < 100) { stops.push(`#334155 ${offset.toFixed(2)}%`, '#334155 100%'); }
+  return `conic-gradient(${stops.join(', ')})`;
+});
+
+function formatDbBytes(bytes) {
+  if (bytes == null) return '—';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+  if (bytes >= 1048576)    return (bytes / 1048576).toFixed(1) + ' MB';
+  if (bytes >= 1024)       return (bytes / 1024).toFixed(0) + ' KB';
+  return bytes + ' B';
+}
+
+async function loadDbInsights() {
+  if (dbLoading.value) return;
+  dbLoading.value = true;
+  try {
+    const { data } = await axios.get(route('settings.db.insights'));
+    dbData.value = data;
+  } catch {
+    toast.error('تعذّر تحميل معلومات قاعدة البيانات');
+  } finally {
+    dbLoading.value = false;
+  }
+}
+
+async function runVacuum() {
+  vacuuming.value = true;
+  try {
+    const { data } = await axios.post(route('settings.db.vacuum'));
+    toast.success(data.message + (data.saved ? ` | وُفِّر: ${formatDbBytes(data.saved)}` : ''));
+    await loadDbInsights();
+  } catch {
+    toast.error('فشل VACUUM');
+  } finally {
+    vacuuming.value = false;
+  }
+}
+
+onMounted(loadDbInsights);
 </script>
 
 <template>
@@ -877,6 +938,87 @@ async function confirmSystemReset({ password, confirmation, done }) {
           </button>
         </section>
       </div>
+    </div>
+
+    <!-- ─── Database Insights ─── -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 space-y-4">
+      <!-- Vacuum hint -->
+      <div v-if="dbData && dbData.free_bytes > 10 * 1024 * 1024"
+        class="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-amber-500/40 bg-amber-900/20">
+        <span class="text-amber-300 font-medium flex-1">
+          ⚠️ {{ formatDbBytes(dbData.free_bytes) }} مساحة حرة — شغّل VACUUM لتصغير الملف
+        </span>
+        <button :disabled="vacuuming" @click="runVacuum"
+          class="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 disabled:opacity-60 flex items-center gap-2">
+          <span v-if="vacuuming" class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+          {{ vacuuming ? 'جارٍ التنفيذ…' : '🗜️ VACUUM' }}
+        </button>
+      </div>
+
+      <section class="bg-slate-900 shadow rounded-xl p-6 border border-slate-700/60">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">🗄️ تخزين قاعدة البيانات</h3>
+            <p class="text-sm text-slate-400">توزيع الحجم على مستوى الجداول</p>
+          </div>
+          <button @click="loadDbInsights" :disabled="dbLoading"
+            class="px-3 py-1.5 text-sm bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 disabled:opacity-60">
+            {{ dbLoading ? '…' : '↻ تحديث' }}
+          </button>
+        </div>
+
+        <div v-if="dbLoading" class="flex justify-center py-8 text-slate-400">
+          <span class="animate-spin inline-block w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full"></span>
+        </div>
+
+        <template v-else-if="dbData">
+          <!-- Stats -->
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="bg-slate-800 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-400 mb-1">الإجمالي</p>
+              <p class="font-bold text-slate-100">{{ formatDbBytes(dbData.db_size) }}</p>
+            </div>
+            <div class="bg-slate-800 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-400 mb-1">مستخدم</p>
+              <p class="font-bold text-slate-100">{{ formatDbBytes(dbData.used_bytes) }}</p>
+            </div>
+            <div class="bg-slate-800 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-400 mb-1">حر</p>
+              <p class="font-bold text-emerald-400">{{ formatDbBytes(dbData.free_bytes) }}</p>
+            </div>
+          </div>
+
+          <!-- Chart + list -->
+          <div class="flex flex-col lg:flex-row gap-6 items-start">
+            <div class="flex-shrink-0 flex justify-center">
+              <div class="relative w-36 h-36">
+                <div class="w-36 h-36 rounded-full" :style="{ background: dbChartGradient }"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="w-20 h-20 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                    <span class="text-xs text-slate-400 text-center leading-tight">{{ dbTopTables.length }}<br>جدول</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="flex-1 space-y-2">
+              <div v-for="(row, idx) in dbTopTables" :key="row.name"
+                class="flex items-center gap-2 text-sm">
+                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ background: dbColors[idx % dbColors.length] }"></span>
+                <code class="flex-1 text-slate-300 text-xs truncate">{{ row.name }}</code>
+                <span class="text-slate-400 text-xs">{{ (row.rows ?? 0).toLocaleString() }} صف</span>
+                <span class="font-semibold text-slate-100 w-16 text-right">{{ formatDbBytes(row.size_bytes) }}</span>
+                <span class="text-slate-500 text-xs w-10 text-right">{{ row.percent != null ? row.percent.toFixed(1) + '%' : '' }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="text-center py-6">
+          <button @click="loadDbInsights" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">
+            تحميل المعلومات
+          </button>
+        </div>
+      </section>
     </div>
 
     <ModalSystemReset

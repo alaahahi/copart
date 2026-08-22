@@ -44,17 +44,31 @@ class CarService
     }
 
     /**
+     * Sales remaining owed by client:
+     * total_s − paid − discount − damage_compensation
+     */
+    public function remainingBalance(float $totalS, float $paid, float $discount = 0, float $damageCompensation = 0): float
+    {
+        return round($totalS - $paid - $discount - $damageCompensation, 2);
+    }
+
+    /**
      * Car payment color flag used in tables:
      * 0 = unpaid (default), 1 = partial (red), 2 = fully paid (green).
      *
-     * remaining = total_s - paid - discount
-     * When remaining <= 0 and something was paid/discounted → green (2).
+     * remaining = total_s - paid - discount - damage_compensation
+     * When remaining <= 0 and something was paid/discounted/compensated → green (2).
      */
-    public function resolveResultsStatus(float $totalS, float $paid, float $discount): int
-    {
-        $remaining = $totalS - $paid - $discount;
+    public function resolveResultsStatus(
+        float $totalS,
+        float $paid,
+        float $discount,
+        float $damageCompensation = 0
+    ): int {
+        $remaining = $this->remainingBalance($totalS, $paid, $discount, $damageCompensation);
+        $settledWithoutCash = $paid + $discount + $damageCompensation;
 
-        if ($paid + $discount <= 0) {
+        if ($settledWithoutCash <= 0) {
             return 0;
         }
 

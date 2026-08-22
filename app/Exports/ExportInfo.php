@@ -57,6 +57,7 @@ class ExportInfo implements FromCollection, WithHeadings
             'total_s',
             'paid',
             'discount',
+            'damage_compensation',
             'date',
             'results',
         ]);
@@ -76,8 +77,9 @@ class ExportInfo implements FromCollection, WithHeadings
             $total = (float) ($car->total_s ?? 0);
             $paid = (float) ($car->paid ?? 0);
             $discount = (float) ($car->discount ?? 0);
-            // Same as UI carRemaining(): total_s − paid − discount
-            $remaining = $total - $paid - $discount;
+            $damageCompensation = (float) ($car->damage_compensation ?? 0);
+            // Same as UI carRemaining(): total_s − paid − discount − damage_compensation
+            $remaining = $total - $paid - $discount - $damageCompensation;
 
             $collection->push([
                 $seqNo,
@@ -95,6 +97,8 @@ class ExportInfo implements FromCollection, WithHeadings
                 (float) ($car->commission_s ?? 0),
                 $total,
                 $paid,
+                $discount,
+                $damageCompensation,
                 $remaining,
                 $car->date ?? '',
             ]);
@@ -124,7 +128,9 @@ class ExportInfo implements FromCollection, WithHeadings
             'مصاريف أربيل',         // erbil_expenses
             'الإجمالي',             // total
             'المدفوع',              // paid
-            'المتبقي',              // remaining (total_s − paid − discount)
+            'الخصم',                // discount
+            'تعويض ضرر',            // damage_compensation
+            'المتبقي',              // remaining (total_s − paid − discount − damage_compensation)
             'بتاريخ',               // date
         ];
     }

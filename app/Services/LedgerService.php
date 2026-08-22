@@ -913,6 +913,51 @@ class LedgerService
     }
 
     /**
+     * Damage compensation (تعويض ضرر) — AR write-off without cash, same COA pattern as payment discount:
+     * delta > 0 → Dr expense 5100 / Cr AR (reduce client debt)
+     * delta < 0 → reverse (restore debt)
+     */
+    public function postClientArWriteOff(
+        int $ownerId,
+        int $clientId,
+        float $delta,
+        string $currency,
+        string $memo,
+        $reference = null
+    ): ?JournalEntry {
+        $delta = round($delta, 2);
+        if (abs($delta) < 0.005) {
+            return null;
+        }
+
+        $ar = $this->clientReceivableAccount($ownerId, $clientId);
+        $expense = $this->systemAccount($ownerId, self::CODE_EXPENSE);
+        $amount = abs($delta);
+
+        if ($delta > 0) {
+            $lines = [
+                ['account_id' => $expense->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+                ['account_id' => $ar->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+            ];
+        } else {
+            $lines = [
+                ['account_id' => $ar->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+                ['account_id' => $expense->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+            ];
+        }
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'car_damage_compensation',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], $lines);
+    }
+
+    /**
      * Cash-box receipt (وصل قبض): Debit Cash / Credit COA (revenue or expense refund).
      * Optional $cashUserId routes to that user's cash vault ledger (not always 1100).
      * Optional $coaAccountId posts to a specific expense/income COA (else system 4100 revenue).

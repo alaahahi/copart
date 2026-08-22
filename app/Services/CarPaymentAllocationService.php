@@ -51,7 +51,8 @@ class CarPaymentAllocationService
             $car->results = $this->cars->resolveResultsStatus(
                 (float) $car->total_s,
                 (float) $car->paid,
-                (float) $car->discount
+                (float) $car->discount,
+                (float) ($car->damage_compensation ?? 0)
             );
             $car->save();
 
@@ -279,7 +280,8 @@ class CarPaymentAllocationService
         $car->results = $this->cars->resolveResultsStatus(
             (float) $car->total_s,
             $paid,
-            $discount
+            $discount,
+            (float) ($car->damage_compensation ?? 0)
         );
         $car->save();
 

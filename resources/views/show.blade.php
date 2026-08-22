@@ -65,6 +65,8 @@
                     <th scope="col">مصاريف أربيل</th>
                     <th scope="col">المجموع</th>
                     <th scope="col">مدفوع</th>
+                    <th scope="col">خصم</th>
+                    <th scope="col">تعويض ضرر</th>
                     <th scope="col">متبقي</th>
                     <th scope="col">ملاحظة</th>
                 </tr>
@@ -87,7 +89,9 @@
                     <td class="num">{{ $row->commission_s ?? 0 }}</td>
                     <td class="num">{{ $row->total_s }}</td>
                     <td class="num">{{ $row->paid }}</td>
-                    <td class="num">{{ ($row->total_s) - ($row->paid) }}</td>
+                    <td class="num">{{ $row->discount ?? 0 }}</td>
+                    <td class="num">{{ $row->damage_compensation ?? 0 }}</td>
+                    <td class="num">{{ ($row->total_s) - ($row->paid) - ($row->discount ?? 0) - ($row->damage_compensation ?? 0) }}</td>
                     <td class="text-start-rtl">{{ $row->note }}</td>
                 </tr>
                 @endforeach

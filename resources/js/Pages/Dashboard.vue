@@ -1320,6 +1320,10 @@ body {
   animation: dash-celestial-breathe 2.5s ease-in-out infinite;
 }
 
+.dash-celestial.pointer-events-none {
+  left: 0.75rem !important;
+}
+
 .dash-celestial--dawn {
   filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.55));
 }

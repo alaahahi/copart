@@ -170,6 +170,8 @@ Route::group(['middleware' => ['auth','verified']], function () {
         Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
         Route::post('reset', [SystemConfigController::class, 'reset'])->name('reset');
     });
+    Route::get('settings/database-insights', [SystemConfigController::class, 'databaseInsights'])->name('settings.db.insights');
+    Route::post('settings/database-vacuum', [SystemConfigController::class, 'vacuumDatabase'])->name('settings.db.vacuum');
     Route::post('whatsapp/debt-notice',[SystemConfigController::class, 'queueDebtNotice'])->name('whatsapp.debt_notice');
     Route::get('sync-monitor', function () {
         return Inertia::render('SyncMonitor');

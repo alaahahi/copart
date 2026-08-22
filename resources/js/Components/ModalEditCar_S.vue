@@ -460,6 +460,27 @@ function formatAllocDate(at) {
             <p v-if="errors?.media" class="car-error">{{ errors?.media[0] }}</p>
           </section>
 
+          <!-- Section: خصومات وتعويضات -->
+          <section class="car-section">
+            <h3 class="car-section-title">
+              <span class="car-section-dot bg-violet-400"></span>
+              {{ $t("deductions") }}
+            </h3>
+            <div class="car-grid car-grid-4">
+              <div>
+                <label class="car-label" for="damage_compensation">{{ $t("damage_compensation") }}</label>
+                <input
+                  id="damage_compensation"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="car-input"
+                  v-model.number="formData.damage_compensation"
+                />
+              </div>
+            </div>
+          </section>
+
           <!-- Section: ملاحظات -->
           <section class="car-section">
             <h3 class="car-section-title">

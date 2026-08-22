@@ -801,10 +801,11 @@ class AccountingController extends Controller
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->whereBetween('date', [$from, $to])->count();
             $car_total_complete =   Car::where('client_id',$client->id)->where('results',2)->whereBetween('date', [$from, $to])->count();
             $cars_discount=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('discount');
+            $cars_damage_compensation=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('damage_compensation');
             $cars_paid=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('paid');
             $cars_sum=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->sum('total_s');
             $exit_car_total=   Car::where('client_id',$client->id)->whereBetween('date', [$from, $to])->where('is_exit','!=',0)->count();
-            $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
+            $cars_need_paid=$cars_sum-($cars_paid+$cars_discount+$cars_damage_compensation);
         }else{
             $transactions = $this->transactionsQueryForUser($client);
             $cars =  Car::with('CarImages', 'shippingRoute')->where('client_id',$client->id);
@@ -813,10 +814,11 @@ class AccountingController extends Controller
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->count();
             $car_total_complete =   Car::where('client_id',$client->id)->where('results',2)->count();
             $cars_discount=Car::where('client_id',$client->id)->sum('discount');
+            $cars_damage_compensation=Car::where('client_id',$client->id)->sum('damage_compensation');
             $cars_paid=   Car::where('client_id',$client->id)->sum('paid');
             $cars_sum=   Car::where('client_id',$client->id)->sum('total_s');
             $exit_car_total=   Car::where('client_id',$client->id)->where('is_exit','!=',0)->count();
-            $cars_need_paid=$cars_sum-($cars_paid+$cars_discount);
+            $cars_need_paid=$cars_sum-($cars_paid+$cars_discount+$cars_damage_compensation);
         }
         if ($includeTrashed) {
             $transactions->withTrashed();
@@ -835,7 +837,7 @@ class AccountingController extends Controller
         // Same as Car::clientRemainingBalanceSqlSubquery — uses wallet payments, NOT car.paid,
         // so توزيع السيارة (AddPayFromBalanceCar) does not change this figure.
         // payments_sum_dollar is a negative sum of out/is_pay amounts.
-        $client_balance = round((float) $cars_sum - (float) $cars_discount + (float) $payments_sum_dollar, 2);
+        $client_balance = round((float) $cars_sum - (float) $cars_discount - (float) $cars_damage_compensation + (float) $payments_sum_dollar, 2);
 
         //$data = $transactions->paginate(10);
  
@@ -858,6 +860,7 @@ class AccountingController extends Controller
                     'cars_sum'=>$cars_sum,
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
+                    'cars_damage_compensation'=>$cars_damage_compensation,
                     'cars_need_paid'=>$cars_need_paid,
                     'payments_sum_dollar'=>$payments_sum_dollar,
                     'client_balance'=>$client_balance,
@@ -880,6 +883,7 @@ class AccountingController extends Controller
                     'cars_sum'=>$cars_sum,
                     'cars_paid'=>$cars_paid,
                     'cars_discount'=>$cars_discount,
+                    'cars_damage_compensation'=>$cars_damage_compensation,
                     'cars_need_paid'=>$cars_need_paid,
                     'payments_sum_dollar'=>$payments_sum_dollar,
                     'client_balance'=>$client_balance,
@@ -924,7 +928,8 @@ class AccountingController extends Controller
                 'cars_sum'=> $car->total_s,
                 'cars_paid'=> $car->paid,
                 'cars_discount'=>$car->discount,
-                'cars_need_paid'=>$car->total_s - $car->paid - $car->discount,
+                'cars_damage_compensation'=>$car->damage_compensation ?? 0,
+                'cars_need_paid'=>$car->total_s - $car->paid - $car->discount - ($car->damage_compensation ?? 0),
                 'payments_sum_dollar'=>$payments_sum_dollar,
                 'client_balance'=>$client_balance,
                 'transactions'=>$this->attachMoneyAccounts($transactions->get()),
@@ -950,6 +955,7 @@ class AccountingController extends Controller
             'cars_sum'=>$cars_sum,
             'cars_paid'=>$cars_paid,
             'cars_discount'=>$cars_discount,
+            'cars_damage_compensation'=>$cars_damage_compensation,
             'cars_need_paid'=>$cars_need_paid,
             'payments_sum_dollar'=>$payments_sum_dollar,
             'client_balance'=>$client_balance,
@@ -1040,7 +1046,7 @@ class AccountingController extends Controller
         // الحساب المحاسبي (increment على $car) يبقى كما هو أدناه، هذه فقط قيم للعرض في الوصل.
         $paidUpTotal = (float) $car->paid + (float) $amount;
         $discountTotal = (float) $car->discount + (float) $discount;
-        $restTotal = round((float) $car->total_s - $paidUpTotal - $discountTotal, 2);
+        $restTotal = round((float) $car->total_s - $paidUpTotal - $discountTotal - (float) ($car->damage_compensation ?? 0), 2);
 
         // رقم اللوت (نفس عمود car_number الحالي في جدول السيارات) مرتبط بوصل الدفعة
         // ليتم عرضه في الوصل فقط عندما تكون الدفعة على سيارة محددة (وليس دفعة عامة للزبون).
@@ -1187,7 +1193,7 @@ class AccountingController extends Controller
 
         $balance = (float) ($request->balance ?? 0);
         $car = Car::findOrFail($request->id);
-        $shouldPaid = max(0, (float) $car->total_s - (float) $car->paid - (float) $car->discount);
+        $shouldPaid = max(0, (float) $car->total_s - (float) $car->paid - (float) $car->discount - (float) ($car->damage_compensation ?? 0));
         $toApply = min($balance, $shouldPaid);
 
         if ($toApply <= 0) {
@@ -1910,6 +1916,72 @@ class AccountingController extends Controller
                 $salesDelta,
                 $costRecoveryDelta,
                 $revenueDelta,
+                $currency === 'IQD' ? 'IQD' : '$',
+                (string) $desc,
+                $transaction
+            );
+
+            if ($journal && \Illuminate\Support\Facades\Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $transaction->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $clientId);
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * تعويض ضرر on a car: reduce (or restore) client AR without cash.
+     * Mirrors payment-discount COA (expense 5100 ↔ AR). Positive $delta reduces debt.
+     *
+     * @return \App\Models\Transactions|int|null
+     */
+    public function adjustClientDamageCompensation(
+        float $delta,
+        string $desc,
+        int $clientId,
+        $morphedId = '',
+        $morphedType = '',
+        string $currency = '$',
+        $ownerId = null
+    ) {
+        $ownerId = $ownerId ?? Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+        $delta = round($delta, 2);
+
+        if (abs($delta) < 0.005) {
+            return 0;
+        }
+
+        if (! User::find($clientId)) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($delta, $desc, $clientId, $morphedId, $morphedType, $currency, $ownerId) {
+            $type = $delta >= 0 ? 'out' : 'in';
+            $transactionAttrs = $this->transactionAttrsForUser((int) $clientId, [
+                'type' => $type,
+                'description' => $desc,
+                'amount' => $delta * -1,
+                'is_pay' => 0,
+                'morphed_id' => $morphedId,
+                'morphed_type' => $morphedType,
+                'user_added' => 0,
+                'created' => $this->currentDate,
+                'discount' => 0,
+                'currency' => $currency,
+                'parent_id' => 0,
+                'details' => [
+                    'damage_compensation_delta' => $delta,
+                ],
+            ]);
+            $transaction = Transactions::create($transactionAttrs);
+
+            $ledger = app(LedgerService::class);
+            $journal = $ledger->postClientArWriteOff(
+                (int) $ownerId,
+                (int) $clientId,
+                $delta,
                 $currency === 'IQD' ? 'IQD' : '$',
                 (string) $desc,
                 $transaction

@@ -1,18 +1,21 @@
 import { asNumber } from "@/utils/formatMoney";
 
 /**
- * Remaining balance on a car: totalKey − paid − discount.
+ * Remaining balance on a car: totalKey − paid − discount − damage_compensation.
  * Default totalKey is sales total (`total_s`). Pass `totalKey: "total"` for purchases.
  * @param {Record<string, unknown>|null|undefined} car
- * @param {{ totalKey?: string, paidKey?: string, discountKey?: string|false }} [options]
+ * @param {{ totalKey?: string, paidKey?: string, discountKey?: string|false, damageKey?: string|false }} [options]
  * @returns {number}
  */
 export function carRemaining(car, options = {}) {
   const totalKey = options.totalKey ?? "total_s";
   const paidKey = options.paidKey ?? "paid";
   const discountKey = options.discountKey === false ? null : (options.discountKey ?? "discount");
+  const damageKey =
+    options.damageKey === false ? null : (options.damageKey ?? "damage_compensation");
   const discount = discountKey ? asNumber(car?.[discountKey]) : 0;
-  return asNumber(car?.[totalKey]) - asNumber(car?.[paidKey]) - discount;
+  const damage = damageKey ? asNumber(car?.[damageKey]) : 0;
+  return asNumber(car?.[totalKey]) - asNumber(car?.[paidKey]) - discount - damage;
 }
 
 /**

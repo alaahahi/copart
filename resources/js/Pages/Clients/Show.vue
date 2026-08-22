@@ -195,6 +195,7 @@ const clientBalanceUsd = computed(() => {
   return (
     asNumber(laravelData.value?.cars_sum) -
     asNumber(laravelData.value?.cars_discount) -
+    asNumber(laravelData.value?.cars_damage_compensation) -
     paymentsReceived
   );
 });
@@ -796,6 +797,15 @@ function checkClientBalance(_v) {
                   {{ laravelData?.cars_discount ?? 0 }}
                 </div>
               </div>
+              <div
+                v-if="asNumber(laravelData?.cars_damage_compensation) > 0"
+                class="rounded-xl border border-violet-400 bg-white px-4 py-3 shadow-sm dark:border-violet-600 dark:bg-slate-800"
+              >
+                <div class="text-xs font-semibold text-violet-800 dark:text-violet-300">{{ $t("total_damage_compensation_usd") }}</div>
+                <div class="mt-1 font-mono text-lg font-bold text-violet-700 dark:text-violet-200">
+                  {{ laravelData?.cars_damage_compensation ?? 0 }}
+                </div>
+              </div>
               <div class="rounded-xl border border-indigo-400 bg-white px-4 py-3 shadow-sm dark:border-indigo-600 dark:bg-slate-800">
                 <div class="text-xs font-semibold text-indigo-800 dark:text-indigo-300">{{ $t("balance") }}</div>
                 <div
@@ -1122,7 +1132,7 @@ function checkClientBalance(_v) {
                   <trash />
                 </button>
                 <button
-                  v-if="car.total_s != car.paid + car.discount"
+                  v-if="carRemaining(car) > 0"
                   type="button"
                   class="inline-flex items-center rounded-md bg-emerald-600 px-1.5 py-0.5 text-white hover:bg-emerald-700"
                   :title="$t('pay')"
@@ -1268,7 +1278,7 @@ function checkClientBalance(_v) {
                         <trash />
                       </button>
                       <button
-                        v-if="car.total_s != car.paid + car.discount"
+                        v-if="carRemaining(car) > 0"
                         tabindex="1"
                         class="mx-0.5 rounded-lg bg-emerald-600 px-1.5 py-1 text-white hover:bg-emerald-700"
                         @click="openAddCarPayment(car)"
