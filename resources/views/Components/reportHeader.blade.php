@@ -13,10 +13,10 @@
     }
 
     if (empty($appLogoStored) || empty($firstTitle)) {
-        $fresh = \App\Models\SystemConfig::query()->select(['app_logo', 'first_title_ar', 'second_title_ar'])->first();
-        $appLogoStored = $appLogoStored ?: ($fresh->app_logo ?? null);
-        $firstTitle = $firstTitle ?: ($fresh->first_title_ar ?? null);
-        $secondTitle = $secondTitle ?: ($fresh->second_title_ar ?? null);
+        $fresh = app(\App\Services\SystemConfigService::class)->current();
+        $appLogoStored = $appLogoStored ?: $fresh->app_logo;
+        $firstTitle = $firstTitle ?: $fresh->first_title_ar;
+        $secondTitle = $secondTitle ?: $fresh->second_title_ar;
     }
 
     $resolvedLogo = app(\App\Services\SystemBrandingService::class)->resolve($appLogoStored);

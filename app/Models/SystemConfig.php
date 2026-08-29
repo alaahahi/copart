@@ -46,6 +46,15 @@ class SystemConfig extends Model
         'default_purchases_vault_id',
     ];
 
+    /**
+     * Null-safe singleton read: returns defaults when the row (or the whole
+     * table, on a partially migrated database) is missing.
+     */
+    public static function resolved(): self
+    {
+        return app(\App\Services\SystemConfigService::class)->current();
+    }
+
     protected $casts = [
         'wa_enabled' => 'boolean',
         'wa_notify_debt' => 'boolean',

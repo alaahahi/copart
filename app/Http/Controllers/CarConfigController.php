@@ -342,7 +342,7 @@ class CarConfigController extends Controller
 
         public function document($id)
     {
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $profile=Profile::where('id',$id)->first();
         $results = Results::where('profile_id',$id)->latest()->first();
         $resultsDoctor = DoctorResults::where('profile_id',$id)->latest()->first();
@@ -354,7 +354,7 @@ class CarConfigController extends Controller
     }
     public function showfile($id)
     {
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $profile=Profile::where('id',$id)->first();
         $results = Results::where('profile_id',$id)->latest()->first();
         $resultsDoctor = DoctorResults::where('profile_id',$id)->latest()->first();

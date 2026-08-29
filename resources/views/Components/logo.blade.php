@@ -5,7 +5,7 @@
         $stored = data_get($config, 'app_logo');
     }
     if (empty($stored)) {
-        $stored = \App\Models\SystemConfig::query()->value('app_logo');
+        $stored = app(\App\Services\SystemConfigService::class)->current()->app_logo;
     }
 
     $resolved = app(\App\Services\SystemBrandingService::class)->resolve($stored);

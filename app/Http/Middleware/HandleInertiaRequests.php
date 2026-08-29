@@ -2,9 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\SystemConfig;
 use App\Services\Auth\SanctumTokenPairService;
-use App\Services\SystemBrandingService;
+use App\Services\SystemConfigService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -41,18 +40,14 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
         $accessToken = $this->resolveSessionAccessToken($request, $user);
 
-        $branding = SystemConfig::query()
-            ->select(['app_logo', 'app_cover', 'first_title_ar'])
-            ->first();
-
-        $brandingService = app(SystemBrandingService::class);
+        $branding = app(SystemConfigService::class)->branding();
 
         return array_merge(parent::share($request), [
-            'appName' => $branding?->first_title_ar ?: config('app.name'),
+            'appName' => $branding['appName'],
             'productName' => config('app.product_name') ?: 'HAULF',
             'branding' => [
-                'logo' => $brandingService->resolve($branding?->app_logo),
-                'cover' => $brandingService->resolve($branding?->app_cover),
+                'logo' => $branding['logo'],
+                'cover' => $branding['cover'],
             ],
             'auth' => [
                 'user' => $user,

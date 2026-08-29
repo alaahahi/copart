@@ -484,7 +484,7 @@ class CompanyTreasuryController extends Controller
             ->orderBy('id', 'asc')
             ->get();
 
-        $config = SystemConfig::first();
+        $config = SystemConfig::resolved();
         $balanceUsd = $this->getLastBalance($ownerId, '$');
         $balanceIqd = $this->getLastBalance($ownerId, 'IQD');
 

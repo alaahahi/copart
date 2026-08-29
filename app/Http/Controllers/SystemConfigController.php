@@ -115,6 +115,8 @@ class SystemConfigController extends Controller
 
         $config->save();
 
+        app(\App\Services\SystemConfigService::class)->flush();
+
         return Response::json([
             'message' => 'تم حفظ الإعدادات',
             'config' => $this->configForClient($config->fresh()),

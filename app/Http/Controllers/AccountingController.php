@@ -364,43 +364,43 @@ class AccountingController extends Controller
          })->values()->toArray();
      }
      if($print==1){
-         $config=SystemConfig::first();
+         $config=SystemConfig::resolved();
          return view('receiptPaymentTotal',compact('data','config'));
       }
       elseif($print==2){
-         $config=SystemConfig::first();
+         $config=SystemConfig::resolved();
          return $this->renderVoucher('receipt', 'receipt', $config, compact('data','config','transactions_id','owner_id'));
       }
       elseif($print==3){
-         $config=SystemConfig::first();
+         $config=SystemConfig::resolved();
          return $this->renderVoucher('receiptPayment', 'payment', $config, compact('data','config','transactions_id','owner_id'));
       }
       elseif($print==4){
-         $config=SystemConfig::first();
+         $config=SystemConfig::resolved();
  
          return view('receiptPaymentTotal',compact('data','config','transactions_id'));
       }
       elseif($print==5){
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
 
         return view('receiptBoxTotal',compact('data','config','transactions_id'));
      }
      elseif($print==6){
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
       
         return Excel::download(new ExportAccount($from,$to,(int) $user->id), $from.' '.$to.'.xlsx');
 
         return view('receiptPaymentTotal',compact('data','config','transactions_id'));
      }
      elseif($print==7){
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         // Filter only Amanah transactions - get collection from paginated result
         $amanahTransactions = collect($allTransactions->items())->whereIn('type', ['inUserAmanah', 'outUserAmanah'])->values();
         $data['transactions'] = $amanahTransactions;
         return view('receiptWalletTotal',compact('data','config'));
      }
      elseif($print==8){
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         // Cash vault print: all non-amanah movements (matches on-screen vault ledger).
         $walletTransactions = collect($allTransactions->items())
             ->reject(fn ($t) => in_array($t->type, \App\Services\VaultService::AMANAH_MOVEMENT_TYPES, true))
@@ -410,7 +410,7 @@ class AccountingController extends Controller
      }
      elseif($print==9){
         // طباعة وصل قبض للدفعات (inUser)
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $transaction = Transactions::find($transactions_id);
         $clientData = [
             'client' => $user
@@ -419,7 +419,7 @@ class AccountingController extends Controller
      }
      elseif($print==10){
         // طباعة وصل دفع للدفعات (outUser)
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $transaction = Transactions::find($transactions_id);
         $clientData = [
             'client' => $user
@@ -428,7 +428,7 @@ class AccountingController extends Controller
      }
      elseif($print==11){
         // طباعة وصل قبض للأمانات (inUserAmanah)
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $transaction = Transactions::find($transactions_id);
         $clientData = [
             'client' => $user
@@ -437,7 +437,7 @@ class AccountingController extends Controller
      }
      elseif($print==12){
         // طباعة وصل دفع للأمانات (outUserAmanah)
-        $config=SystemConfig::first();
+        $config=SystemConfig::resolved();
         $transaction = Transactions::find($transactions_id);
         $clientData = [
             'client' => $user
@@ -990,18 +990,11 @@ class AccountingController extends Controller
     }
 
     /**
-     * Print blades index config as an array; null SystemConfig::first() caused HTTP 500.
+     * Print blades index the config directly; a missing row/table caused HTTP 500.
      */
     protected function resolveSystemConfig(): SystemConfig
     {
-        return SystemConfig::query()->first() ?? new SystemConfig([
-            'first_title_ar' => (string) config('app.name', ''),
-            'second_title_ar' => '',
-            'third_title_ar' => '',
-            'first_title_kr' => '',
-            'second_title_kr' => '',
-            'third_title_kr' => '',
-        ]);
+        return app(\App\Services\SystemConfigService::class)->current();
     }
     public function paySelse(Request $request,$id)
     {

@@ -130,7 +130,7 @@ class UserController extends Controller
             $vaultRows = app(VaultService::class)->systemQasaClientRows((int) $owner_id);
 
             if ((int) $print === 1) {
-                $config = SystemConfig::first();
+                $config = SystemConfig::resolved();
                 $data = $vaultRows->toArray();
 
                 return view('reportClients', compact('data', 'config', 'owner_id'));
@@ -220,7 +220,7 @@ class UserController extends Controller
         );
 
         if ($print == 1) {
-            $config = SystemConfig::first();
+            $config = SystemConfig::resolved();
 
             if ($q == 'debit' || (int) $excludeZero === 1) {
                 $data = $applyBalanceFilter($query, (int) $excludeZero === 1)->get();

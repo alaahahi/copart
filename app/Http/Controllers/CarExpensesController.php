@@ -139,7 +139,7 @@ class CarExpensesController extends Controller
         $data = Car::with('client','carexpenses.user')->where('id', $request->car_id)->first();
         if($data){
 
-            $config=SystemConfig::first();
+            $config=SystemConfig::resolved();
     
             return view('receiptCarsExpensesTotal',compact('data','config'));
         }else{

@@ -21,7 +21,7 @@ use App\Http\Controllers\Settings\UserManagementController;
 use App\Http\Controllers\QaE2eController;
 use App\Http\Controllers\VaultController;
 
-use App\Models\SystemConfig;
+use App\Services\SystemConfigService;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,7 +38,7 @@ Route::resource('/users', UserController::class)->middleware(['auth', 'verified'
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'config' => SystemConfig::first(),
+        'config' => app(SystemConfigService::class)->current(),
         'canLogin' => Route::has('login'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
