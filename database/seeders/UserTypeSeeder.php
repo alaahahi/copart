@@ -37,5 +37,14 @@ class UserTypeSeeder extends Seeder
                 ['id' => $type['id']]
             );
         }
+
+        // Legacy "annual clients" module (AnnualController) needs this type.
+        // Its legacy id is unknown, so allocate the next free id instead of guessing.
+        if (! UserType::query()->where('name', 'clientAnnual')->exists()) {
+            UserType::query()->create([
+                'id' => (int) UserType::query()->max('id') + 1,
+                'name' => 'clientAnnual',
+            ]);
+        }
     }
 }

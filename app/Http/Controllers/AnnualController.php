@@ -27,8 +27,8 @@ class AnnualController extends Controller
 {
     public function __construct(){
         $this->url = env('FRONTEND_URL');
-        $this->userClient =  UserType::where('name', 'client')->first()->id;
-        $this->userClientAnnual =  UserType::where('name', 'clientAnnual')->first()->id;
+        $this->userClient =  UserType::where('name', 'client')->value('id');
+        $this->userClientAnnual =  UserType::where('name', 'clientAnnual')->value('id');
         $this->currentDate = Carbon::now()->format('Y-m-d');
     }
 
