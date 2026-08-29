@@ -49,5 +49,27 @@ class AdminSeeder extends Seeder
         );
 
         // Wallets removed — admin uses ledger only.
+
+        // Secondary admin. firstOrCreate (not updateOrCreate) so an already
+        // changed password is never reset by re-running the seeder.
+        $secondEmail = env('SEED_ADMIN2_EMAIL', 'admin2@admin.com');
+        $secondPassword = env('SEED_ADMIN2_PASSWORD', '12345678');
+
+        $second = User::query()->firstOrCreate(
+            ['email' => $secondEmail],
+            [
+                'name' => 'admin2',
+                'password' => Hash::make($secondPassword),
+                'type_id' => $adminType->id,
+                'owner_id' => $ownerId,
+                'is_band' => 0,
+                'created' => Carbon::now()->format('Y-m-d'),
+                'year_date' => (int) Carbon::now()->format('Y'),
+            ]
+        );
+
+        if ($second->wasRecentlyCreated) {
+            $this->command?->warn("Created admin user {$secondEmail} with the default password. Change it after first login.");
+        }
     }
 }
