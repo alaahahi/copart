@@ -19,6 +19,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Product / Brand Name
+    |--------------------------------------------------------------------------
+    |
+    | Commercial brand shown in the footer credit line and printed reports.
+    | Override with APP_PRODUCT_NAME without affecting APP_NAME (mail, etc).
+    |
+    */
+
+    'product_name' => env('APP_PRODUCT_NAME', 'HAULF'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

@@ -49,6 +49,7 @@ class HandleInertiaRequests extends Middleware
 
         return array_merge(parent::share($request), [
             'appName' => $branding?->first_title_ar ?: config('app.name'),
+            'productName' => config('app.product_name') ?: 'HAULF',
             'branding' => [
                 'logo' => $brandingService->resolve($branding?->app_logo),
                 'cover' => $brandingService->resolve($branding?->app_cover),

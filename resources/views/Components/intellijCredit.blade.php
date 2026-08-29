@@ -2,7 +2,7 @@
 @php
     $intellijYear = $year ?? date('Y');
     $intellijUrl = $url ?? 'https://intellij-app.com/';
-    $intellijProduct = $product ?? 'HAULF';
+    $intellijProduct = $product ?? (config('app.product_name') ?: 'HAULF');
     $intellijBrand = $brand ?? 'IntelliJ App';
     $intellijPoweredBy = $poweredBy ?? 'بواسطة';
     $asPlain = !empty($plain);

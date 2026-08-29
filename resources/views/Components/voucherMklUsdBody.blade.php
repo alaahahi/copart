@@ -28,6 +28,7 @@
     $logoLeft3 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_3'] ?? null);
     $logoHaulf = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_haulf'] ?? null);
     $logoMain = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_main'] ?? '/img/logo.jpg');
+    $productName = config('app.product_name') ?: 'HAULF';
 
     if ($isReceipt) {
         $typeKr = 'وەسڵی وەرگرتن';
@@ -60,9 +61,9 @@
         </div>
         <div class="mkl-logos-right">
             @if($logoHaulf)
-                <img src="{{ $logoHaulf }}" alt="HAULF" class="mkl-haulf-img">
+                <img src="{{ $logoHaulf }}" alt="{{ $productName }}" class="mkl-haulf-img">
             @else
-                <div class="mkl-haulf">HAULF</div>
+                <div class="mkl-haulf">{{ $productName }}</div>
             @endif
             <div class="mkl-shipping-block">
                 @if($logoMain)

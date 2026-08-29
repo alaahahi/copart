@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { usePage } from "@inertiajs/inertia-vue3";
 
 const props = defineProps({
   url: {
@@ -9,7 +10,7 @@ const props = defineProps({
   },
   product: {
     type: String,
-    default: "HAULF",
+    default: "",
   },
   brand: {
     type: String,
@@ -18,7 +19,11 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+const page = usePage();
 const year = computed(() => new Date().getFullYear());
+const productName = computed(
+  () => props.product || page.props.value?.productName || "HAULF"
+);
 </script>
 
 <template>
@@ -26,7 +31,7 @@ const year = computed(() => new Date().getFullYear());
     class="intellij-credit text-center text-xs text-slate-500 dark:text-slate-400 print:hidden"
     dir="rtl"
   >
-    © {{ year }} {{ product }} · {{ t("poweredBy") }}
+    © {{ year }} {{ productName }} · {{ t("poweredBy") }}
     <a
       :href="url"
       target="_blank"
