@@ -13,8 +13,9 @@ return [
     |
     */
 
-    'failed' => 'These credentials do not match our records.',
-    'password' => 'The provided password is incorrect.',
-    'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',
+    'failed' => 'بيانات الدخول غير صحيحة.',
+    'password' => 'كلمة المرور غير صحيحة.',
+    'throttle' => 'عدد محاولات الدخول كبير جداً. الرجاء المحاولة بعد :seconds ثانية.',
+    'banned' => 'هذا الحساب موقوف. الرجاء التواصل مع الإدارة.',
 
 ];

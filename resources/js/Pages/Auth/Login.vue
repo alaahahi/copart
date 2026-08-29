@@ -4,24 +4,68 @@ import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { Head, useForm } from '@inertiajs/inertia-vue3';
+import { Head } from '@inertiajs/inertia-vue3';
+import axios from 'axios';
+import { reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 defineProps({
     canResetPassword: Boolean,
     status: String,
 });
 
-const form = useForm({
+const { t } = useI18n();
+
+const form = reactive({
     email: '',
     password: '',
     // Default on: pairs with SESSION_LIFETIME=43200 + remember cookie (30 days).
-    remember: true
+    remember: true,
 });
 
-const submit = () => {
-    form.post(route('login'), {
-        onFinish: () => form.reset('password'),
-    });
+const processing = ref(false);
+const errors = reactive({ email: '', password: '' });
+
+const csrfToken = () =>
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+
+const submit = async () => {
+    if (processing.value) return;
+
+    processing.value = true;
+    errors.email = '';
+    errors.password = '';
+
+    try {
+        const { data } = await axios.post(
+            route('login'),
+            { email: form.email, password: form.password, remember: form.remember },
+            {
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+            }
+        );
+
+        // Keep the button disabled while the browser navigates away.
+        window.location.href = data?.redirect || '/dashboard';
+    } catch (error) {
+        const response = error?.response;
+
+        // Expired CSRF token / session: a reload hands back a fresh one.
+        if (response?.status === 419) {
+            window.location.reload();
+            return;
+        }
+
+        const bag = response?.status === 422 ? response.data?.errors ?? {} : {};
+
+        errors.email = bag.email?.[0] || (response?.status === 422 ? t('login_failed') : t('login_error_generic'));
+        errors.password = bag.password?.[0] || '';
+        form.password = '';
+        processing.value = false;
+    }
 };
 </script>
 
@@ -46,7 +90,7 @@ const submit = () => {
                     autocomplete="username"
                     :placeholder="$t('username')"
                 />
-                <InputError class="mt-2" :message="form.errors.email" />
+                <InputError class="mt-2" :message="errors.email" />
             </div>
 
             <div>
@@ -60,7 +104,7 @@ const submit = () => {
                     autocomplete="current-password"
                     :placeholder="$t('password')"
                 />
-                <InputError class="mt-2" :message="form.errors.password" />
+                <InputError class="mt-2" :message="errors.password" />
             </div>
 
             <div class="pt-0.5">
@@ -74,9 +118,14 @@ const submit = () => {
                 <button
                     type="submit"
                     class="login-form__submit w-full inline-flex items-center justify-center rounded-md px-4 py-3 text-sm font-semibold tracking-wide text-white transition duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                    :disabled="form.processing"
+                    :disabled="processing"
                 >
-                    {{ $t('login') }}
+                    <span
+                        v-if="processing"
+                        class="login-form__spinner me-2 inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white"
+                        aria-hidden="true"
+                    ></span>
+                    {{ processing ? $t('logging_in') : $t('login') }}
                 </button>
             </div>
         </form>
@@ -136,5 +185,15 @@ const submit = () => {
 
 .login-form__submit:active:not(:disabled) {
     background-color: #075985;
+}
+
+.login-form__spinner {
+    animation: login-form-spin 0.7s linear infinite;
+}
+
+@keyframes login-form-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 </style>

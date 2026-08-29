@@ -10,6 +10,10 @@ class CreateAccountingJournalsTable extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('accounting_journals')) {
+            return;
+        }
+
         Schema::create('accounting_journals', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedInteger('ledger_id')->nullable();

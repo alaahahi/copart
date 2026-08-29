@@ -10,6 +10,10 @@ class CreateAccountingLedgersTable extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('accounting_ledgers')) {
+            return;
+        }
+
         Schema::create('accounting_ledgers', function (Blueprint $table) {
             $table->increments('id');
             $table->string('name');

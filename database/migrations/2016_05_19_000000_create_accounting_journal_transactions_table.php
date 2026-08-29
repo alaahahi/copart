@@ -15,6 +15,10 @@ class CreateAccountingJournalTransactionsTable extends Migration
 
     public function up(): void
     {
+        if (Schema::hasTable('accounting_journal_transactions')) {
+            return;
+        }
+
         Schema::create('accounting_journal_transactions', function (Blueprint $table) {
             $table->char('id', 36)->unique();
             $table->char('transaction_group', 36)->nullable();
