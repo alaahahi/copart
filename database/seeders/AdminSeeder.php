@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 class AdminSeeder extends Seeder
 {
@@ -21,7 +22,18 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
-        $adminType = UserType::query()->where('name', 'admin')->firstOrFail();
+        if (! Schema::hasTable((new UserType)->getTable()) || ! Schema::hasTable((new User)->getTable())) {
+            throw new RuntimeException(
+                'الجداول الأساسية غير موجودة في قاعدة البيانات. نفّذ الأمر "php artisan migrate" أولاً ثم أعد تشغيل الـ seeder.'
+            );
+        }
+
+        $adminType = UserType::query()->where('name', 'admin')->first();
+
+        if (! $adminType) {
+            $this->call(UserTypeSeeder::class);
+            $adminType = UserType::query()->where('name', 'admin')->firstOrFail();
+        }
 
         $ownerId = 1;
         if (Schema::hasTable('owner') && ! DB::table('owner')->where('id', $ownerId)->exists()) {

@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\UserType;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 class UserTypeSeeder extends Seeder
 {
@@ -15,6 +17,14 @@ class UserTypeSeeder extends Seeder
      */
     public function run(): void
     {
+        $table = (new UserType)->getTable();
+
+        if (! Schema::hasTable($table)) {
+            throw new RuntimeException(
+                "جدول \"{$table}\" غير موجود. نفّذ الأمر \"php artisan migrate\" أولاً ثم أعد تشغيل الـ seeder."
+            );
+        }
+
         $types = [
             ['id' => 1, 'name' => 'admin'],
             ['id' => 2, 'name' => 'account'],
