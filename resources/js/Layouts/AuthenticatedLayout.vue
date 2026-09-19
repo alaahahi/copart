@@ -21,14 +21,25 @@ const i18n = useI18n();
 const { appName: brandName, tagline: brandTagline, logo: brandingLogoPath } = useBranding();
 
 const user = computed(() => page.props.value.auth?.user ?? {});
-const brandingLogo = computed(() => resolvePublicAsset(brandingLogoPath.value));
+const brandingLogoAlt = ref("");
 const brandingLogoBroken = ref(false);
+const brandingLogo = computed(
+  () => brandingLogoAlt.value || resolvePublicAsset(brandingLogoPath.value)
+);
 
-watch(brandingLogo, () => {
+watch(brandingLogoPath, () => {
+  brandingLogoAlt.value = "";
   brandingLogoBroken.value = false;
 });
 
 function onBrandingLogoError() {
+  if (!brandingLogoAlt.value) {
+    const alt = alternatePublicAsset(brandingLogoPath.value || brandingLogo.value);
+    if (alt) {
+      brandingLogoAlt.value = alt;
+      return;
+    }
+  }
   brandingLogoBroken.value = true;
 }
 

@@ -128,6 +128,10 @@ const brandingPaths = ref({
 });
 const brandingFiles = ref({});
 const brandingPreviews = ref({});
+const brandingAltTried = ref({
+  app_logo: false,
+  app_cover: false,
+});
 const removeBranding = ref({
   app_logo: false,
   app_cover: false,
@@ -221,6 +225,7 @@ function onBrandingChange(field, event) {
   brandingFiles.value[field] = file;
   brandingPreviews.value[field] = URL.createObjectURL(file);
   removeBranding.value[field] = false;
+  brandingAltTried.value[field] = false;
 }
 
 function brandingSrc(field) {
@@ -232,7 +237,12 @@ function brandingSrc(field) {
 
 function onBrandingImgError(field) {
   if (brandingPreviews.value[field]) return;
-  brandingPaths.value[field] = "";
+  if (brandingAltTried.value[field]) return;
+  const alt = alternatePublicAsset(brandingPaths.value[field] || brandingSrc(field));
+  if (alt) {
+    brandingAltTried.value[field] = true;
+    brandingPaths.value[field] = alt;
+  }
 }
 
 function clearBranding(field) {
@@ -281,6 +291,7 @@ async function save() {
       });
       brandingPaths.value.app_logo = data.config.app_logo || "";
       brandingPaths.value.app_cover = data.config.app_cover || "";
+      brandingAltTried.value = { app_logo: false, app_cover: false };
       // Keep header / login branding in sync without a full reload.
       if (!page.props.value.branding) {
         page.props.value.branding = {};

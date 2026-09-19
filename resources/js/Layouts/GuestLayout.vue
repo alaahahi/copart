@@ -1,16 +1,30 @@
 <script setup>
 import { usePage } from '@inertiajs/inertia-vue3';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import IntelliJCredit from '@/Components/IntelliJCredit.vue';
-import { resolvePublicAsset } from '@/utils/resolvePublicAsset';
+import { alternatePublicAsset, resolvePublicAsset } from '@/utils/resolvePublicAsset';
 
 const page = usePage();
+const logoAlt = ref('');
 const coverUrl = computed(() =>
   resolvePublicAsset(page.props.value.branding?.cover || '/img/logo-color.png')
 );
 const logoUrl = computed(() =>
-  resolvePublicAsset(page.props.value.branding?.logo || '')
+  logoAlt.value || resolvePublicAsset(page.props.value.branding?.logo || '')
 );
+
+watch(
+  () => page.props.value.branding?.logo,
+  () => {
+    logoAlt.value = '';
+  }
+);
+
+function onLogoError() {
+  if (logoAlt.value) return;
+  const alt = alternatePublicAsset(logoUrl.value);
+  if (alt) logoAlt.value = alt;
+}
 </script>
 
 <template>
@@ -22,7 +36,7 @@ const logoUrl = computed(() =>
           v-if="logoUrl"
           class="mb-2 rounded-2xl bg-slate-900/70 border border-slate-700 px-4 py-3 backdrop-blur"
         >
-          <img :src="logoUrl" alt="" class="max-h-14 max-w-[200px] object-contain" />
+          <img :src="logoUrl" alt="" class="max-h-14 max-w-[200px] object-contain" @error="onLogoError" />
         </div>
 
         <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg dark:bg-slate-800 dark:border dark:border-slate-700">
