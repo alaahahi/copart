@@ -21,15 +21,21 @@ use Illuminate\Support\Facades\Log;
  */
 class ExchangeRateService
 {
-    public const CACHE_KEY = 'dashboard-exchange-rates-v3';
+    public const CACHE_KEY = 'dashboard-exchange-rates-v4';
 
-    public const LAST_GOOD_CACHE_KEY = 'dashboard-exchange-rates-last-good-v3';
+    public const LAST_GOOD_CACHE_KEY = 'dashboard-exchange-rates-last-good-v4';
 
     public const CACHE_TTL_SECONDS = 3600;
 
     public const SOURCE_URL = 'https://qamaralfajr.com/production/exchange_rates.php';
 
     public const SOURCE_NAME = 'قمر الفجر';
+
+    public const XE_USD_CAD_URL = 'https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=CAD';
+
+    public const XE_SOURCE_NAME = 'xe.com';
+
+    public const FRANKFURTER_USD_CAD_URL = 'https://api.frankfurter.app/latest?from=USD&to=CAD';
 
     /**
      * USD↔IQD and CAD↔USD sell/buy for the ERP dashboard card.
@@ -45,6 +51,10 @@ class ExchangeRateService
      *   cad_to_usd_buy: float|null,
      *   usd_to_cad_sell: float|null,
      *   usd_to_cad_buy: float|null,
+     *   usd_to_cad_mid: float|null,
+     *   cad_to_usd_mid: float|null,
+     *   cad_mid_source: string|null,
+     *   cad_mid_source_url: string|null,
      *   cad_available: bool,
      *   cad_note: string|null,
      *   source: string,
@@ -62,7 +72,7 @@ class ExchangeRateService
                 return $this->present($cached, cached: true, stale: false);
             }
 
-            $fresh = $this->fetchAndParse();
+            $fresh = $this->mergeCadMidMarket($this->fetchAndParse());
             Cache::put(self::CACHE_KEY, $fresh, self::CACHE_TTL_SECONDS);
             Cache::forever(self::LAST_GOOD_CACHE_KEY, $fresh);
 
