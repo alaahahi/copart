@@ -7,7 +7,10 @@ import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
 import { useToast } from "vue-toastification";
-import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
+import {
+  alternatePublicAsset,
+  resolvePublicAsset,
+} from "@/utils/resolvePublicAsset";
 
 const { t } = useI18n();
 const toast = useToast();

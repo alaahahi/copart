@@ -8,7 +8,10 @@ import { Link, usePage } from "@inertiajs/inertia-vue3";
 import { useI18n } from "vue-i18n";
 import DarkModeToggle from "@/Components/DarkToggle.vue";
 import IntelliJCredit from "@/Components/IntelliJCredit.vue";
-import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
+import {
+  alternatePublicAsset,
+  resolvePublicAsset,
+} from "@/utils/resolvePublicAsset";
 import { useBranding } from "@/composables/useBranding";
 
 const showingNavigationDropdown = ref(false);
