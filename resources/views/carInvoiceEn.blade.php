@@ -3,23 +3,42 @@
     /** @var \App\Models\User $client */
     /** @var \App\Models\SystemConfig|null $config */
 
-    $cfg = $config instanceof \Illuminate\Database\Eloquent\Model ? $config->toArray() : (array) ($config ?? []);
-    $brandName = \App\Support\Branding::resolveName((string) ($cfg['first_title_ar'] ?? ''));
-    $tagline = \App\Support\Branding::tagline();
-    $phone = trim((string) ($cfg['receipt_phone'] ?? ''));
-    $address = trim((string) ($cfg['receipt_address'] ?? ''));
-    $website = trim((string) ($cfg['receipt_website'] ?? ''));
+    $configService = app(\App\Services\SystemConfigService::class);
+    $fresh = $configService->current();
+    $brandingSvc = app(\App\Services\SystemBrandingService::class);
 
-    $logoPath = $cfg['app_logo'] ?? null;
-    if (! $logoPath) {
-        $logoPath = $cfg['receipt_logo_main'] ?? null;
+    if (! $config instanceof \App\Models\SystemConfig) {
+        $config = $fresh;
     }
-    $logoUrl = \App\Helpers\Help::publicAssetUrl($logoPath) ?: \App\Helpers\Help::publicAssetUrl('/img/logo.jpg');
+
+    // Always prefer live row for branding files / contact (avoids stale print payloads).
+    $cfg = array_merge($fresh->toArray(), $config->toArray());
+
+    // Brand from .env (APP_PRODUCT_NAME → APP_NAME), never the seeded "Laravel" title.
+    $brandName = \App\Support\Branding::name();
+    $tagline = \App\Support\Branding::tagline();
+    $phone = trim((string) ($cfg['receipt_phone'] ?? $fresh->receipt_phone ?? ''));
+    $address = trim((string) ($cfg['receipt_address'] ?? $fresh->receipt_address ?? ''));
+    $website = trim((string) ($cfg['receipt_website'] ?? $fresh->receipt_website ?? ''));
+
+    // Logo: settings app_logo → branding resolve → receipt logos → static fallbacks.
+    $storedLogo = $cfg['app_logo'] ?? $fresh->app_logo ?? null;
+    $resolvedLogo = $brandingSvc->resolve($storedLogo);
+    if (! $resolvedLogo) {
+        $resolvedLogo = $brandingSvc->resolve($cfg['receipt_logo_haulf'] ?? $fresh->receipt_logo_haulf ?? null)
+            ?: $brandingSvc->resolve($cfg['receipt_logo_main'] ?? $fresh->receipt_logo_main ?? null)
+            ?: \App\Helpers\Help::normalizePublicPath($cfg['receipt_logo_main'] ?? null)
+            ?: \App\Helpers\Help::normalizePublicPath($cfg['receipt_logo_haulf'] ?? null);
+    }
+
+    $logoUrl = \App\Helpers\Help::publicAssetUrl($resolvedLogo)
+        ?? \App\Helpers\Help::publicAssetUrl('/img/logo-color.png')
+        ?? \App\Helpers\Help::publicAssetUrl('/img/logo.jpg');
 
     $carType = trim((string) ($car->car_type ?? ''));
     $typeParts = preg_split('/\s+/', $carType, 2) ?: [];
     $make = $typeParts[0] ?? ($carType !== '' ? $carType : '—');
-    $model = $typeParts[1] ?? '—';
+    $model = isset($typeParts[1]) && $typeParts[1] !== '' ? $typeParts[1] : '—';
 
     $invoiceDate = $car->date
         ? \Carbon\Carbon::parse($car->date)->format('M j, Y')
@@ -37,17 +56,16 @@
 
     if ($balanceDue <= 0.009 && $total > 0) {
         $status = 'PAID';
-        $statusClass = 'inv-badge--paid';
+        $statusClass = 'is-paid';
     } elseif ($paid > 0.009) {
         $status = 'PARTIAL';
-        $statusClass = 'inv-badge--partial';
+        $statusClass = 'is-partial';
     } else {
         $status = 'UNPAID';
-        $statusClass = 'inv-badge--unpaid';
+        $statusClass = 'is-unpaid';
     }
 
     $erbilSub = (float) \App\Models\Car::erbilTransferSubtotal($car->getAttributes(), true);
-
     $money = fn ($n) => '$' . \App\Helpers\Help::formatMoney($n, '$');
 
     $lineItems = [];
@@ -71,7 +89,7 @@
     $push('Discount', $discount, true);
     $push('Damage Compensation', $damage, true);
 
-    if ($lineItems === [] && $total > 0) {
+    if ($lineItems === [] && abs($total) > 0.005) {
         $push('Vehicle Total', $total);
     }
 
@@ -88,275 +106,199 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Invoice #{{ $car->id }} — {{ $car->vin ?: $brandName }}</title>
     <style>
-        @page { size: A4; margin: 14mm 12mm; }
+        :root {
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #e2e8f0;
+            --soft: #f8fafc;
+            --green: #166534;
+            --green-soft: #dcfce7;
+            --amber: #92400e;
+            --amber-soft: #fef3c7;
+            --rose: #9f1239;
+            --rose-soft: #ffe4e6;
+        }
+        @page { size: A4; margin: 12mm; }
         * { box-sizing: border-box; }
         html, body {
             margin: 0;
             padding: 0;
-            background: #e8edf3;
-            color: #1e293b;
+            background: #dbe3ee;
+            color: var(--ink);
             font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
             font-size: 13px;
             line-height: 1.45;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
-        .inv-toolbar {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 16px;
-            background: #0f172a;
-            color: #f8fafc;
+        .toolbar {
+            position: sticky; top: 0; z-index: 40;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 10px 18px; background: #0b1220; color: #f8fafc;
         }
-        .inv-toolbar__hint { margin: 0; font-size: 12px; opacity: .85; }
-        .inv-toolbar__actions { display: flex; gap: 8px; }
-        .inv-toolbar button {
-            border: 0;
-            border-radius: 8px;
-            padding: 8px 14px;
-            font-weight: 600;
-            cursor: pointer;
+        .toolbar p { margin: 0; font-size: 12px; opacity: .85; }
+        .toolbar button {
+            border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 700; cursor: pointer;
         }
-        .inv-toolbar .btn-print { background: #059669; color: #fff; }
-        .inv-toolbar .btn-back { background: #334155; color: #fff; }
+        .toolbar .print { background: #059669; color: #fff; }
+        .toolbar .back { background: #334155; color: #fff; margin-inline-start: 8px; }
 
-        .inv-page {
-            max-width: 210mm;
-            min-height: 100vh;
-            margin: 0 auto;
-            padding: 28px 32px 40px;
+        .sheet {
+            width: min(210mm, 100%);
+            min-height: 297mm;
+            margin: 18px auto;
+            padding: 34px 36px 40px;
             background: #fff;
-            color: #1e293b;
-            box-shadow: 0 1px 10px rgba(15, 23, 42, .08);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
         }
 
-        .inv-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+        .top {
+            display: grid;
+            grid-template-columns: 1.2fr .8fr;
             gap: 24px;
-            margin-bottom: 28px;
+            align-items: start;
+            padding-bottom: 22px;
+            border-bottom: 2px solid var(--ink);
         }
-        .inv-brand {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            min-width: 0;
+        .brand {
+            display: flex; align-items: center; gap: 16px; min-width: 0;
         }
-        .inv-logo {
-            width: 72px;
-            height: 72px;
-            object-fit: contain;
-            border-radius: 10px;
-            background: #f8fafc;
+        .brand img {
+            width: 78px; height: 78px; object-fit: contain;
+            border-radius: 12px; background: var(--soft); border: 1px solid var(--line);
         }
-        .inv-brand__name {
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: .02em;
-            color: #0f172a;
-            line-height: 1.15;
+        .brand-fallback {
+            width: 78px; height: 78px; border-radius: 12px;
+            display: grid; place-items: center;
+            background: linear-gradient(145deg, #0f172a, #1e3a5f);
+            color: #fff; font-weight: 800; font-size: 22px; letter-spacing: .04em;
         }
-        .inv-brand__tag {
-            margin-top: 2px;
-            font-size: 12px;
-            color: #64748b;
+        .brand h1 {
+            margin: 0; font-size: 26px; line-height: 1.1; letter-spacing: .01em;
+        }
+        .brand .tag { margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+
+        .meta { text-align: right; }
+        .meta .label {
+            margin: 0 0 8px; font-size: 36px; font-weight: 800; letter-spacing: .08em; line-height: 1;
+        }
+        .badge {
+            display: inline-block; margin-bottom: 12px; padding: 4px 12px;
+            border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em;
+            background: #e2e8f0; color: #334155;
+        }
+        .badge.is-paid { background: var(--green-soft); color: var(--green); }
+        .badge.is-partial { background: var(--amber-soft); color: var(--amber); }
+        .badge.is-unpaid { background: var(--rose-soft); color: var(--rose); }
+        .meta ul { list-style: none; margin: 0; padding: 0; color: var(--muted); font-size: 12.5px; }
+        .meta li { margin: 4px 0; }
+        .meta strong { color: var(--ink); }
+
+        .section { margin-top: 28px; }
+        .section-title {
+            margin: 0 0 12px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--line);
+            color: var(--green); font-size: 12px; font-weight: 800;
+            letter-spacing: .1em; text-transform: uppercase;
         }
 
-        .inv-meta { text-align: right; min-width: 220px; }
-        .inv-title {
-            margin: 0 0 8px;
-            font-size: 34px;
-            font-weight: 800;
-            letter-spacing: .04em;
-            color: #0f172a;
-            line-height: 1;
-        }
-        .inv-badge {
-            display: inline-block;
-            margin-bottom: 12px;
-            padding: 3px 12px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: .06em;
-            background: #e2e8f0;
-            color: #334155;
-        }
-        .inv-badge--paid { background: #d1fae5; color: #065f46; }
-        .inv-badge--partial { background: #fef3c7; color: #92400e; }
-        .inv-badge--unpaid { background: #fee2e2; color: #991b1b; }
+        .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+        .party-name { margin: 0 0 6px; font-size: 16px; font-weight: 750; }
+        .party-line { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
 
-        .inv-meta-list { margin: 0; padding: 0; list-style: none; font-size: 12px; color: #475569; }
-        .inv-meta-list li { margin: 3px 0; }
-        .inv-meta-list strong { color: #0f172a; font-weight: 700; }
+        .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 20px; }
+        .field-label {
+            display: block; margin-bottom: 3px;
+            color: #94a3b8; font-size: 11px; font-weight: 750;
+            letter-spacing: .06em; text-transform: uppercase;
+        }
+        .field-value { font-size: 14px; font-weight: 650; word-break: break-word; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
 
-        .inv-section { margin-top: 26px; }
-        .inv-section__title {
-            margin: 0 0 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e2e8f0;
-            color: #166534;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: .08em;
-            text-transform: uppercase;
+        table.items { width: 100%; border-collapse: collapse; }
+        table.items th {
+            padding: 10px 0; border-bottom: 1px solid var(--line);
+            text-align: left; color: #94a3b8; font-size: 11px;
+            letter-spacing: .08em; text-transform: uppercase;
         }
+        table.items th:last-child,
+        table.items td:last-child { text-align: right; }
+        table.items td {
+            padding: 12px 0; border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+        table.items td.credit { color: var(--amber); }
 
-        .inv-parties {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 28px;
+        .totals-wrap { display: flex; justify-content: flex-end; margin-top: 18px; }
+        .totals {
+            width: 300px; padding: 16px 18px; border-radius: 12px;
+            background: var(--soft); border: 1px solid var(--line);
         }
-        .inv-party__name {
-            margin: 0 0 4px;
-            font-size: 15px;
-            font-weight: 700;
-            color: #0f172a;
+        .totals-row {
+            display: flex; justify-content: space-between; gap: 16px;
+            margin: 7px 0; color: var(--muted); font-size: 13px;
         }
-        .inv-party__line {
-            margin: 0;
-            font-size: 12.5px;
-            color: #64748b;
-            line-height: 1.5;
+        .totals-row.due {
+            margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);
+            color: var(--ink); font-size: 17px; font-weight: 800;
         }
+        .totals-row.due span:last-child { color: var(--green); }
 
-        .inv-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 14px 20px;
+        .note {
+            margin-top: 22px; padding: 12px 14px; border-radius: 10px;
+            background: var(--soft); border: 1px solid var(--line);
+            color: var(--muted); font-size: 12.5px;
         }
-        .inv-field__label {
-            display: block;
-            margin-bottom: 2px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: .04em;
-            text-transform: uppercase;
-            color: #94a3b8;
-        }
-        .inv-field__value {
-            font-size: 13.5px;
-            font-weight: 600;
-            color: #0f172a;
-            word-break: break-word;
-        }
-        .inv-field__value--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .note strong { color: var(--ink); }
 
-        .inv-items { width: 100%; border-collapse: collapse; }
-        .inv-items th {
-            padding: 8px 0;
-            border-bottom: 1px solid #e2e8f0;
-            text-align: left;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: .06em;
-            text-transform: uppercase;
-            color: #94a3b8;
-        }
-        .inv-items th:last-child,
-        .inv-items td:last-child { text-align: right; }
-        .inv-items td {
-            padding: 11px 0;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 13.5px;
-            color: #1e293b;
-        }
-        .inv-items td.credit { color: #b45309; }
-
-        .inv-totals-wrap {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 18px;
-        }
-        .inv-totals {
-            width: 280px;
-            padding: 14px 16px;
-            border-radius: 10px;
-            background: #f8fafc;
-        }
-        .inv-totals__row {
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            margin: 6px 0;
-            font-size: 13px;
-            color: #475569;
-        }
-        .inv-totals__row--due {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #e2e8f0;
-            font-size: 16px;
-            font-weight: 800;
-            color: #0f172a;
-        }
-        .inv-totals__row--due span:last-child { color: #166534; }
-
-        .inv-note {
-            margin-top: 22px;
-            padding: 12px 14px;
-            border-radius: 8px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            font-size: 12.5px;
-            color: #475569;
-        }
-        .inv-note strong { color: #0f172a; }
-
-        .inv-footer {
-            margin-top: 36px;
-            padding-top: 12px;
-            border-top: 1px solid #e2e8f0;
-            text-align: center;
-            font-size: 11px;
-            color: #94a3b8;
+        .footer {
+            margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line);
+            text-align: center; color: #94a3b8; font-size: 11px;
         }
 
         @media print {
             html, body { background: #fff !important; }
-            .inv-toolbar { display: none !important; }
-            .inv-page {
-                max-width: none;
-                min-height: auto;
-                margin: 0;
-                padding: 0;
+            .toolbar { display: none !important; }
+            .sheet {
+                width: auto; min-height: auto; margin: 0; padding: 0;
                 box-shadow: none;
             }
+        }
+        @media (max-width: 720px) {
+            .sheet { margin: 0; padding: 20px 16px 28px; min-height: auto; }
+            .top, .parties, .grid3 { grid-template-columns: 1fr; }
+            .meta { text-align: left; }
         }
     </style>
 </head>
 <body>
-<div class="inv-toolbar no-print">
-    <p class="inv-toolbar__hint">Invoice preview — review then print</p>
-    <div class="inv-toolbar__actions">
-        <button type="button" class="btn-print" onclick="window.print()">Print</button>
-        <button type="button" class="btn-back" onclick="window.history.back()">Back</button>
+<div class="toolbar">
+    <p>Invoice preview — review then print</p>
+    <div>
+        <button type="button" class="print" onclick="window.print()">Print</button>
+        <button type="button" class="back" onclick="window.history.back()">Back</button>
     </div>
 </div>
 
-<div class="inv-page">
-    <header class="inv-header">
-        <div class="inv-brand">
+<article class="sheet">
+    <header class="top">
+        <div class="brand">
             @if($logoUrl)
-                <img src="{{ $logoUrl }}" alt="{{ $brandName }}" class="inv-logo">
+                <img src="{{ $logoUrl }}" alt="{{ $brandName }}">
+            @else
+                <div class="brand-fallback">{{ mb_strtoupper(mb_substr($brandName, 0, 2)) }}</div>
             @endif
             <div>
-                <div class="inv-brand__name">{{ $brandName }}</div>
+                <h1>{{ $brandName }}</h1>
                 @if($tagline !== '')
-                    <div class="inv-brand__tag">{{ $tagline }}</div>
+                    <div class="tag">{{ $tagline }}</div>
                 @endif
             </div>
         </div>
-        <div class="inv-meta">
-            <h1 class="inv-title">INVOICE</h1>
-            <span class="inv-badge {{ $statusClass }}">{{ $status }}</span>
-            <ul class="inv-meta-list">
+        <div class="meta">
+            <p class="label">INVOICE</p>
+            <span class="badge {{ $statusClass }}">{{ $status }}</span>
+            <ul>
                 <li><strong>Invoice #</strong> {{ $car->id }}</li>
                 <li><strong>Invoice Date</strong> {{ $invoiceDate }}</li>
                 <li><strong>Print Date</strong> {{ $printDate }}</li>
@@ -365,78 +307,76 @@
         </div>
     </header>
 
-    <section class="inv-section inv-parties">
+    <section class="section parties">
         <div>
-            <h2 class="inv-section__title">From</h2>
-            <p class="inv-party__name">{{ $brandName }}</p>
+            <h2 class="section-title">From</h2>
+            <p class="party-name">{{ $brandName }}</p>
             @if($address !== '')
-                <p class="inv-party__line">{{ $address }}</p>
+                <p class="party-line">{{ $address }}</p>
             @endif
             @if($phone !== '')
-                <p class="inv-party__line">{{ $phone }}</p>
+                <p class="party-line">{{ $phone }}</p>
             @endif
             @if($website !== '')
-                <p class="inv-party__line">{{ $website }}</p>
+                <p class="party-line">{{ $website }}</p>
             @endif
         </div>
         <div>
-            <h2 class="inv-section__title">Bill To</h2>
-            <p class="inv-party__name">{{ $clientName !== '' ? $clientName : '—' }}</p>
+            <h2 class="section-title">Bill To</h2>
+            <p class="party-name">{{ $clientName !== '' ? $clientName : '—' }}</p>
             @if($clientPhone !== '')
-                <p class="inv-party__line">{{ $clientPhone }}</p>
+                <p class="party-line">{{ $clientPhone }}</p>
             @else
-                <p class="inv-party__line">No billing phone on file</p>
+                <p class="party-line">No billing phone on file</p>
             @endif
         </div>
     </section>
 
-    <section class="inv-section">
-        <h2 class="inv-section__title">Vehicle Details</h2>
-        <div class="inv-grid">
-            <div class="inv-field">
-                <span class="inv-field__label">Year</span>
-                <span class="inv-field__value">{{ $car->year ?: '—' }}</span>
+    <section class="section">
+        <h2 class="section-title">Vehicle Details</h2>
+        <div class="grid3">
+            <div>
+                <span class="field-label">Year</span>
+                <div class="field-value">{{ $car->year ?: '—' }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Make</span>
-                <span class="inv-field__value">{{ $make }}</span>
+            <div>
+                <span class="field-label">Make</span>
+                <div class="field-value">{{ $make }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Model</span>
-                <span class="inv-field__value">{{ $model }}</span>
+            <div>
+                <span class="field-label">Model</span>
+                <div class="field-value">{{ $model }}</div>
             </div>
-
-            <div class="inv-field">
-                <span class="inv-field__label">VIN</span>
-                <span class="inv-field__value inv-field__value--mono">{{ $car->vin ?: '—' }}</span>
+            <div>
+                <span class="field-label">VIN</span>
+                <div class="field-value mono">{{ $car->vin ?: '—' }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Lot / Stock #</span>
-                <span class="inv-field__value inv-field__value--mono">{{ $car->car_number ?: '—' }}</span>
+            <div>
+                <span class="field-label">Lot / Stock #</span>
+                <div class="field-value mono">{{ $car->car_number ?: '—' }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Color</span>
-                <span class="inv-field__value">{{ $car->car_color ?: '—' }}</span>
+            <div>
+                <span class="field-label">Color</span>
+                <div class="field-value">{{ $car->car_color ?: '—' }}</div>
             </div>
-
-            <div class="inv-field">
-                <span class="inv-field__label">Auction</span>
-                <span class="inv-field__value">{{ $auctionName }}</span>
+            <div>
+                <span class="field-label">Auction</span>
+                <div class="field-value">{{ $auctionName }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Shipping Route</span>
-                <span class="inv-field__value">{{ $routeName }}</span>
+            <div>
+                <span class="field-label">Shipping Route</span>
+                <div class="field-value">{{ $routeName }}</div>
             </div>
-            <div class="inv-field">
-                <span class="inv-field__label">Buyer / Client #</span>
-                <span class="inv-field__value">{{ $client->id ?? '—' }}</span>
+            <div>
+                <span class="field-label">Buyer / Client #</span>
+                <div class="field-value">{{ $client->id ?? '—' }}</div>
             </div>
         </div>
     </section>
 
-    <section class="inv-section">
-        <h2 class="inv-section__title">Invoice Items</h2>
-        <table class="inv-items">
+    <section class="section">
+        <h2 class="section-title">Invoice Items</h2>
+        <table class="items">
             <thead>
                 <tr>
                     <th>Description</th>
@@ -447,43 +387,27 @@
                 @forelse ($lineItems as $item)
                     <tr>
                         <td>{{ $item['description'] }}</td>
-                        <td class="{{ !empty($item['credit']) ? 'credit' : '' }}">
-                            {{ $money($item['amount']) }}
-                        </td>
+                        <td class="{{ !empty($item['credit']) ? 'credit' : '' }}">{{ $money($item['amount']) }}</td>
                     </tr>
                 @empty
-                    <tr>
-                        <td colspan="2">No line items</td>
-                    </tr>
+                    <tr><td colspan="2">No line items</td></tr>
                 @endforelse
             </tbody>
         </table>
 
-        <div class="inv-totals-wrap">
-            <div class="inv-totals">
-                <div class="inv-totals__row">
-                    <span>Subtotal</span>
-                    <span>{{ $money($total) }}</span>
-                </div>
+        <div class="totals-wrap">
+            <div class="totals">
+                <div class="totals-row"><span>Subtotal</span><span>{{ $money($total) }}</span></div>
                 @if($paid > 0.009)
-                    <div class="inv-totals__row">
-                        <span>Paid</span>
-                        <span>{{ $money($paid) }}</span>
-                    </div>
+                    <div class="totals-row"><span>Paid</span><span>{{ $money($paid) }}</span></div>
                 @endif
                 @if($discount > 0.009)
-                    <div class="inv-totals__row">
-                        <span>Discount</span>
-                        <span>−{{ $money($discount) }}</span>
-                    </div>
+                    <div class="totals-row"><span>Discount</span><span>−{{ $money($discount) }}</span></div>
                 @endif
                 @if($damage > 0.009)
-                    <div class="inv-totals__row">
-                        <span>Damage Comp.</span>
-                        <span>−{{ $money($damage) }}</span>
-                    </div>
+                    <div class="totals-row"><span>Damage Comp.</span><span>−{{ $money($damage) }}</span></div>
                 @endif
-                <div class="inv-totals__row inv-totals__row--due">
+                <div class="totals-row due">
                     <span>Balance Due</span>
                     <span>{{ $money(max(0, $balanceDue)) }} USD</span>
                 </div>
@@ -492,15 +416,13 @@
     </section>
 
     @if($note !== '')
-        <div class="inv-note">
-            <strong>Note:</strong> {{ $note }}
-        </div>
+        <div class="note"><strong>Note:</strong> {{ $note }}</div>
     @endif
 
-    <footer class="inv-footer">
+    <footer class="footer">
         {{ $brandName }}@if($tagline !== '') — {{ $tagline }}@endif
         @if($website !== '') · {{ $website }}@endif
     </footer>
-</div>
+</article>
 </body>
 </html>

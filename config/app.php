@@ -27,7 +27,7 @@ return [
     |
     */
 
-    'product_name' => env('APP_PRODUCT_NAME', 'HAULF'),
+    'product_name' => env('APP_PRODUCT_NAME'),
 
     /*
     |--------------------------------------------------------------------------

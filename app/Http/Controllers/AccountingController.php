@@ -908,43 +908,11 @@ class AccountingController extends Controller
 
          }
 
-         if($print==6){
-            $config = $this->resolveSystemConfig();
-            $car = (clone $cars)->where('id', $car_id)->first();
-            if (!$car) {
-                abort(404, 'السيارة غير موجودة');
-            }
-            $clientData = [
-                'totalAmount' =>   $activeTotalAmount,
-                'data' => collect([$car]),
-                'client'=>$client,
-                'car_total'=>1,
-                'car_total_unpaid'=>$car_total_unpaid,
-                'car_total_complete'=>$car_total_complete,
-                'car_total_uncomplete'=>$car_total_uncomplete,
-                'contract_total'=>$contract_total,
-                'exit_car_total'=>$exit_car_total,
-                'contract_total_debit_Dollar'=>$contract_total_debit_Dollar,
-                'contract_total_debit_Dinar'=>$contract_total_debit_Dinar,
-                'cars_sum'=> $car->total_s,
-                'cars_paid'=> $car->paid,
-                'cars_discount'=>$car->discount,
-                'cars_damage_compensation'=>$car->damage_compensation ?? 0,
-                'cars_need_paid'=>$car->total_s - $car->paid - $car->discount - ($car->damage_compensation ?? 0),
-                'payments_sum_dollar'=>$payments_sum_dollar,
-                'client_balance'=>$client_balance,
-                'transactions'=>$this->attachMoneyAccounts($transactions->get()),
-                'date'=> Carbon::now()->format('Y-m-d'),
-                'print'=> 6
-            ];
-            return view('show',compact('clientData','config'));
-         }
-
-         if ((int) $print === 13) {
+         if($print==6 || (int) $print === 13){
             $config = $this->resolveSystemConfig();
             $car = (clone $cars)->where('id', $car_id)->first();
             if (! $car) {
-                abort(404, 'Car not found');
+                abort(404, (int) $print === 13 ? 'Car not found' : 'السيارة غير موجودة');
             }
 
             return view('carInvoiceEn', [

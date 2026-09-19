@@ -9,12 +9,20 @@ namespace App\Support;
  */
 class Branding
 {
-    /** Brand name from APP_PRODUCT_NAME, falling back to APP_NAME. */
+    /** Brand name: APP_PRODUCT_NAME, else a real APP_NAME, else HAULF. */
     public static function name(): string
     {
-        $product = trim((string) config('app.product_name'));
+        $product = trim((string) (config('app.product_name') ?? ''));
+        if ($product !== '') {
+            return $product;
+        }
 
-        return $product !== '' ? $product : (string) config('app.name', '');
+        $appName = trim((string) config('app.name', ''));
+        if ($appName !== '' && strcasecmp($appName, 'Laravel') !== 0) {
+            return $appName;
+        }
+
+        return 'HAULF';
     }
 
     /**
