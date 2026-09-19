@@ -84,6 +84,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public web prefix
+    |--------------------------------------------------------------------------
+    |
+    | Prefix for files under public/img, public/storage, public/css.
+    | Leave unset to auto-detect: "" when DOCUMENT_ROOT is public/,
+    | "/public" when the site is served from the project root.
+    | Override with APP_PUBLIC_WEB_PREFIX="" or "/public".
+    |
+    */
+
+    'public_web_prefix' => env('APP_PUBLIC_WEB_PREFIX'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

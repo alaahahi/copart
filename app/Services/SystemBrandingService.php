@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\File;
 
 class SystemBrandingService
 {
-    /** Relative to public_path(); served as /public/img/branding/... */
+    /** Relative to public_path(); URL prefix comes from Help::publicWebPrefix(). */
     public const REL_DIR = 'img/branding';
 
     /**
@@ -26,7 +26,7 @@ class SystemBrandingService
         $name = $field.'_'.time().'_'.bin2hex(random_bytes(4)).'.'.$ext;
         $file->move($dir, $name);
 
-        return '/public/'.self::REL_DIR.'/'.$name;
+        return '/'.self::REL_DIR.'/'.$name;
     }
 
     /**
@@ -63,7 +63,7 @@ class SystemBrandingService
         if (preg_match('#(?:^|/)(?:public/)?(img/branding/[^/?]+)$#', $path, $m)) {
             $rel = $m[1];
             if (File::isFile(public_path($rel))) {
-                return '/public/'.$rel;
+                return Help::normalizePublicPath('/'.$rel);
             }
 
             return null;
@@ -77,7 +77,7 @@ class SystemBrandingService
             $newAbsolute = public_path($newRel);
 
             if (File::isFile($newAbsolute)) {
-                return '/public/'.$newRel;
+                return Help::normalizePublicPath('/'.$newRel);
             }
 
             $sources = [
@@ -97,7 +97,7 @@ class SystemBrandingService
 
                 File::copy($src, $newAbsolute);
 
-                return '/public/'.$newRel;
+                return Help::normalizePublicPath('/'.$newRel);
             }
 
             // Path saved but file missing (common when storage:link is absent).

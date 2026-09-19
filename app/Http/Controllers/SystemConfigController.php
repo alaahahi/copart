@@ -239,7 +239,7 @@ class SystemConfigController extends Controller
         $file->move($dir, $name);
 
         // Match project convention (/public/uploads/...) for hosts whose docroot is project root.
-        return '/public/img/receipt/'.$name;
+        return '/img/receipt/'.$name;
     }
 
     protected function deleteStoredLogo(?string $path): void

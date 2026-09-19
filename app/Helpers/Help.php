@@ -47,11 +47,59 @@ class Help
         return self::formatNumber($number, $isUsd ? 2 : 0);
     }
 
+    protected static ?string $publicWebPrefix = null;
+
+    /** Forget cached prefix (tests / after config change). */
+    public static function flushPublicWebPrefix(): void
+    {
+        self::$publicWebPrefix = null;
+    }
+
     /**
-     * Normalize a public web path for this deploy (docroot is often project root,
-     * so static files live under /public/... — matching uploads elsewhere).
+     * Web prefix for files under public/ (img, storage, css).
      *
-     * Accepts stored values like /img/receipt/x.png, /img/branding/..., /storage/..., or full URLs.
+     * '' when DOCUMENT_ROOT is already public/ (standard Laravel / this IntelliJ host).
+     * '/public' when the site is served from the project root (XAMPP / some tenants).
+     * Override with APP_PUBLIC_WEB_PREFIX="" or "/public".
+     */
+    public static function publicWebPrefix(): string
+    {
+        if (self::$publicWebPrefix !== null) {
+            return self::$publicWebPrefix;
+        }
+
+        $forced = config('app.public_web_prefix');
+        if ($forced !== null && $forced !== false) {
+            $forced = trim((string) $forced);
+            if ($forced === '' || $forced === '/') {
+                return self::$publicWebPrefix = '';
+            }
+
+            return self::$publicWebPrefix = '/'.trim($forced, '/');
+        }
+
+        $docRoot = realpath((string) ($_SERVER['DOCUMENT_ROOT'] ?? '')) ?: '';
+        $public = realpath(public_path()) ?: '';
+
+        if ($docRoot !== '' && $public !== '' && strcasecmp($docRoot, $public) === 0) {
+            return self::$publicWebPrefix = '';
+        }
+
+        $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        $scriptFile = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_FILENAME'] ?? ''));
+        if ($scriptFile !== '' && str_ends_with($scriptFile, '/public/index.php')
+            && ($scriptName === '/index.php' || $scriptName === 'index.php')) {
+            return self::$publicWebPrefix = '';
+        }
+
+        return self::$publicWebPrefix = '/public';
+    }
+
+    /**
+     * Normalize a public web path for this deploy.
+     *
+     * Hosts whose docroot is the project root need /public/img/...
+     * Hosts whose docroot is public/ need /img/...
      */
     public static function normalizePublicPath(?string $path): ?string
     {
@@ -80,24 +128,24 @@ class Help
                 return $path;
             }
 
-            $prefix = '';
+            $origin = '';
             if (! empty($parts['scheme'])) {
-                $prefix = $parts['scheme'].'://';
+                $origin = $parts['scheme'].'://';
             } elseif (str_starts_with($path, '//')) {
-                $prefix = '//';
+                $origin = '//';
             }
 
             if (! empty($parts['user'])) {
-                $prefix .= $parts['user'];
+                $origin .= $parts['user'];
                 if (isset($parts['pass'])) {
-                    $prefix .= ':'.$parts['pass'];
+                    $origin .= ':'.$parts['pass'];
                 }
-                $prefix .= '@';
+                $origin .= '@';
             }
 
-            $prefix .= $parts['host'];
+            $origin .= $parts['host'];
             if (! empty($parts['port'])) {
-                $prefix .= ':'.$parts['port'];
+                $origin .= ':'.$parts['port'];
             }
 
             $suffix = '';
@@ -108,7 +156,7 @@ class Help
                 $suffix .= '#'.$parts['fragment'];
             }
 
-            return $prefix.$normalizedPath.$suffix;
+            return $origin.$normalizedPath.$suffix;
         }
 
         $path = '/'.ltrim($path, '/');
@@ -117,12 +165,17 @@ class Help
             $path = substr($path, 7);
         }
 
-        // Legacy paths omitted /public (404 when site is served from project root).
-        if (preg_match('#^/(img|storage|css)/#', $path)) {
-            $path = '/public'.$path;
+        if (! preg_match('#^/(?:public/)?(img|storage|css)/#', $path)) {
+            return $path;
         }
 
-        return $path;
+        if (preg_match('#^/public/(img|storage|css)/#', $path)) {
+            $path = substr($path, 7);
+        }
+
+        $webPrefix = self::publicWebPrefix();
+
+        return $webPrefix === '' ? $path : $webPrefix.$path;
     }
 
     /**
