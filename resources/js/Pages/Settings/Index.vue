@@ -299,6 +299,7 @@ async function save() {
       page.props.value.branding.logo = data.config.app_logo || null;
       page.props.value.branding.cover = data.config.app_cover || null;
       if (data.config.first_title_ar) {
+        form.value.first_title_ar = data.config.first_title_ar;
         page.props.value.appName = data.config.first_title_ar;
       }
       form.value.wa_enabled = !!data.config.wa_enabled;
@@ -478,6 +479,19 @@ onMounted(loadDbInsights);
           <p class="text-sm text-slate-300 mb-5">
             {{ $t("brandingHint") }}
           </p>
+
+          <div class="mb-5">
+            <label class="block text-sm font-semibold text-slate-200 mb-2" for="first_title_ar">
+              {{ $t("companyName") }}
+            </label>
+            <input
+              id="first_title_ar"
+              v-model="form.first_title_ar"
+              type="text"
+              class="w-full rounded-lg bg-slate-950 border border-slate-600 text-white placeholder-slate-400"
+              :placeholder="$t('companyNameHint')"
+            />
+          </div>
 
           <div class="grid gap-5 sm:grid-cols-2 mb-5">
             <div

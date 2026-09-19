@@ -32,7 +32,7 @@ $Help = new MyHelp();
 <div class="row">
     <div class="col-4 text-center py-3">
         <h5 class="pt-3">
-       {{$config['first_title_ar']}}
+       {{ \App\Support\Branding::resolveName((string) ($config['first_title_ar'] ?? '')) }}
         </h5>
         <h5>
         {{$config['second_title_ar']}}
@@ -100,7 +100,7 @@ $Help = new MyHelp();
   <div class="row">
       <div class="col-4 text-center py-3">
           <h5 class="pt-3">
-         {{$config['first_title_ar']}}
+         {{ \App\Support\Branding::resolveName((string) ($config['first_title_ar'] ?? '')) }}
           </h5>
           <h5>
           {{$config['second_title_ar']}}

@@ -207,6 +207,8 @@
     "logoMain": "الشعار الرئيسي",
     "brandingTitle": "هوية المشروع",
     "brandingHint": "شعار وغلاف يظهران في تسجيل الدخول والواجهة الرئيسية.",
+    "companyName": "اسم المشروع",
+    "companyNameHint": "يظهر في الوصولات والتقارير بدل Laravel",
     "appLogo": "شعار المشروع",
     "appCover": "غلاف المشروع",
     "appLogoHint": "jpeg / png / webp / svg — حتى 2 ميغابايت",

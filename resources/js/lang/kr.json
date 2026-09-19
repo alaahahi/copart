@@ -210,6 +210,8 @@
     "logoMain": "لۆگۆی سەرەکی",
     "brandingTitle": "ناسنامەی پرۆژە",
     "brandingHint": "لۆگۆ و کاڤەر لە لاگین و پەڕەی سەرەکی دەردەکەون.",
+    "companyName": "ناوی پرۆژە",
+    "companyNameHint": "لە وەسڵ و ڕاپۆرت دەردەکەوێت لەبری Laravel",
     "appLogo": "لۆگۆی پرۆژە",
     "appCover": "کاڤەری پرۆژە",
     "appLogoHint": "jpeg / png / webp / svg — تا 2MB",

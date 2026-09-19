@@ -18,7 +18,7 @@
 <table>
 <tr>
     <th style=" font-size: 16px;font-weight: 700;padding-right: 20px">
-        {{$config['first_title_ar']}}
+        {{ \App\Support\Branding::resolveName((string) ($config['first_title_ar'] ?? '')) }}
         <br>
         {{$config['second_title_ar']}}
         <br>

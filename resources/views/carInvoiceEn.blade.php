@@ -239,26 +239,6 @@
         }
         .field-value { font-size: 14px; font-weight: 650; word-break: break-word; }
         .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
-        .vin-block { grid-column: 1 / -1; }
-        .vin-row {
-            display: inline-flex; align-items: center; gap: 8px;
-            max-width: 100%; padding: 8px 12px;
-            border-radius: 10px; background: #0f172a; color: #f8fafc;
-        }
-        .vin-value {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 18px; font-weight: 800; letter-spacing: .08em;
-            line-height: 1.2; word-break: break-all;
-        }
-        .vin-copy {
-            flex-shrink: 0; width: 28px; height: 28px; padding: 0;
-            border: 0; border-radius: 7px; cursor: pointer;
-            background: #334155; color: #f8fafc;
-            display: inline-grid; place-items: center;
-        }
-        .vin-copy:hover { background: #475569; }
-        .vin-copy.copied { background: #059669; }
-        .vin-copy svg { width: 14px; height: 14px; }
 
         table.items { width: 100%; border-collapse: collapse; }
         table.items th {
@@ -311,9 +291,6 @@
                 width: auto; max-width: none; min-height: auto; margin: 0; padding: 0;
                 box-shadow: none;
             }
-            .vin-copy { display: none !important; }
-            .vin-row { background: #f1f5f9; color: #0f172a; padding: 6px 0; border-radius: 0; }
-            .vin-value { font-size: 16px; }
         }
         @media (max-width: 720px) {
             .sheet { margin: 0; padding: 20px 16px 28px; min-height: auto; }
@@ -398,27 +375,9 @@
                 <span class="field-label">Model</span>
                 <div class="field-value">{{ $model }}</div>
             </div>
-            <div class="vin-block">
-                <span class="field-label">VIN / Chassis</span>
-                @if(!empty($car->vin))
-                    <div class="vin-row" dir="ltr">
-                        <span class="vin-value">{{ $car->vin }}</span>
-                        <button
-                            type="button"
-                            class="vin-copy"
-                            data-vin="{{ e($car->vin) }}"
-                            title="Copy VIN / نسخ الشاصي"
-                            aria-label="Copy VIN"
-                            onclick="copyVin(this)"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                    </div>
-                @else
-                    <div class="field-value">—</div>
-                @endif
+            <div>
+                <span class="field-label">VIN</span>
+                <div class="field-value mono" dir="ltr">{{ $car->vin ?: '—' }}</div>
             </div>
             <div>
                 <span class="field-label">Lot / Stock #</span>
@@ -493,31 +452,5 @@
         @if($website !== '') · {{ $website }}@endif
     </footer>
 </article>
-<script>
-function copyVin(btn) {
-    var text = (btn.getAttribute('data-vin') || '').trim();
-    if (!text) return;
-    var done = function () {
-        btn.classList.add('copied');
-        window.setTimeout(function () { btn.classList.remove('copied'); }, 1200);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done).catch(fallback);
-    } else {
-        fallback();
-    }
-    function fallback() {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); done(); } catch (e) {}
-        document.body.removeChild(ta);
-    }
-}
-</script>
 </body>
 </html>

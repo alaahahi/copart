@@ -24,7 +24,7 @@
         ?? \App\Helpers\Help::publicAssetUrl('/img/logo-color.png')
         ?? \App\Helpers\Help::publicAssetUrl('/img/logo.jpg');
 
-    $appName = $firstTitle ?: \App\Support\Branding::name();
+    $appName = \App\Support\Branding::resolveName((string) ($firstTitle ?? ''));
     $appSub = $secondTitle ?: null;
     $reportTitle = $title ?? 'تقرير';
     $reportSubtitle = $subtitle ?? null;

@@ -1370,14 +1370,11 @@ function checkClientBalance(_v) {
 
             <!-- List / table view -->
             <div v-else class="clients-cars-table-wrap relative overflow-x-auto">
-              <table class="w-full min-w-[1400px] text-center text-sm text-slate-700 dark:text-slate-200">
+              <table class="w-full min-w-[1200px] text-center text-sm text-slate-700 dark:text-slate-200">
                 <thead>
                   <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("no") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_type") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("year") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("color") }}</th>
-                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("vin") }}</th>
+                    <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold text-start">{{ $t("car_type") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_number") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold print:hidden">{{ $t("note") }}</th>
                     <th scope="col" class="whitespace-nowrap px-2 py-2.5 text-sm font-semibold">{{ $t("car_price_usa") }}</th>
@@ -1412,29 +1409,31 @@ function checkClientBalance(_v) {
                     :class="carRowClass(car)"
                   >
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ i + 1 }}</td>
-                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_type }}</td>
-                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.year }}</td>
-                    <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_color }}</td>
                     <td class="px-2 py-1.5 text-start">
+                      <div class="font-semibold text-slate-900 dark:text-white">{{ car.car_type || "—" }}</div>
+                      <div class="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+                        <span v-if="car.year">{{ car.year }}</span>
+                        <span v-if="car.year && car.car_color"> · </span>
+                        <span v-if="car.car_color">{{ car.car_color }}</span>
+                      </div>
                       <div
                         v-if="car.vin"
-                        class="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-slate-900 px-2 py-1 dark:bg-slate-950"
+                        class="mt-1 inline-flex items-center gap-1 whitespace-nowrap"
                         dir="ltr"
                       >
-                        <span class="break-all font-mono text-sm font-extrabold tracking-wider text-white">{{ car.vin }}</span>
+                        <span class="font-mono text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-100">{{ car.vin }}</span>
                         <button
                           type="button"
-                          class="print:hidden inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-700 text-slate-100 hover:bg-slate-600"
+                          class="print:hidden inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
                           title="نسخ رقم الشاصي"
                           aria-label="نسخ رقم الشاصي"
                           @click.stop="copyVinToClipboard(car.vin)"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3 w-3" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                         </button>
                       </div>
-                      <span v-else class="text-slate-400">—</span>
                     </td>
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_number }}</td>
                     <td class="px-2 py-1.5 print:hidden text-slate-900 dark:text-slate-100">{{ car.note }}</td>

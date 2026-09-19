@@ -200,6 +200,8 @@
     "logoMain": "Main logo",
     "brandingTitle": "Project branding",
     "brandingHint": "Logo and cover shown on login and the welcome page.",
+    "companyName": "Company name",
+    "companyNameHint": "Shown on receipts and reports instead of Laravel",
     "appLogo": "Project logo",
     "appCover": "Project cover",
     "appLogoHint": "jpeg / png / webp / svg — max 2 MB",

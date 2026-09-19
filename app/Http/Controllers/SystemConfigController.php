@@ -62,6 +62,12 @@ class SystemConfigController extends Controller
             $config->save();
         }
 
+        $resolvedTitle = \App\Support\Branding::resolveName((string) $config->first_title_ar);
+        if ($resolvedTitle !== (string) $config->first_title_ar) {
+            $config->first_title_ar = $resolvedTitle;
+            $config->save();
+        }
+
         return Inertia::render('Settings/Index', [
             'config' => $this->configForClient($config),
             'waSources' => WhatsAppQueueService::SOURCES,
@@ -94,6 +100,10 @@ class SystemConfigController extends Controller
         }
         if (empty($validated['wa_created_by'])) {
             $validated['wa_created_by'] = 'copart-erp';
+        }
+
+        if (array_key_exists('first_title_ar', $validated)) {
+            $validated['first_title_ar'] = \App\Support\Branding::resolveName((string) $validated['first_title_ar']);
         }
 
         $config->fill($validated);
@@ -215,6 +225,7 @@ class SystemConfigController extends Controller
         }
 
         $data = $config->toArray();
+        $data['first_title_ar'] = \App\Support\Branding::resolveName((string) ($data['first_title_ar'] ?? ''));
         foreach ($this->logoFields as $field) {
             if (! empty($data[$field])) {
                 $data[$field] = Help::normalizePublicPath($data[$field]);
