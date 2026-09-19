@@ -89,6 +89,10 @@ const carMatchesVinSearch = (car, q = carVinSearch.value) => {
   return vin.includes(needle) || chassis.includes(needle);
 };
 
+const canReturnToBalance = (car) =>
+  asNumber(car?.paid) > 0 ||
+  carAllocations(car).some((row) => asNumber(row?.amount) > 0);
+
 const visibleCars = computed(() => {
   const cars = Array.isArray(laravelData.value?.data) ? laravelData.value.data : [];
   return cars.filter(
@@ -1354,10 +1358,7 @@ function checkClientBalance(_v) {
                   {{ $t("pay_from_balance") }}
                 </button>
                 <button
-                  v-if="
-                    (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) != 0 &&
-                    asNumber(car.paid)
-                  "
+                  v-if="canReturnToBalance(car)"
                   type="button"
                   class="rounded-md bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-rose-700"
                   @click="openModalDelPayFromBalanceCar(car)"
@@ -1541,10 +1542,7 @@ function checkClientBalance(_v) {
                       <button
                         tabindex="1"
                         style="min-width: 100px"
-                        v-if="
-                          (asNumber(calculateTotalFilteredAmount().totalAmount) * -1) - asNumber(laravelData?.cars_sum) != 0 &&
-                          asNumber(car.paid)
-                        "
+                        v-if="canReturnToBalance(car)"
                         class="mx-0.5 mt-1 rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700"
                         @click="openModalDelPayFromBalanceCar(car)"
                       >
