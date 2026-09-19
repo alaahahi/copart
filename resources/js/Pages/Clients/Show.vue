@@ -45,9 +45,35 @@ const carPrintUrl = (car) => {
   return `/api/getIndexAccountsSelas?user_id=${uid}&from=${from.value}&to=${to.value}&print=6&car_id=${car.id}`;
 };
 
-const carInvoiceEnUrl = (car) => {
-  const uid = laravelData.value?.client?.id || client_Select.value || props.client_id;
-  return `/api/getIndexAccountsSelas?user_id=${uid}&from=${from.value}&to=${to.value}&print=13&car_id=${car.id}`;
+const copyVinToClipboard = async (vin) => {
+  const text = String(vin || "").trim();
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success("تم نسخ رقم الشاصي", {
+      timeout: 2500,
+      position: "bottom-right",
+      rtl: true,
+    });
+  } catch (e) {
+    toast.error("فشل نسخ رقم الشاصي", {
+      timeout: 3000,
+      position: "bottom-right",
+      rtl: true,
+    });
+  }
 };
 
 const carVinSearch = ref("");
@@ -1209,41 +1235,36 @@ function checkClientBalance(_v) {
 
           <!-- Cars: list / grid -->
           <div class="p-3 sm:p-4">
-            <div class="mb-3 flex flex-wrap items-end justify-between gap-3 print:hidden">
-              <div class="flex min-w-0 flex-1 flex-wrap items-end gap-3">
-                <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  {{ $t("cars") }}
-                  <span class="ms-1 font-mono text-slate-500 dark:text-slate-400">
-                    ({{ displayedCars.length }}<template v-if="normalizeVinQuery(carVinSearch)">/{{ visibleCars.length }}</template>)
-                  </span>
-                </div>
-                <div class="min-w-[200px] max-w-md flex-1">
-                  <label class="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    {{ $t("search_vin") }}
-                  </label>
-                  <div class="flex gap-1.5">
-                    <TextInput
-                      id="car-vin-search"
-                      v-model="carVinSearch"
-                      type="search"
-                      class="mt-0 block w-full font-mono"
-                      dir="ltr"
-                      :placeholder="$t('search_vin_placeholder')"
-                      autocomplete="off"
-                    />
-                    <button
-                      v-if="normalizeVinQuery(carVinSearch)"
-                      type="button"
-                      class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                      @click="clearCarVinSearch"
-                    >
-                      {{ $t("clear") }}
-                    </button>
-                  </div>
-                </div>
+            <div class="clients-cars-panel overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+            <div class="clients-cars-toolbar print:hidden flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <div class="shrink-0 text-sm font-bold text-slate-800 dark:text-slate-100">
+                {{ $t("cars") }}
+                <span class="ms-1 font-mono text-slate-500 dark:text-slate-400">
+                  ({{ displayedCars.length }}<template v-if="normalizeVinQuery(carVinSearch)">/{{ visibleCars.length }}</template>)
+                </span>
+              </div>
+              <div class="flex min-w-[12rem] flex-1 items-center gap-1.5 sm:max-w-md">
+                <label class="sr-only" for="car-vin-search">{{ $t("search_vin") }}</label>
+                <TextInput
+                  id="car-vin-search"
+                  v-model="carVinSearch"
+                  type="search"
+                  class="mt-0 block w-full font-mono text-sm"
+                  dir="ltr"
+                  :placeholder="$t('search_vin')"
+                  autocomplete="off"
+                />
+                <button
+                  v-if="normalizeVinQuery(carVinSearch)"
+                  type="button"
+                  class="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  @click="clearCarVinSearch"
+                >
+                  {{ $t("clear") }}
+                </button>
               </div>
               <div
-                class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-800"
+                class="ms-auto inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 shadow-sm dark:border-slate-600 dark:bg-slate-800"
                 role="group"
                 :aria-label="$t('view_mode')"
               >
@@ -1282,8 +1303,8 @@ function checkClientBalance(_v) {
               </div>
             </div>
 
+            <div v-if="carsViewMode === 'grid'" class="p-3 dark:bg-slate-950/40">
             <CarsGridView
-              v-if="carsViewMode === 'grid'"
               :cars="displayedCars"
               variant="client"
               :highlight-query="carVinSearch"
@@ -1324,14 +1345,6 @@ function checkClientBalance(_v) {
                 >
                   <print />
                 </a>
-                <a
-                  :href="carInvoiceEnUrl(car)"
-                  target="_blank"
-                  class="inline-flex items-center rounded-md bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white hover:bg-emerald-800"
-                  :title="$t('print_car_invoice_en')"
-                >
-                  INV
-                </a>
                 <button
                   v-if="hasUndistributedBalance"
                   type="button"
@@ -1353,9 +1366,10 @@ function checkClientBalance(_v) {
                 </button>
               </template>
             </CarsGridView>
+            </div>
 
             <!-- List / table view -->
-            <div v-else class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+            <div v-else class="clients-cars-table-wrap relative overflow-x-auto">
               <table class="w-full min-w-[1400px] text-center text-sm text-slate-700 dark:text-slate-200">
                 <thead>
                   <tr class="bg-slate-800 text-slate-100 dark:bg-slate-950">
@@ -1401,7 +1415,27 @@ function checkClientBalance(_v) {
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_type }}</td>
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.year }}</td>
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_color }}</td>
-                    <td class="px-2 py-1.5 font-mono text-xs text-slate-900 dark:text-slate-100">{{ car.vin }}</td>
+                    <td class="px-2 py-1.5 text-start">
+                      <div
+                        v-if="car.vin"
+                        class="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-slate-900 px-2 py-1 dark:bg-slate-950"
+                        dir="ltr"
+                      >
+                        <span class="break-all font-mono text-sm font-extrabold tracking-wider text-white">{{ car.vin }}</span>
+                        <button
+                          type="button"
+                          class="print:hidden inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-700 text-slate-100 hover:bg-slate-600"
+                          title="نسخ رقم الشاصي"
+                          aria-label="نسخ رقم الشاصي"
+                          @click.stop="copyVinToClipboard(car.vin)"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <span v-else class="text-slate-400">—</span>
+                    </td>
                     <td class="px-2 py-1.5 text-slate-900 dark:text-slate-100">{{ car.car_number }}</td>
                     <td class="px-2 py-1.5 print:hidden text-slate-900 dark:text-slate-100">{{ car.note }}</td>
                     <td class="px-2 py-1.5 font-mono text-slate-900 dark:text-slate-100">{{ car.shipping_dolar_s }}</td>
@@ -1478,15 +1512,6 @@ function checkClientBalance(_v) {
                       >
                         <print />
                       </a>
-                      <a
-                        :href="carInvoiceEnUrl(car)"
-                        target="_blank"
-                        tabindex="1"
-                        class="mx-0.5 inline-flex items-center rounded-lg bg-emerald-700 px-2 py-1 text-[10px] font-bold tracking-wide text-white hover:bg-emerald-800"
-                        :title="$t('print_car_invoice_en')"
-                      >
-                        INV
-                      </a>
                     </td>
                     <td class="px-2 py-1.5 text-start print:hidden">
                       <a
@@ -1531,6 +1556,7 @@ function checkClientBalance(_v) {
                 </tbody>
               </table>
             </div>
+            </div>
 
             <div v-if="carsViewMode === 'list'" class="mt-4 text-center" style="direction: ltr">
               <TailwindPagination
@@ -1561,6 +1587,26 @@ function checkClientBalance(_v) {
 </template>
 
 <style>
+.clients-cars-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #1e293b;
+}
+.clients-cars-table-wrap::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.clients-cars-table-wrap::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+.clients-cars-table-wrap::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 999px;
+  border: 2px solid #1e293b;
+}
+.clients-cars-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .td {
   max-width: 200px; /* can be 100% ellipsis will happen when contents exceed it */
   text-overflow: ellipsis;

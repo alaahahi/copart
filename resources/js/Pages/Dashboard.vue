@@ -1247,21 +1247,33 @@ function directionClass(direction) {
 }
 
 body::-webkit-scrollbar {
-  width: 12px;
+  width: 10px;
 }
 
 body::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #e2e8f0;
 }
 
 body::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 6px;
+  background: #94a3b8;
+  border-radius: 999px;
 }
 
 body {
   scrollbar-width: thin;
-  scrollbar-color: #888 #f1f1f1;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+
+html.dark body::-webkit-scrollbar-track {
+  background: #0b1220;
+}
+
+html.dark body::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+html.dark body {
+  scrollbar-color: #475569 #0b1220;
 }
 
 @media (prefers-reduced-motion: reduce) {

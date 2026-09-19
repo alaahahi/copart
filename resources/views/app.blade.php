@@ -19,42 +19,82 @@
                 justify-content: center;
                 margin: 25px ;
             }
-            body::-webkit-scrollbar {
-                width: 12px;
-                }
-
-                body::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                }
-
-                body::-webkit-scrollbar-thumb {
-                background: #888;
-                border-radius: 6px;
-                }
-
-                /* Style the scrollbars for Firefox */
-                body {
+            html, body {
                 scrollbar-width: thin;
-                scrollbar-color: #888 #f1f1f1;
-                }
-                .hydrated::-webkit-scrollbar {
-                width: 12px;
-                }
-
-                .hydrated::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                }
-
-                .hydrated::-webkit-scrollbar-thumb {
-                background: #888;
-                border-radius: 6px;
-                }
-                .scroll-rgCol
-                /* Style the scrollbars for Firefox */
-                .hydrated {
+                scrollbar-color: #94a3b8 #e2e8f0;
+            }
+            html::-webkit-scrollbar,
+            body::-webkit-scrollbar,
+            .hydrated::-webkit-scrollbar {
+                width: 10px;
+                height: 10px;
+            }
+            html::-webkit-scrollbar-track,
+            body::-webkit-scrollbar-track,
+            .hydrated::-webkit-scrollbar-track {
+                background: #e2e8f0;
+            }
+            html::-webkit-scrollbar-thumb,
+            body::-webkit-scrollbar-thumb,
+            .hydrated::-webkit-scrollbar-thumb {
+                background: #94a3b8;
+                border-radius: 999px;
+                border: 2px solid #e2e8f0;
+            }
+            html.dark,
+            html.dark body {
+                scrollbar-color: #475569 #0b1220;
+            }
+            html.dark::-webkit-scrollbar-track,
+            html.dark body::-webkit-scrollbar-track,
+            html.dark .hydrated::-webkit-scrollbar-track {
+                background: #0b1220;
+            }
+            html.dark::-webkit-scrollbar-thumb,
+            html.dark body::-webkit-scrollbar-thumb,
+            html.dark .hydrated::-webkit-scrollbar-thumb {
+                background: #475569;
+                border-color: #0b1220;
+            }
+            html.dark::-webkit-scrollbar-thumb:hover,
+            html.dark body::-webkit-scrollbar-thumb:hover {
+                background: #64748b;
+            }
+            .hydrated {
                 scrollbar-width: thin;
-                scrollbar-color: #888 #f1f1f1;
-                }
+                scrollbar-color: #94a3b8 #e2e8f0;
+            }
+            html.dark .hydrated {
+                scrollbar-color: #475569 #0b1220;
+            }
+            .overflow-x-auto,
+            .overflow-y-auto,
+            .overflow-auto {
+                scrollbar-width: thin;
+                scrollbar-color: #94a3b8 #e2e8f0;
+            }
+            .overflow-x-auto::-webkit-scrollbar,
+            .overflow-y-auto::-webkit-scrollbar,
+            .overflow-auto::-webkit-scrollbar {
+                width: 10px;
+                height: 10px;
+            }
+            html.dark .overflow-x-auto,
+            html.dark .overflow-y-auto,
+            html.dark .overflow-auto {
+                scrollbar-color: #475569 #0f172a;
+            }
+            html.dark .overflow-x-auto::-webkit-scrollbar-track,
+            html.dark .overflow-y-auto::-webkit-scrollbar-track,
+            html.dark .overflow-auto::-webkit-scrollbar-track {
+                background: #0f172a;
+            }
+            html.dark .overflow-x-auto::-webkit-scrollbar-thumb,
+            html.dark .overflow-y-auto::-webkit-scrollbar-thumb,
+            html.dark .overflow-auto::-webkit-scrollbar-thumb {
+                background: #475569;
+                border-radius: 999px;
+            }
                 .Vue-Toastification__container {
                 width: unset !important;
                 }

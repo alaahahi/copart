@@ -199,17 +199,17 @@ const copyVinToClipboard = async (vin) => {
                 {{ $t("vin") }}
               </span>
               <span
-                class="inline-flex min-w-0 max-w-full items-center gap-1.5"
+                class="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-slate-900 px-2 py-1 dark:bg-slate-950"
                 dir="ltr"
               >
                 <span
-                  class="min-w-0 break-all font-mono text-lg font-bold leading-snug tracking-wide text-slate-900 dark:text-white sm:text-xl"
+                  class="min-w-0 break-all font-mono text-lg font-extrabold leading-snug tracking-wider text-white sm:text-xl"
                 >
                   {{ car.vin }}
                 </span>
                 <button
                   type="button"
-                  class="print:hidden inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-slate-100 p-1 text-slate-700 hover:bg-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  class="print:hidden inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-700 text-white hover:bg-slate-600"
                   title="نسخ رقم الشاصي"
                   aria-label="نسخ رقم الشاصي"
                   @click.stop="copyVinToClipboard(car.vin)"
