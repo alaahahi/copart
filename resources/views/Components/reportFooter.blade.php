@@ -8,7 +8,7 @@
             $footerCompany = $cfg['first_title_ar'] ?? null;
         }
     }
-    $footerCompany = $footerCompany ?: (string) config('app.name', '');
+    $footerCompany = $footerCompany ?: \App\Support\Branding::name();
 @endphp
 <footer class="erp-report-footer" dir="rtl">
     <span class="erp-report-footer__company">{{ $footerCompany }}</span>

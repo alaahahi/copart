@@ -45,6 +45,11 @@ const carPrintUrl = (car) => {
   return `/api/getIndexAccountsSelas?user_id=${uid}&from=${from.value}&to=${to.value}&print=6&car_id=${car.id}`;
 };
 
+const carInvoiceEnUrl = (car) => {
+  const uid = laravelData.value?.client?.id || client_Select.value || props.client_id;
+  return `/api/getIndexAccountsSelas?user_id=${uid}&from=${from.value}&to=${to.value}&print=13&car_id=${car.id}`;
+};
+
 const carVinSearch = ref("");
 
 const normalizeVinQuery = (q) => String(q || "").trim().toLowerCase();
@@ -132,6 +137,7 @@ let isLoading = ref(0);
 let from = ref(0);
 let to = ref(0);
 let showPaymentForm = ref(false);
+let showWithdrawForm = ref(false);
 let showModalEditCars = ref(false);
 let showModalDelCar = ref(false);
 let showModalDelPayment = ref(false);
@@ -166,9 +172,9 @@ let getResults = async (page = 1) => {
 function calculateTotalFilteredAmount() {
   if(laravelData.value && laravelData.value.transactions && Array.isArray(laravelData.value.transactions)){
      const filteredTransactions = laravelData.value.transactions.filter(user =>
-    user.type === 'out' && asNumber(user?.amount) < 0 && asNumber(user?.is_pay) === 1 && !user.deleted_at
+    user.type === 'out' && asNumber(user?.is_pay) === 1 && !user.deleted_at && asNumber(user?.amount) !== 0
   );
-  
+
   const totalAmount = filteredTransactions.reduce((sum, user) => {
     const amount = asNumber(user?.amount);
     return sum + amount;
@@ -181,27 +187,36 @@ function calculateTotalFilteredAmount() {
 
 /**
  * Client balance (الرصيد) — same as traders list / Car::clientRemainingBalanceSqlSubquery:
- * Σ(total_s − discount) − Σ(wallet payment txs). Independent of car.paid / توزيع.
+ * Σ(total_s − discount − damage) + Σ(wallet payment txs). Independent of car.paid / توزيع.
  * Accounting sign: + = customer owes, − = credit / overpayment. Do not change storage.
+ * payments_sum: deposits negative, refunds (سحب) positive.
  */
 const clientBalanceUsd = computed(() => {
   if (laravelData.value?.client_balance !== undefined && laravelData.value?.client_balance !== null) {
     return asNumber(laravelData.value.client_balance);
   }
-  const paymentsReceived =
-    laravelData.value?.payments_sum_dollar !== undefined && laravelData.value?.payments_sum_dollar !== null
-      ? Math.abs(asNumber(laravelData.value.payments_sum_dollar))
-      : asNumber(calculateTotalFilteredAmount().totalAmount) * -1;
+  if (laravelData.value?.payments_sum_dollar !== undefined && laravelData.value?.payments_sum_dollar !== null) {
+    return (
+      asNumber(laravelData.value?.cars_sum) -
+      asNumber(laravelData.value?.cars_discount) -
+      asNumber(laravelData.value?.cars_damage_compensation) +
+      asNumber(laravelData.value.payments_sum_dollar)
+    );
+  }
+  const paymentsNet = asNumber(calculateTotalFilteredAmount().totalAmount);
   return (
     asNumber(laravelData.value?.cars_sum) -
     asNumber(laravelData.value?.cars_discount) -
-    asNumber(laravelData.value?.cars_damage_compensation) -
-    paymentsReceived
+    asNumber(laravelData.value?.cars_damage_compensation) +
+    paymentsNet
   );
 });
 
 /** Display-only flip (× −1) so credit reads as positive for traders. */
 const clientBalanceUsdDisplay = computed(() => clientBalanceUsd.value * -1);
+
+/** Available prepaid credit for withdraw (سحب من الرصيد). */
+const availableCreditUsd = computed(() => Math.max(0, -clientBalanceUsd.value));
 
 /** Payments received on wallet but not allocated to cars yet (changes with توزيع). */
 const undistributedBalanceUsd = computed(() => {
@@ -498,6 +513,65 @@ function confirmAddPaymentTotal(amount, client_Select,discount,note) {
       });
     });
 }
+function confirmWithdrawClientBalance() {
+  const withdrawAmount = asNumber(amount.value);
+  if (withdrawAmount < 0.01) {
+    toast.info("أدخل مبلغ السحب", {
+      timeout: 3000,
+      position: "bottom-right",
+      rtl: true,
+    });
+    return;
+  }
+  if (withdrawAmount > availableCreditUsd.value + 0.009) {
+    amount.value = availableCreditUsd.value;
+    toast.info("المبلغ أكبر من الرصيد المتاح " + availableCreditUsd.value, {
+      timeout: 4000,
+      position: "bottom-right",
+      rtl: true,
+    });
+    return;
+  }
+
+  isLoading.value = true;
+  axios
+    .post("/api/withdrawClientBalance", {
+      client_id: client_Select.value ?? props.client_id,
+      amount: withdrawAmount,
+      note: note.value ?? "",
+    })
+    .then((response) => {
+      toast.success("تم سحب " + withdrawAmount + " دولار من الرصيد", {
+        timeout: 3000,
+        position: "bottom-right",
+        rtl: true,
+      });
+      showWithdrawForm.value = false;
+      isLoading.value = false;
+      getResultsSelect();
+      resetValuse();
+
+      const transaction = response.data;
+      if (transaction?.id) {
+        window.open(
+          `/api/getIndexAccountsSelas?user_id=${props.client_id}&print=3&transactions_id=${transaction.id}`,
+          "_blank"
+        );
+      }
+    })
+    .catch((error) => {
+      isLoading.value = false;
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.amount?.[0] ||
+        "فشل السحب من الرصيد";
+      toast.error(msg, {
+        timeout: 3000,
+        position: "bottom-right",
+        rtl: true,
+      });
+    });
+}
 function resetValuse(){
       amount.value=0
       discount.value=0
@@ -505,14 +579,26 @@ function resetValuse(){
 }
 function showAddPaymentTotal(){
   showPaymentForm.value = true;
+  showWithdrawForm.value = false;
   showTransactions.value=false;
 }
 function hideAddPaymentTotal(){
   showPaymentForm.value = false;
 }
+function showWithdrawFromBalance(){
+  showWithdrawForm.value = true;
+  showPaymentForm.value = false;
+  showTransactions.value = false;
+  amount.value = availableCreditUsd.value > 0 ? availableCreditUsd.value : 0;
+}
+function hideWithdrawFromBalance(){
+  showWithdrawForm.value = false;
+  resetValuse();
+}
 function showTransactionsDiv(){
   showTransactions.value=true;
   showPaymentForm.value = false;
+  showWithdrawForm.value = false;
 }
 function hideTransactionsDiv(){
   showTransactions.value=false;
@@ -846,6 +932,24 @@ function checkClientBalance(_v) {
                 {{ $t("hide_payment") }}
               </button>
               <button
+                v-if="!showWithdrawForm && availableCreditUsd >= 0.01"
+                type="button"
+                :disabled="isLoading"
+                class="min-h-[42px] rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
+                @click.prevent="showWithdrawFromBalance()"
+              >
+                {{ $t("withdraw_from_balance") }}
+              </button>
+              <button
+                v-if="showWithdrawForm"
+                type="button"
+                :disabled="isLoading"
+                class="min-h-[42px] rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:opacity-50"
+                @click.prevent="hideWithdrawFromBalance()"
+              >
+                {{ $t("hide_withdraw") }}
+              </button>
+              <button
                 v-if="!showTransactions"
                 type="button"
                 :disabled="isLoading"
@@ -921,6 +1025,52 @@ function checkClientBalance(_v) {
             </div>
           </div>
 
+          <!-- Withdraw from credit balance -->
+          <div
+            v-if="showWithdrawForm"
+            class="border-b border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
+          >
+            <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              {{ $t("withdraw_from_balance_hint") }}
+              <span class="ms-1 font-mono font-semibold text-sky-700 dark:text-sky-300">
+                {{ availableCreditUsd }} $
+              </span>
+            </p>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">
+                  {{ $t("amount_usd_to_withdraw") }}
+                </label>
+                <TextInput
+                  id="withdraw-amount"
+                  v-model="amount"
+                  type="number"
+                  class="mt-0 block w-full !bg-white !text-slate-900 !border-slate-400 dark:!bg-slate-950 dark:!text-white dark:!border-slate-500"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-bold text-slate-900 dark:text-white">{{ $t("note") }}</label>
+                <TextInput
+                  id="withdraw-note"
+                  v-model="note"
+                  type="text"
+                  class="mt-0 block w-full !bg-white !text-slate-900 !border-slate-400 dark:!bg-slate-950 dark:!text-white dark:!border-slate-500"
+                />
+              </div>
+              <div class="flex items-end print:hidden sm:col-span-2 lg:col-span-1">
+                <button
+                  type="button"
+                  :disabled="isLoading"
+                  class="min-h-[42px] w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
+                  @click.prevent="confirmWithdrawClientBalance()"
+                >
+                  <span v-if="!isLoading">{{ $t("withdraw_and_print") }}</span>
+                  <span v-else>{{ $t("printing") }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Payments table -->
           <div v-if="showTransactions" class="border-b border-slate-200 p-4 dark:border-slate-700">
             <div class="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
@@ -954,17 +1104,25 @@ function checkClientBalance(_v) {
                   </tr>
                   <template v-for="user in laravelData.transactions" :key="user.id">
                     <tr
-                      v-if="user.type == 'out' && user.amount < 0 && user.is_pay == 1"
+                      v-if="user.type == 'out' && user.is_pay == 1 && asNumber(user.amount) !== 0"
                       :class="
                         user.deleted_at
                           ? 'bg-slate-100/80 text-slate-500 dark:bg-slate-900/60 dark:text-slate-400'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                          : asNumber(user.amount) > 0
+                            ? 'bg-sky-50/80 hover:bg-sky-50 dark:bg-sky-950/30 dark:hover:bg-sky-950/50'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                       "
                     >
                       <td class="px-3 py-2" :class="{ 'line-through': user.deleted_at }">{{ user.id }}</td>
                       <td class="px-3 py-2" :class="{ 'line-through': user.deleted_at }">{{ user.created }}</td>
                       <td class="px-3 py-2">
                         <span :class="{ 'line-through': user.deleted_at }">{{ user.description }}</span>
+                        <span
+                          v-if="asNumber(user.amount) > 0 && !user.deleted_at"
+                          class="ms-2 inline-flex items-center rounded bg-sky-100 px-1.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                        >
+                          {{ $t('withdraw_badge') }}
+                        </span>
                         <span
                           v-if="user.deleted_at"
                           class="ms-2 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300"
@@ -977,16 +1135,34 @@ function checkClientBalance(_v) {
                           {{ getMoneyAccountLabel(user) ?? '—' }}
                         </span>
                       </td>
-                      <td class="px-3 py-2 font-mono" :class="{ 'line-through': user.deleted_at }">{{ user.amount * -1 }}</td>
+                      <td
+                        class="px-3 py-2 font-mono"
+                        :class="{
+                          'line-through': user.deleted_at,
+                          'text-sky-700 dark:text-sky-300': asNumber(user.amount) > 0 && !user.deleted_at,
+                        }"
+                      >
+                        {{ asNumber(user.amount) * -1 }}
+                      </td>
                       <td class="px-3 py-2 print:hidden">
                         <div class="inline-flex items-center gap-1">
                           <a
-                            v-if="user.type == 'out' && user.amount < 0 && !user.deleted_at"
+                            v-if="!user.deleted_at && asNumber(user.amount) < 0"
                             target="_blank"
                             :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=2&transactions_id=${user.id}`"
                             tabindex="1"
                             class="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
                             title="طباعة"
+                          >
+                            <print />
+                          </a>
+                          <a
+                            v-if="!user.deleted_at && asNumber(user.amount) > 0"
+                            target="_blank"
+                            :href="`/api/getIndexAccountsSelas?user_id=${laravelData.client.id}&from=${from}&to=${to}&print=3&transactions_id=${user.id}`"
+                            tabindex="1"
+                            class="inline-flex items-center rounded-lg bg-sky-600 px-3 py-1.5 text-white hover:bg-sky-700"
+                            title="طباعة وصل سحب"
                           >
                             <print />
                           </a>
@@ -1148,6 +1324,14 @@ function checkClientBalance(_v) {
                 >
                   <print />
                 </a>
+                <a
+                  :href="carInvoiceEnUrl(car)"
+                  target="_blank"
+                  class="inline-flex items-center rounded-md bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white hover:bg-emerald-800"
+                  :title="$t('print_car_invoice_en')"
+                >
+                  INV
+                </a>
                 <button
                   v-if="hasUndistributedBalance"
                   type="button"
@@ -1293,6 +1477,15 @@ function checkClientBalance(_v) {
                         :title="$t('print')"
                       >
                         <print />
+                      </a>
+                      <a
+                        :href="carInvoiceEnUrl(car)"
+                        target="_blank"
+                        tabindex="1"
+                        class="mx-0.5 inline-flex items-center rounded-lg bg-emerald-700 px-2 py-1 text-[10px] font-bold tracking-wide text-white hover:bg-emerald-800"
+                        :title="$t('print_car_invoice_en')"
+                      >
+                        INV
                       </a>
                     </td>
                     <td class="px-2 py-1.5 text-start print:hidden">

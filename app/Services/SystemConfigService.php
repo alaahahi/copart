@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SystemConfig;
+use App\Support\Branding;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -41,7 +42,7 @@ class SystemConfigService
     /**
      * Branding payload for the shared Inertia props / layouts.
      *
-     * @return array{appName: string, logo: ?string, cover: ?string}
+     * @return array{appName: string, tagline: string, logo: ?string, cover: ?string}
      */
     public function branding(): array
     {
@@ -49,7 +50,8 @@ class SystemConfigService
         $files = app(SystemBrandingService::class);
 
         return [
-            'appName' => $config->first_title_ar ?: (string) config('app.name'),
+            'appName' => Branding::resolveName((string) $config->first_title_ar),
+            'tagline' => Branding::tagline(),
             'logo' => $files->resolve($config->app_logo),
             'cover' => $files->resolve($config->app_cover),
         ];
@@ -79,7 +81,7 @@ class SystemConfigService
     protected function defaults(): SystemConfig
     {
         return new SystemConfig([
-            'first_title_ar' => (string) config('app.name', ''),
+            'first_title_ar' => Branding::name(),
             'first_title_kr' => '',
             'second_title_ar' => '',
             'second_title_kr' => '',

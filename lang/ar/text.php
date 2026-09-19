@@ -34,5 +34,6 @@ return [
     'expensesExpErbil'=>' مصاريف أربيل بقيمة ',
     'expensesExpPay'=>' دفعة للمورد بقيمة ',
     'addPayment'=>' دفعة بقيمة',
+    'withdrawBalance'=>' سحب من الرصيد',
     'for_car'=>' للسيارة'
 ];

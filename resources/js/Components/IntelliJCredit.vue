@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { usePage } from "@inertiajs/inertia-vue3";
+import { useBranding } from "@/composables/useBranding";
 
 const props = defineProps({
   url: {
@@ -19,11 +19,9 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
-const page = usePage();
+const { productName: brandProduct } = useBranding();
 const year = computed(() => new Date().getFullYear());
-const productName = computed(
-  () => props.product || page.props.value?.productName || "HAULF"
-);
+const productName = computed(() => props.product || brandProduct.value);
 </script>
 
 <template>

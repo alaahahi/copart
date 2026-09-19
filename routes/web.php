@@ -16,6 +16,7 @@ use App\Http\Controllers\CompanyTreasuryController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
+use App\Http\Controllers\LegacyCutoverController;
 use App\Http\Controllers\SystemConfigController;
 use App\Http\Controllers\Settings\UserManagementController;
 use App\Http\Controllers\QaE2eController;
@@ -177,9 +178,14 @@ Route::group(['middleware' => ['auth','verified']], function () {
         return Inertia::render('SyncMonitor');
     })->name('sync-monitor');
 
+    Route::middleware('admin')->prefix('ops')->name('ops.')->group(function () {
+        Route::get('legacy-cutover', [LegacyCutoverController::class, 'index'])->name('legacy-cutover');
+        Route::get('legacy-cutover/status', [LegacyCutoverController::class, 'status'])->name('legacy-cutover.status');
+        Route::post('legacy-cutover/import', [LegacyCutoverController::class, 'importDump'])->name('legacy-cutover.import');
+        Route::post('legacy-cutover/cutover', [LegacyCutoverController::class, 'cutover'])->name('legacy-cutover.cutover');
+        Route::post('legacy-cutover/integrity', [LegacyCutoverController::class, 'integrity'])->name('legacy-cutover.integrity');
+    });
 
-    
-    
     Route::get('dubai',[TransfersController::class, 'dubai'])->name('dubai');
     Route::get('iran',[TransfersController::class, 'iran'])->name('iran');
     Route::get('border',[TransfersController::class, 'border'])->name('border');

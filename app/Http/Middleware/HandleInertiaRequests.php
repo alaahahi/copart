@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\Auth\SanctumTokenPairService;
 use App\Services\SystemConfigService;
+use App\Support\Branding;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -44,7 +45,8 @@ class HandleInertiaRequests extends Middleware
 
         return array_merge(parent::share($request), [
             'appName' => $branding['appName'],
-            'productName' => config('app.product_name') ?: 'HAULF',
+            'productName' => Branding::name(),
+            'productTagline' => $branding['tagline'],
             'branding' => [
                 'logo' => $branding['logo'],
                 'cover' => $branding['cover'],

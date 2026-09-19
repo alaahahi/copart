@@ -42,6 +42,7 @@ use App\Models\LedgerAccount;
 use Illuminate\Support\Facades\Schema;
 use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
+use App\Http\Requests\WithdrawClientBalanceRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Log;
@@ -795,7 +796,7 @@ class AccountingController extends Controller
 
         if($from && $to ){
             $transactions = $this->transactionsQueryForUser($client)->whereBetween('created', [$from, $to]);
-            $cars = Car::with('CarImages', 'shippingRoute')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
+            $cars = Car::with('CarImages', 'shippingRoute', 'auction')->where('client_id',$client->id)->whereBetween('date', [$from, $to]);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->whereBetween('date', [$from, $to])->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->whereBetween('date', [$from, $to])->count();
@@ -808,7 +809,7 @@ class AccountingController extends Controller
             $cars_need_paid=$cars_sum-($cars_paid+$cars_discount+$cars_damage_compensation);
         }else{
             $transactions = $this->transactionsQueryForUser($client);
-            $cars =  Car::with('CarImages', 'shippingRoute')->where('client_id',$client->id);
+            $cars =  Car::with('CarImages', 'shippingRoute', 'auction')->where('client_id',$client->id);
             $car_total = $cars->count();
             $car_total_unpaid =     Car::where('client_id',$client->id)->where('results',0)->count();
             $car_total_uncomplete = Car::where('client_id',$client->id)->where('results',1)->count();
@@ -825,18 +826,18 @@ class AccountingController extends Controller
         }
         // مجموع الدفعات بالدولار (type=out, is_pay=1, currency=$) - للمطابقة مع cars_paid
         // Always exclude soft-deleted rows from totals even when include_trashed is on.
+        // Negative amounts = deposits (دفعات); positive = refunds (سحب من الرصيد).
         $payments_sum_dollar = (clone $transactions)
             ->whereNull('deleted_at')
             ->where('type', 'out')
             ->where('is_pay', 1)
             ->where('currency', '$')
-            ->where('amount', '<', 0)
             ->sum('amount');
         $activeTotalAmount = (clone $transactions)->whereNull('deleted_at')->sum('amount');
 
         // Same as Car::clientRemainingBalanceSqlSubquery — uses wallet payments, NOT car.paid,
         // so توزيع السيارة (AddPayFromBalanceCar) does not change this figure.
-        // payments_sum_dollar is a negative sum of out/is_pay amounts.
+        // payments_sum_dollar: deposits negative, refunds positive.
         $client_balance = round((float) $cars_sum - (float) $cars_discount - (float) $cars_damage_compensation + (float) $payments_sum_dollar, 2);
 
         //$data = $transactions->paginate(10);
@@ -937,6 +938,20 @@ class AccountingController extends Controller
                 'print'=> 6
             ];
             return view('show',compact('clientData','config'));
+         }
+
+         if ((int) $print === 13) {
+            $config = $this->resolveSystemConfig();
+            $car = (clone $cars)->where('id', $car_id)->first();
+            if (! $car) {
+                abort(404, 'Car not found');
+            }
+
+            return view('carInvoiceEn', [
+                'car' => $car,
+                'client' => $client,
+                'config' => $config,
+            ]);
          }
 
                  // Additional logic to retrieve client data
@@ -1180,6 +1195,124 @@ class AccountingController extends Controller
         }
 
         return Response::json('ok', 200);
+    }
+
+    /**
+     * سحب من رصيد الزبون (إرجاع نقد لرصيد دائن) — عكس addPaymentCarTotal.
+     * Journal: Debit AR / Credit Cash (قاصة استلام دفعات الزبائن).
+     */
+    public function withdrawClientBalance(WithdrawClientBalanceRequest $request)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+
+        $clientId = (int) $request->validated('client_id');
+        $amount = round((float) $request->validated('amount'), 2);
+        $note = trim((string) ($request->validated('note') ?? ''));
+
+        $clientTypeId = (int) ($this->userClient ?? UserType::where('name', 'client')->value('id'));
+        $client = User::where('id', $clientId)
+            ->where('owner_id', $ownerId)
+            ->where('type_id', $clientTypeId)
+            ->first();
+
+        if (! $client) {
+            return Response::json(['message' => 'الزبون غير موجود'], 404);
+        }
+
+        // Available credit = overpayment (accounting sign: client_balance < 0).
+        $carsSum = (float) Car::where('client_id', $clientId)->sum('total_s');
+        $carsDiscount = (float) Car::where('client_id', $clientId)->sum('discount');
+        $carsDamage = (float) Car::where('client_id', $clientId)->sum('damage_compensation');
+        $paymentsSum = (float) $this->transactionsQueryForUser($client)
+            ->whereNull('deleted_at')
+            ->where('type', 'out')
+            ->where('is_pay', 1)
+            ->where('currency', '$')
+            ->sum('amount');
+        $clientBalance = round($carsSum - $carsDiscount - $carsDamage + $paymentsSum, 2);
+        $availableCredit = max(0, round(-$clientBalance, 2));
+
+        if ($availableCredit < 0.01) {
+            return Response::json(['message' => 'لا يوجد رصيد دائن للسحب'], 422);
+        }
+        if ($amount > $availableCredit + 0.009) {
+            return Response::json([
+                'message' => 'المبلغ أكبر من الرصيد المتاح ('.$availableCredit.')',
+                'available' => $availableCredit,
+            ], 422);
+        }
+
+        $vaults = app(VaultService::class);
+        try {
+            $vaults->ensureMainBoxVault($ownerId);
+            $receiptsUserId = $vaults->receiptsCashUserId($ownerId);
+        } catch (\Throwable $e) {
+            $receiptsUserId = (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
+        }
+
+        $desc = trans('text.withdrawBalance').' '.$amount.($note !== '' ? ' '.$note : '');
+
+        try {
+            $transaction = DB::transaction(function () use ($amount, $desc, $receiptsUserId, $clientId, $ownerId) {
+                $ledger = app(LedgerService::class);
+
+                // Root on receipts vault (cash out) — owns the journal.
+                $root = Transactions::create($this->transactionAttrsForUser((int) $receiptsUserId, [
+                    'type' => 'out',
+                    'description' => $desc,
+                    'amount' => $amount * -1,
+                    'is_pay' => 0,
+                    'morphed_id' => $clientId,
+                    'morphed_type' => 'App\Models\User',
+                    'user_added' => 0,
+                    'created' => $this->currentDate,
+                    'discount' => 0,
+                    'currency' => '$',
+                    'parent_id' => 0,
+                    'details' => ['client_balance_withdraw' => true],
+                ]));
+
+                $journal = $ledger->postClientRefund(
+                    $ownerId,
+                    $clientId,
+                    $amount,
+                    '$',
+                    $desc,
+                    $root,
+                    (int) $receiptsUserId
+                );
+
+                if (Schema::hasColumn('transactions', 'journal_entry_id')) {
+                    $root->forceFill(['journal_entry_id' => $journal->id])->save();
+                }
+
+                // Client trail (positive out/is_pay) — offsets deposits in payments_sum.
+                $clientTx = Transactions::create($this->transactionAttrsForUser((int) $clientId, [
+                    'type' => 'out',
+                    'description' => $desc,
+                    'amount' => $amount,
+                    'is_pay' => 1,
+                    'morphed_id' => $clientId,
+                    'morphed_type' => 'App\Models\User',
+                    'user_added' => 0,
+                    'created' => $this->currentDate,
+                    'discount' => 0,
+                    'currency' => '$',
+                    'parent_id' => $root->id,
+                    'details' => ['client_balance_withdraw' => true],
+                ]));
+
+                $ledger->syncWalletFromLedger($ownerId, (int) $receiptsUserId);
+                $ledger->syncWalletFromLedger($ownerId, $clientId);
+
+                return $clientTx;
+            });
+        } catch (\Throwable $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        }
+
+        return Response::json($transaction, 200);
     }
 
     public function AddPayFromBalanceCar (Request $request){

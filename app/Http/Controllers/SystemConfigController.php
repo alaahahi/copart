@@ -50,7 +50,7 @@ class SystemConfigController extends Controller
 
         if (! $config) {
             $config = SystemConfig::create([
-                'first_title_ar' => config('app.name'),
+                'first_title_ar' => \App\Support\Branding::name(),
                 'receipt_template' => 'default',
                 'wa_base_host' => 'https://wa.intellij-app.com',
                 'wa_source' => 'sales',

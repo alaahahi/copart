@@ -28,7 +28,7 @@ class EnsureAdmin
 
     protected function deny(Request $request, string $message, int $status): Response
     {
-        if ($request->expectsJson() || $request->is('qa/e2e/*')) {
+        if ($request->expectsJson() || $request->is('qa/e2e/*') || $request->is('ops/legacy-cutover/*')) {
             return response()->json(['message' => $message, 'result' => null], $status);
         }
 

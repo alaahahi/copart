@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="utf-8">
-    <title>{{ config('app.name') }} — {{ ($voucherType ?? 'receipt') === 'receipt' ? 'وصل قبض' : 'وصل صرف' }}</title>
+    <title>{{ \App\Support\Branding::name() }} — {{ ($voucherType ?? 'receipt') === 'receipt' ? 'وصل قبض' : 'وصل صرف' }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         @page {

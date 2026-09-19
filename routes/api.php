@@ -135,6 +135,7 @@ Route::get('addPaymentCar',[AccountingController::class, 'addPaymentCar'])->name
 
 
 Route::get('addPaymentCarTotal',[AccountingController::class, 'addPaymentCarTotal'])->name('addPaymentCarTotal');
+Route::post('withdrawClientBalance',[AccountingController::class, 'withdrawClientBalance'])->name('withdrawClientBalance');
 Route::post('DelPayFromBalanceCar',[AccountingController::class, 'DelPayFromBalanceCar'])->name('DelPayFromBalanceCar');
 Route::post('AddPayFromBalanceCar',[AccountingController::class, 'AddPayFromBalanceCar'])->name('AddPayFromBalanceCar');
 Route::post('ReturnCarAllocation',[AccountingController::class, 'ReturnCarAllocation'])->name('ReturnCarAllocation');

@@ -9,15 +9,16 @@ import { useI18n } from "vue-i18n";
 import DarkModeToggle from "@/Components/DarkToggle.vue";
 import IntelliJCredit from "@/Components/IntelliJCredit.vue";
 import { resolvePublicAsset } from "@/utils/resolvePublicAsset";
+import { useBranding } from "@/composables/useBranding";
 
 const showingNavigationDropdown = ref(false);
 const page = usePage();
 const i18n = useI18n();
 
+const { appName: brandName, tagline: brandTagline, logo: brandingLogoPath } = useBranding();
+
 const user = computed(() => page.props.value.auth?.user ?? {});
-const brandingLogo = computed(() =>
-  resolvePublicAsset(page.props.value.branding?.logo || "")
-);
+const brandingLogo = computed(() => resolvePublicAsset(brandingLogoPath.value));
 const brandingLogoBroken = ref(false);
 
 watch(brandingLogo, () => {
@@ -56,6 +57,13 @@ const moreItems = computed(() => [
   { key: "treasury", label: "CompanyTreasury", href: route("company_treasury"), active: route().current("company_treasury"), show: true },
   { key: "ledger", label: "Ledger", href: route("ledger"), active: route().current("ledger"), show: hasRole(1, 6) },
   { key: "sync", label: "SyncMonitor", href: route("sync-monitor"), active: route().current("sync-monitor"), show: true },
+  {
+    key: "legacy-cutover",
+    label: "قطع MySQL→SQLite",
+    href: "/ops/legacy-cutover",
+    active: typeof window !== "undefined" && window.location.pathname.includes("/ops/legacy-cutover"),
+    show: hasRole(1),
+  },
 ]);
 
 const visiblePrimaryItems = computed(() => primaryItems.value.filter((item) => item.show));
@@ -77,16 +85,19 @@ const moreMenuActive = computed(() => visibleMoreItems.value.some((item) => item
                 <img
                   v-if="brandingLogo && !brandingLogoBroken"
                   :src="brandingLogo"
-                  alt=""
+                  :alt="brandName"
                   class="h-12 w-12 shrink-0 rounded-xl object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                   @error="onBrandingLogoError"
                 />
                 <div class="flex flex-col leading-tight">
                   <span class="text-sm font-bold text-slate-900 dark:text-white">
-                    {{ $page.props.appName }}
+                    {{ brandName }}
                   </span>
-                  <span class="text-xs text-slate-500 dark:text-slate-400">
-                    Shipping ERP
+                  <span
+                    v-if="brandTagline"
+                    class="text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    {{ brandTagline }}
                   </span>
                 </div>
               </Link>

@@ -913,6 +913,45 @@ class LedgerService
     }
 
     /**
+     * Client refund / withdraw credit: reverse of {@see postClientPayment}.
+     * Debit AR / Credit Cash (return overpayment cash to the client).
+     */
+    public function postClientRefund(
+        int $ownerId,
+        int $clientId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null,
+        ?int $cashUserId = null
+    ): JournalEntry {
+        $amount = abs($amount);
+        if ($amount < 0.005) {
+            throw new InvalidArgumentException('مبلغ السحب يجب أن يكون أكبر من صفر.');
+        }
+
+        $cash = $cashUserId
+            ? $this->walletLedgerAccount($ownerId, $cashUserId, $currency)
+            : $this->cashAccount($ownerId, $currency);
+        $ar = $this->clientReceivableAccount($ownerId, $clientId);
+
+        $lines = [
+            ['account_id' => $ar->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $cash->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ];
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'wallet',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], $lines);
+    }
+
+    /**
      * Damage compensation (تعويض ضرر) — AR write-off without cash, same COA pattern as payment discount:
      * delta > 0 → Dr expense 5100 / Cr AR (reduce client debt)
      * delta < 0 → reverse (restore debt)

@@ -31,6 +31,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Product Tagline
+    |--------------------------------------------------------------------------
+    |
+    | Secondary line shown under the brand name in the navbar / login screen.
+    | Override with APP_PRODUCT_TAGLINE.
+    |
+    */
+
+    'product_tagline' => env('APP_PRODUCT_TAGLINE', 'Shipping ERP'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

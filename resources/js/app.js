@@ -9,7 +9,7 @@ import { createI18n } from 'vue-i18n';
 import Toast from "vue-toastification";
 import "vue-toastification/dist/index.css";
 
-const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
+const appName = window.document.getElementsByTagName('title')[0]?.innerText || '';
 import en from './lang/en.json';
 import ar from './lang/ar.json';
 import kr from './lang/kr.json';
@@ -26,7 +26,7 @@ const i18n = createI18n({
 });
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (appName ? `${title} - ${appName}` : title),
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
     setup({ el, app, props, plugin }) {
         return createApp({ render: () => h(app, props) })

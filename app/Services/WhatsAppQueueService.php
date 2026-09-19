@@ -186,7 +186,7 @@ class WhatsAppQueueService
 
     public function notifyDebt(User $client, ?float $balance = null): bool
     {
-        $appName = config('app.name', 'ERP');
+        $appName = \App\Support\Branding::name() ?: 'ERP';
         $amount = $balance !== null
             ? number_format(abs($balance), 2)
             : '';

@@ -407,7 +407,23 @@ Vault::CASH_TYPES = ['cash', 'bank', 'safe']
 
 ---
 
-## 11. ملخص جملة واحدة للمراجع
+## 11. قطع من MySQL/wallets إلى SQLite + ميزان المراجعة
+
+لاستيراد دمب MariaDB/MySQL قديم (فيه `wallets` بلا `journal_entries`):
+
+1. من الواجهة (أدمن): `/ops/legacy-cutover` — أزرار استيراد / dry-run / تنفيذ / integrity مع بطاقات قياس.
+2. أو CLI: `php artisan db:import-mysql-dump "C:\path\dump.sql" --force --migrate`  
+   يحوّل إلى `database/database_mazad.sqlite`، يلتقط `legacy_cutover_wallets`، يصفّر سجل `migrations`، ثم يشغّل ترحيلات المشروع.
+3. وجّه `.env` إلى الملف الجديد (`DB_CONNECTION=sqlite`, `DB_DATABASE=.../database_mazad.sqlite`) و`config:clear` للتشغيل الدائم.
+4. `php artisan ledger:cutover-from-legacy --dry-run` ثم `--execute`  
+   ينشئ حسابات الزبائن (`1200`/`1210`/`1220`)، يزامن القاصات، ويرحّل أرصدة ختامية كقيود `source=legacy_cutover` مقابل `3900`.
+5. تحقق: `php artisan accounting:integrity` + ميزان المراجعة (مدين = دائن لكل عملة).
+
+**لا** يُعاد تمثيل كل صف في `transactions` كقيد تاريخي. الأمر idempotent عبر `reference_type`/`reference_id`.
+
+---
+
+## 12. ملخص جملة واحدة للمراجع
 
 **مصدر الحقيقة = قيود مزدوجة على `ledger_accounts`؛ القاصات صناديق نقد مربوطة بـ COA (`1100`/`1110` أو `11V-*`)؛ ذمم العملاء `1200-*`؛ المصروف من حساب مصروف وليس من التحويل؛ جدول Wallet ملغى والباقي أسماء/مرآة تشغيلية في `transactions`.**
 

@@ -14,5 +14,5 @@
         ?? \App\Helpers\Help::publicAssetUrl('/img/logo.jpg');
 @endphp
 @if($logoSrc)
-    <img src="{{ $logoSrc }}" alt="{{ config('app.name') }}" style="max-height:70px;max-width:140px;object-fit:contain;" />
+    <img src="{{ $logoSrc }}" alt="{{ \App\Support\Branding::name() }}" style="max-height:70px;max-width:140px;object-fit:contain;" />
 @endif
