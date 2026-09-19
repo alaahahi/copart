@@ -29,6 +29,10 @@ createInertiaApp({
     title: (title) => (appName ? `${title} - ${appName}` : title),
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
     setup({ el, app, props, plugin }) {
+        const prefix = props.initialPage?.props?.publicAssetPrefix;
+        if (prefix === "" || prefix === "/public") {
+            window.__PUBLIC_ASSET_PREFIX__ = prefix;
+        }
         return createApp({ render: () => h(app, props) })
             .use(plugin)
             .use(i18n)

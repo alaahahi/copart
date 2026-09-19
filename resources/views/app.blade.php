@@ -10,6 +10,7 @@
 <script nomodule src="https://cdn.jsdelivr.net/npm/@duetds/date-picker@1.3.0/dist/duet/duet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@revolist/revo-dropdown@latest/dist/revo-dropdown/revo-dropdown.js"></script>
         @routes
+        <script>window.__PUBLIC_ASSET_PREFIX__ = @json(\App\Helpers\Help::publicWebPrefix());</script>
         @vite('resources/js/app.js')
         @inertiaHead
         <style>

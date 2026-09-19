@@ -47,6 +47,7 @@ class HandleInertiaRequests extends Middleware
             'appName' => $branding['appName'],
             'productName' => Branding::name(),
             'productTagline' => $branding['tagline'],
+            'publicAssetPrefix' => \App\Helpers\Help::publicWebPrefix(),
             'branding' => [
                 'logo' => $branding['logo'],
                 'cover' => $branding['cover'],
