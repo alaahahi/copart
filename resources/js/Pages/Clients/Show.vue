@@ -1346,7 +1346,7 @@ function checkClientBalance(_v) {
                   <print />
                 </a>
                 <button
-                  v-if="hasUndistributedBalance"
+                  v-if="hasUndistributedBalance && carRemaining(car) > 0"
                   type="button"
                   class="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-emerald-700"
                   @click="openModalAddPayFromBalanceCar(car)"
@@ -1450,10 +1450,10 @@ function checkClientBalance(_v) {
                         v-if="carAllocations(car).length"
                         type="button"
                         class="mt-0.5 text-[10px] font-semibold text-sky-700 underline dark:text-sky-300 print:hidden"
+                        :title="$t('paid_from_sources')"
                         @click="toggleAllocations(car.id)"
                       >
-                        {{ $t("paid_from_sources") }}
-                        ({{ carAllocations(car).length }})
+                        ? ({{ carAllocations(car).length }})
                       </button>
                       <ul
                         v-if="isAllocationsOpen(car.id) && carAllocations(car).length"
@@ -1533,7 +1533,7 @@ function checkClientBalance(_v) {
                         tabindex="1"
                         style="min-width: 100px"
                         class="mx-0.5 rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-                        v-if="hasUndistributedBalance"
+                        v-if="hasUndistributedBalance && carRemaining(car) > 0"
                         @click="openModalAddPayFromBalanceCar(car)"
                       >
                         {{ $t("pay_from_balance") }}
