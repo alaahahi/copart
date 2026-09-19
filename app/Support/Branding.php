@@ -26,8 +26,10 @@ class Branding
     public static function resolveName(string $configuredTitle): string
     {
         $title = trim($configuredTitle);
+        $appName = trim((string) config('app.name', ''));
+        $placeholders = array_filter(['', 'Laravel', $appName]);
 
-        if ($title === '' || $title === trim((string) config('app.name', ''))) {
+        if ($title === '' || in_array($title, $placeholders, true)) {
             return static::name();
         }
 
