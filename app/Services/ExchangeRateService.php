@@ -150,8 +150,124 @@ class ExchangeRateService
             'usd_to_iqd_buy' => $buy,
             'cad_quote_sell' => $cadSell,
             'cad_quote_buy' => $cadBuy,
+            'usd_to_cad_mid' => null,
+            'cad_mid_source' => null,
+            'cad_mid_source_url' => null,
             'updated_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Mid-market USD→CAD (xe.com first, Frankfurter fallback). Does not fail IQD fetch.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    protected function mergeCadMidMarket(array $payload): array
+    {
+        try {
+            $mid = $this->fetchXeUsdToCad();
+            $payload['usd_to_cad_mid'] = $mid;
+            $payload['cad_mid_source'] = self::XE_SOURCE_NAME;
+            $payload['cad_mid_source_url'] = self::XE_USD_CAD_URL;
+
+            return $payload;
+        } catch (\Throwable $e) {
+            Log::warning('ExchangeRateService: xe.com USD/CAD failed, trying fallback', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            $mid = $this->fetchFrankfurterUsdToCad();
+            $payload['usd_to_cad_mid'] = $mid;
+            $payload['cad_mid_source'] = 'frankfurter.app';
+            $payload['cad_mid_source_url'] = self::XE_USD_CAD_URL;
+
+            return $payload;
+        } catch (\Throwable $e) {
+            Log::warning('ExchangeRateService: USD/CAD mid-market unavailable', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return $payload;
+    }
+
+    protected function fetchXeUsdToCad(): float
+    {
+        $response = Http::timeout(10)
+            ->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (compatible; CopartERP-Dashboard/1.0)',
+                'Accept' => 'text/html,application/xhtml+xml',
+            ])
+            ->get(self::XE_USD_CAD_URL);
+
+        if (! $response->successful()) {
+            throw new \RuntimeException('xe.com HTTP '.$response->status());
+        }
+
+        $rate = $this->parseXeUsdCadRate((string) $response->body());
+        if ($rate === null) {
+            throw new \RuntimeException('xe.com USD/CAD rate not found');
+        }
+
+        return $rate;
+    }
+
+    /**
+     * Parse xe.com converter HTML / markdown-ish body for 1 USD = X CAD.
+     */
+    public function parseXeUsdCadRate(string $html): ?float
+    {
+        $patterns = [
+            '/1(?:\.00)?\s*USD\s*=\s*([\d.\s]+)\s*CAD/i',
+            '/1\s*USD\s+equals\s+([\d.\s]+)\s*CAD/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $html, $match)) {
+                $rate = $this->parseRateNumber(preg_replace('/\s+/', '', $match[1]) ?? '');
+                if ($rate !== null && $this->isPlausibleUsdCad($rate)) {
+                    return round($rate, 6);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public function convertCadToUsd(float $cadAmount, float $usdToCadMid): float
+    {
+        if ($usdToCadMid <= 0) {
+            return 0.0;
+        }
+
+        return round($cadAmount / $usdToCadMid, 2);
+    }
+
+    protected function isPlausibleUsdCad(float $rate): bool
+    {
+        return $rate >= 1.05 && $rate <= 1.80;
+    }
+
+    protected function fetchFrankfurterUsdToCad(): float
+    {
+        $response = Http::timeout(8)
+            ->acceptJson()
+            ->get(self::FRANKFURTER_USD_CAD_URL);
+
+        if (! $response->successful()) {
+            throw new \RuntimeException('Frankfurter HTTP '.$response->status());
+        }
+
+        $cad = $response->json('rates.CAD');
+        $rate = is_numeric($cad) ? (float) $cad : null;
+        if ($rate === null || ! $this->isPlausibleUsdCad($rate)) {
+            throw new \RuntimeException('Frankfurter USD/CAD missing or out of range');
+        }
+
+        return round($rate, 6);
     }
 
     /**
@@ -223,6 +339,9 @@ class ExchangeRateService
      *   usd_to_iqd_buy: float,
      *   cad_quote_sell?: float|null,
      *   cad_quote_buy?: float|null,
+     *   usd_to_cad_mid?: float|null,
+     *   cad_mid_source?: string|null,
+     *   cad_mid_source_url?: string|null,
      *   updated_at?: string
      * }  $payload
      * @return array<string, mixed>
@@ -239,7 +358,7 @@ class ExchangeRateService
             ? (float) $payload['cad_quote_buy']
             : null;
 
-        $cadAvailable = $cadQuoteSell !== null && $cadQuoteBuy !== null
+        $boardCadAvailable = $cadQuoteSell !== null && $cadQuoteBuy !== null
             && $cadQuoteSell > 0 && $cadQuoteBuy > 0;
 
         $cadToUsdSell = null;
@@ -247,7 +366,7 @@ class ExchangeRateService
         $usdToCadSell = null;
         $usdToCadBuy = null;
 
-        if ($cadAvailable) {
+        if ($boardCadAvailable) {
             // Board: CAD quote = USD per 100 CAD → USD per 1 CAD / CAD per 1 USD.
             $cadToUsdSell = round($cadQuoteSell / 100, 4);
             $cadToUsdBuy = round($cadQuoteBuy / 100, 4);
@@ -255,18 +374,36 @@ class ExchangeRateService
             $usdToCadBuy = $cadQuoteBuy > 0 ? round(100 / $cadQuoteBuy, 4) : null;
         }
 
+        $usdToCadMid = isset($payload['usd_to_cad_mid']) && is_numeric($payload['usd_to_cad_mid'])
+            ? (float) $payload['usd_to_cad_mid']
+            : null;
+        if ($usdToCadMid !== null && ! $this->isPlausibleUsdCad($usdToCadMid)) {
+            $usdToCadMid = null;
+        }
+        $cadToUsdMid = $usdToCadMid !== null && $usdToCadMid > 0
+            ? round(1 / $usdToCadMid, 6)
+            : null;
+        $cadMidAvailable = $usdToCadMid !== null && $usdToCadMid > 0;
+        $cadAvailable = $cadMidAvailable || $boardCadAvailable;
+
         return [
             'usd_to_iqd_sell' => $sell,
             'usd_to_iqd_buy' => $buy,
             // Reverse: how many USD for 1,000,000 IQD (readable for market rates ~150k).
             'iqd_to_usd_sell' => $sell > 0 ? round(1_000_000 / $sell, 4) : null,
             'iqd_to_usd_buy' => $buy > 0 ? round(1_000_000 / $buy, 4) : null,
-            'cad_quote_sell' => $cadAvailable ? $cadQuoteSell : null,
-            'cad_quote_buy' => $cadAvailable ? $cadQuoteBuy : null,
+            'cad_quote_sell' => $boardCadAvailable ? $cadQuoteSell : null,
+            'cad_quote_buy' => $boardCadAvailable ? $cadQuoteBuy : null,
             'cad_to_usd_sell' => $cadToUsdSell,
             'cad_to_usd_buy' => $cadToUsdBuy,
             'usd_to_cad_sell' => $usdToCadSell,
             'usd_to_cad_buy' => $usdToCadBuy,
+            'usd_to_cad_mid' => $cadMidAvailable ? round($usdToCadMid, 6) : null,
+            'cad_to_usd_mid' => $cadToUsdMid,
+            'cad_mid_source' => $cadMidAvailable ? (string) ($payload['cad_mid_source'] ?? self::XE_SOURCE_NAME) : null,
+            'cad_mid_source_url' => $cadMidAvailable
+                ? (string) ($payload['cad_mid_source_url'] ?? self::XE_USD_CAD_URL)
+                : null,
             'cad_available' => $cadAvailable,
             'cad_note' => $cadAvailable ? null : 'CAD rate unavailable from source',
             'source' => self::SOURCE_NAME,
@@ -293,6 +430,10 @@ class ExchangeRateService
             'cad_to_usd_buy' => null,
             'usd_to_cad_sell' => null,
             'usd_to_cad_buy' => null,
+            'usd_to_cad_mid' => null,
+            'cad_to_usd_mid' => null,
+            'cad_mid_source' => null,
+            'cad_mid_source_url' => null,
             'cad_available' => false,
             'cad_note' => 'CAD rate unavailable from source',
             'source' => self::SOURCE_NAME,

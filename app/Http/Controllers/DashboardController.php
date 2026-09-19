@@ -235,7 +235,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Cached USD↔IQD and CAD↔USD exchange rates for the dashboard card (Qamar Al Fajr HTML scrape, TTL 1h).
+     * Cached USD↔IQD (Qamar) and USD→CAD mid-market (xe.com, TTL 1h) for the dashboard card.
      */
     public function exchangeRates(ExchangeRateService $rates)
     {

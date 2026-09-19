@@ -7,6 +7,7 @@ import { useI18n } from "vue-i18n";
 import { Head, Link, usePage } from "@inertiajs/inertia-vue3";
 import { debounce } from 'lodash';
 import SearchInput from "@/Components/SearchInput.vue";
+import DashboardCadConverter from "@/Components/DashboardCadConverter.vue";
 import { formatMoney } from "@/utils/formatMoney";
 
 const auth = defineProps(['auth']);
@@ -88,9 +89,12 @@ const fxCadSell = ref(null);
 const fxCadBuy = ref(null);
 const fxCadAvailable = ref(false);
 const fxCadNote = ref('');
+const fxUsdToCadMid = ref(null);
+const fxCadMidSource = ref('');
+const fxCadMidSourceUrl = ref('https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=CAD');
 const fxSource = ref('');
 const fxUpdatedAt = ref(null);
-const FX_LS_KEY = 'dashboard-exchange-rates-cache-v3';
+const FX_LS_KEY = 'dashboard-exchange-rates-cache-v4';
 const FX_TTL_MS = 60 * 60 * 1000;
 
 /** dawn | day | sunset | night — local browser hour */
@@ -160,6 +164,11 @@ const fxHasCadRates = computed(
     formatFxCadUsd(fxCadSell.value) !== null &&
     formatFxCadUsd(fxCadBuy.value) !== null
 );
+
+const fxHasCadMid = computed(() => {
+  const n = Number(fxUsdToCadMid.value);
+  return Number.isFinite(n) && n > 0;
+});
 
 const clockTime = computed(() =>
   new Intl.DateTimeFormat('ar-IQ', {
@@ -343,6 +352,9 @@ function writeFxLocalCache(data) {
         usd_to_iqd_buy: data?.usd_to_iqd_buy ?? null,
         cad_to_usd_sell: data?.cad_to_usd_sell ?? null,
         cad_to_usd_buy: data?.cad_to_usd_buy ?? null,
+        usd_to_cad_mid: data?.usd_to_cad_mid ?? null,
+        cad_mid_source: data?.cad_mid_source || '',
+        cad_mid_source_url: data?.cad_mid_source_url || '',
         cad_available: data?.cad_available ?? false,
         cad_note: data?.cad_note || '',
         source: data?.source || '',
@@ -376,6 +388,13 @@ function applyFxData(data) {
   fxCadSell.value = cadOk ? cadSell : null;
   fxCadBuy.value = cadOk ? cadBuy : null;
   fxCadNote.value = cadOk ? '' : data.cad_note || '';
+
+  const mid = data.usd_to_cad_mid != null ? Number(data.usd_to_cad_mid) : null;
+  fxUsdToCadMid.value = mid != null && !Number.isNaN(mid) && mid > 0 ? mid : null;
+  fxCadMidSource.value = data.cad_mid_source || '';
+  fxCadMidSourceUrl.value =
+    data.cad_mid_source_url ||
+    'https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=CAD';
 
   fxSource.value = data.source || '';
   fxUpdatedAt.value = data.updated_at || null;
@@ -936,7 +955,7 @@ function directionClass(direction) {
                     {{ $t('dashboard_exchange_rate') }}
                   </p>
                   <p class="mt-0.5 text-[11px] font-medium text-emerald-300/90">
-                    {{ $t('dashboard_exchange_usd_to_iqd') }} · {{ $t('dashboard_exchange_cad_to_usd') }}
+                    {{ $t('dashboard_exchange_usd_to_iqd') }} · {{ $t('dashboard_exchange_usd_to_cad') }}
                   </p>
                 </div>
                 <div
@@ -1015,10 +1034,16 @@ function directionClass(direction) {
                         </svg>
                       </span>
                       <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-300">
-                        {{ $t('dashboard_exchange_canada') }} · {{ $t('dashboard_exchange_cad_to_usd') }}
+                        {{ $t('dashboard_exchange_canada') }} · {{ $t('dashboard_exchange_usd_to_cad') }}
                       </p>
                     </div>
-                    <template v-if="fxHasCadRates">
+                    <DashboardCadConverter
+                      v-if="fxHasCadMid"
+                      :usd-to-cad="fxUsdToCadMid"
+                      :source="fxCadMidSource || 'xe.com'"
+                      :source-url="fxCadMidSourceUrl"
+                    />
+                    <template v-else-if="fxHasCadRates">
                       <div class="mt-2 grid grid-cols-2 gap-2">
                         <div>
                           <p class="text-[11px] text-slate-200">
