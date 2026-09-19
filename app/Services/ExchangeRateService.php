@@ -243,7 +243,7 @@ class ExchangeRateService
             return 0.0;
         }
 
-        return round($cadAmount / $usdToCadMid, 2);
+        return (float) round($cadAmount / $usdToCadMid);
     }
 
     protected function isPlausibleUsdCad(float $rate): bool
