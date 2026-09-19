@@ -1,5 +1,7 @@
 <script setup>
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import { useToast } from "vue-toastification";
 
 const props = defineProps({
   usdToCad: { type: Number, default: null },
@@ -10,6 +12,8 @@ const props = defineProps({
   },
 });
 
+const { t } = useI18n();
+const toast = useToast();
 const cadAmount = ref("");
 
 const hasRate = computed(() => {
@@ -26,14 +30,50 @@ const formatMid = (value, digits = 5) => {
   }).format(n);
 };
 
+const formatUsdRounded = (value) =>
+  new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+
 const usdFromCad = computed(() => {
   const cad = Number(cadAmount.value);
   const mid = Number(props.usdToCad);
   if (!Number.isFinite(cad) || cad <= 0 || !Number.isFinite(mid) || mid <= 0) {
     return null;
   }
-  return cad / mid;
+  return Math.round(cad / mid);
 });
+
+const copyUsdResult = async () => {
+  if (usdFromCad.value == null) return;
+  const text = String(usdFromCad.value);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success(t("dashboard_exchange_copied"), {
+      timeout: 2500,
+      position: "bottom-right",
+      rtl: true,
+    });
+  } catch (e) {
+    toast.error(t("dashboard_exchange_copy_failed"), {
+      timeout: 3000,
+      position: "bottom-right",
+      rtl: true,
+    });
+  }
+};
 </script>
 
 <template>
@@ -66,13 +106,27 @@ const usdFromCad = computed(() => {
           <p class="mb-1 text-[11px] font-semibold text-slate-200">
             {{ $t("dashboard_exchange_usd_result") }}
           </p>
-          <p
-            class="flex min-h-[42px] items-center rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm font-bold tabular-nums text-emerald-300"
+          <div
+            class="flex min-h-[42px] items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2"
             dir="ltr"
           >
-            <template v-if="usdFromCad != null">{{ formatMid(usdFromCad, 2) }} USD</template>
-            <template v-else>—</template>
-          </p>
+            <p class="font-mono text-sm font-bold tabular-nums text-emerald-300">
+              <template v-if="usdFromCad != null">{{ formatUsdRounded(usdFromCad) }} USD</template>
+              <template v-else>—</template>
+            </p>
+            <button
+              v-if="usdFromCad != null"
+              type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-800 hover:text-white"
+              :title="$t('dashboard_exchange_copy_usd')"
+              :aria-label="$t('dashboard_exchange_copy_usd')"
+              @click="copyUsdResult"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </template>

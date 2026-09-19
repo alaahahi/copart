@@ -26,17 +26,24 @@
         : '—';
 
     $titleAr = $isReceipt ? 'وصل قبض' : 'وصل صرف';
-    $titleEn = $isReceipt ? 'Cash Receipt Voucher' : 'Payment Voucher';
+    $titleEn = $isReceipt ? 'Receipt Voucher' : 'Payment Voucher';
     $partyAr = $isReceipt ? 'استلمت من' : 'دفعت إلى';
     $partyEn = $isReceipt ? 'Received from' : 'Paid to';
+    $currencyMark = in_array($currency, ['IQD', 'iqd'], true) ? 'د.ع' : '$';
+    $copyLabel = $copyLabel ?? 'الأصل';
+    $sheetClass = $isReceipt ? 'rv-sheet rv-sheet--receipt' : 'rv-sheet rv-sheet--payment';
 @endphp
-<section class="rv-sheet">
+<section class="{{ $sheetClass }}">
+    <div class="rv-bar" aria-hidden="true"></div>
+    <div class="rv-mark" aria-hidden="true">{{ $titleAr }}</div>
+
     <header class="rv-head">
         <div class="rv-brand">
             <div class="rv-brand-name">{{ $brandName }}</div>
             @if($subtitle !== '')
                 <div class="rv-brand-sub">{{ $subtitle }}</div>
             @endif
+            <span class="rv-copy">{{ $copyLabel }}</span>
         </div>
         <div class="rv-title">
             <div class="rv-title-ar">{{ $titleAr }}</div>
@@ -48,8 +55,14 @@
     </header>
 
     <div class="rv-meta">
-        <div><span>الرقم</span> <strong>{{ $transactions_id ?? '—' }}</strong></div>
-        <div><span>التاريخ</span> <strong dir="ltr">{{ $createdDisplay }}</strong></div>
+        <div class="rv-meta-card">
+            <span>الرقم / No.</span>
+            <strong>{{ $transactions_id ?? '—' }}</strong>
+        </div>
+        <div class="rv-meta-card">
+            <span>التاريخ / Date</span>
+            <strong dir="ltr">{{ $createdDisplay }}</strong>
+        </div>
     </div>
 
     <div class="rv-fields">
@@ -62,7 +75,7 @@
             <span class="rv-value">{{ $clientName }}</span>
         </div>
         <div class="rv-row">
-            <span class="rv-label">مبلغ قدره / Amount in words</span>
+            <span class="rv-label">مبلغ قدره / In words</span>
             <span class="rv-value" dir="rtl"><bdi>{{ $amountWords }}</bdi></span>
         </div>
         <div class="rv-row">
@@ -73,7 +86,7 @@
                     <span class="rv-chip">LOT: {{ $lotNumber }}</span>
                 @endif
                 @if(!empty($isCarPayment) && filled($restAmount ?? null))
-                    <span class="rv-chip">المتبقي: {{ $restAmount }} {{ $currency }}</span>
+                    <span class="rv-chip">المتبقي: {{ $restAmount }} {{ $currencyMark }}</span>
                 @endif
             </span>
         </div>
@@ -81,13 +94,19 @@
 
     <div class="rv-bottom">
         <div class="rv-amount">
-            <span>المبلغ</span>
-            <strong dir="ltr">{{ $amountText }}</strong>
-            <em>{{ $currency }}</em>
+            <span>المبلغ / AMOUNT</span>
+            <div class="rv-amount-num" dir="ltr">
+                <em>{{ $currencyMark }}</em>
+                <strong>{{ $amountText }}</strong>
+            </div>
         </div>
         <div class="rv-sign">
             <div class="rv-sign-line"></div>
-            <div>اسم وتوقيع المستلم</div>
+            <div>المستلم / Received</div>
+        </div>
+        <div class="rv-sign">
+            <div class="rv-sign-line"></div>
+            <div>المحاسب / Accountant</div>
         </div>
     </div>
 

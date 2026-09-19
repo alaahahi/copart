@@ -26,9 +26,9 @@
 </head>
 <body>
 <div class="rv-page">
-    @include('Components.receiptDefaultCopy', ['voucherKind' => 'payment'])
-    <div class="rv-cut" aria-hidden="true"></div>
-    @include('Components.receiptDefaultCopy', ['voucherKind' => 'payment'])
+    @include('Components.receiptDefaultCopy', ['voucherKind' => 'payment', 'copyLabel' => 'الأصل'])
+    <div class="rv-cut" aria-hidden="true">قص من هنا</div>
+    @include('Components.receiptDefaultCopy', ['voucherKind' => 'payment', 'copyLabel' => 'النسخة'])
 </div>
 <script>window.addEventListener('load', function () { window.print(); });</script>
 </body>
