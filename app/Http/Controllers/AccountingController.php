@@ -2109,7 +2109,13 @@ class AccountingController extends Controller
             return null;
         }
 
-        return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user) {
+        $ledger = app(LedgerService::class);
+        $kind = $ledger->walletPostingKind((int) $ownerId, (int) $user_id);
+        if (app(\App\Services\CarService::class)->shouldSkipCashBoxOutForCarMorph($kind, $morphed_type)) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($amount, $desc, $user_id, $morphed_id, $morphed_type, $is_pay, $discount, $currency, $created, $parent_id, $type, $details, $ownerId, $user, $ledger) {
             $transactionDetils = $this->transactionAttrsForUser((int) $user_id, [
                 'type' => $type,
                 'description'=>$desc,
@@ -2130,7 +2136,6 @@ class AccountingController extends Controller
                 return $transaction;
             }
 
-            $ledger = app(LedgerService::class);
             $journal = $ledger->postWalletDecrease(
                 (int) $ownerId,
                 (int) $user_id,

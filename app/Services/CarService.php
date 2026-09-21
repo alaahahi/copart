@@ -175,6 +175,28 @@ class CarService
     }
 
     /**
+     * Paying/recording car purchase cost must not credit الصندوق.
+     * Client AR payments (wallet kind client) still post normally.
+     */
+    public function shouldSkipCashBoxOutForCarMorph(string $walletKind, $morphedType): bool
+    {
+        if ($this->shouldPostPurchaseCash()) {
+            return false;
+        }
+        if ($walletKind !== 'cash_box') {
+            return false;
+        }
+        $morph = (string) $morphedType;
+
+        return $morph !== '' && (
+            $morph === Car::class
+            || $morph === 'App\\Models\\Car'
+            || $morph === 'App\Models\Car'
+            || str_ends_with($morph, '\\Car')
+        );
+    }
+
+    /**
      * Void non-payment journals tied to this car (purchase cost, expense
      * adjustments, unpaid AR recognition). Client cash payments (is_pay=1)
      * stay — delete is already blocked when paid > 0.

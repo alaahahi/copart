@@ -71,4 +71,11 @@ class CarSaleDebtSplitTest extends TestCase
     {
         $this->assertFalse($this->cars->shouldPostPurchaseCash());
     }
+
+    public function test_cash_box_outflow_for_car_morph_is_skipped(): void
+    {
+        $this->assertTrue($this->cars->shouldSkipCashBoxOutForCarMorph('cash_box', 'App\\Models\\Car'));
+        $this->assertFalse($this->cars->shouldSkipCashBoxOutForCarMorph('client', 'App\\Models\\Car'));
+        $this->assertFalse($this->cars->shouldSkipCashBoxOutForCarMorph('cash_box', 'App\\Models\\User'));
+    }
 }

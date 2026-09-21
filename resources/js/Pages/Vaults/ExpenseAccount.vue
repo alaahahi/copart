@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/inertia-vue3';
 import ModalExpenseDisburse from '@/Components/ModalExpenseDisburse.vue';
 import ModalDelClient from '@/Components/ModalDelCar.vue';
 import print from '@/Components/icon/print.vue';
+import trash from '@/Components/icon/trash.vue';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import { formatMoney } from '@/utils/formatMoney';
@@ -23,12 +24,20 @@ const showCashModal = ref(false);
 const cashModalMode = ref('disburse');
 const cashModalRef = ref(null);
 const showDeleteModal = ref(false);
+const showDeleteRowModal = ref(false);
+const rowToDelete = ref(null);
 const deleting = ref(false);
+const deletingRow = ref(false);
 const flash = ref('');
 
-const canDisburse = computed(() => account.value?.can_disburse !== false);
-const canReceive = computed(() => account.value?.can_receive !== false);
+const canDisburse = computed(() => account.value?.can_disburse === true);
+const canReceive = computed(() => account.value?.can_receive === true);
 const canDelete = computed(() => !!account.value?.can_delete);
+const isCarPurchases = computed(() => {
+  const code = String(account.value?.code || '');
+  const name = String(account.value?.name_ar || account.value?.name || '');
+  return code === '5110' || name.includes('مشتريات سيارات');
+});
 const typeLabel = computed(() => (account.value?.type === 'income' ? 'إيراد' : 'مصروف'));
 const pageTitle = computed(() => `${typeLabel.value} — ${account.value?.name || ''}`);
 
@@ -55,8 +64,6 @@ async function loadLedger() {
         ...account.value,
         ...data.account,
         name: data.account.name || account.value.name,
-        can_disburse: true,
-        can_receive: true,
       };
     }
     const list = await axios.get('/api/ledgerExpenseAccounts', {
@@ -116,6 +123,33 @@ async function confirmCashMove(payload) {
     console.error(error);
   } finally {
     cashModalRef.value?.setSaving?.(false);
+  }
+}
+
+function openDeleteRow(row) {
+  rowToDelete.value = row;
+  showDeleteRowModal.value = true;
+}
+
+async function confirmDeleteRow() {
+  if (!rowToDelete.value?.journal_entry_id || deletingRow.value) return;
+  deletingRow.value = true;
+  loadError.value = '';
+  try {
+    const { data } = await axios.post('/api/ledgerExpenseMovementDelete', {
+      journal_entry_id: rowToDelete.value.journal_entry_id,
+      ledger_account_id: account.value.id,
+    });
+    showDeleteRowModal.value = false;
+    rowToDelete.value = null;
+    flash.value = data.message || 'تم حذف الحركة';
+    await loadLedger();
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || 'تعذر حذف الحركة';
+    showDeleteRowModal.value = false;
+    console.error(error);
+  } finally {
+    deletingRow.value = false;
   }
 }
 
@@ -198,6 +232,23 @@ function rowVoucherTitle(row) {
       </template>
     </ModalDelClient>
 
+    <ModalDelClient
+      :show="showDeleteRowModal"
+      :formData="rowToDelete || {}"
+      @a="confirmDeleteRow"
+      @close="showDeleteRowModal = false"
+    >
+      <template #header>
+        <h2 class="mb-5 text-center text-white">
+          هل متأكد من حذف هذه الحركة؟
+        </h2>
+        <p class="mb-2 text-center text-sm text-slate-200">
+          سيُلغى القيد كاملاً ({{ rowToDelete?.voucher_no || '—' }})
+          ولن يؤثر على الصندوق.
+        </p>
+      </template>
+    </ModalDelClient>
+
     <div class="exp-page py-4 sm:py-6">
       <div class="exp-shell mx-auto w-full px-3 sm:px-5 lg:px-6">
         <div class="exp-card overflow-hidden shadow-sm sm:rounded-xl">
@@ -211,6 +262,9 @@ function rowVoucherTitle(row) {
                 </h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-300">
                   حساب في دليل الحسابات ({{ typeLabel }}) — الرصيد من قيود اليومية
+                </p>
+                <p v-if="isCarPurchases" class="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  مشتريات السيارات لا تُنزل من الصندوق، ودفع تكلفتها أيضاً لا يمس الصندوق.
                 </p>
                 <p class="exp-print-meta mt-1 hidden text-xs text-slate-600 print:block" dir="rtl">
                   العملة: {{ currencyLabel }}
@@ -303,18 +357,35 @@ function rowVoucherTitle(row) {
                     <td dir="ltr">{{ Number(row.credit) ? formatMoney(row.credit) : '—' }}</td>
                     <td class="font-semibold" dir="ltr">{{ formatMoney(row.balance) }}</td>
                     <td class="print:hidden">
-                      <a
-                        v-if="rowVoucherHref(row)"
-                        :href="rowVoucherHref(row)"
-                        target="_blank"
-                        rel="noopener"
-                        class="exp-row-print"
-                        :title="rowVoucherTitle(row)"
-                      >
-                        <print class="exp-row-print-icon" />
-                        <span>{{ row.voucher_kind === 'receipt' ? 'وصل قبض' : 'وصل صرف' }}</span>
-                      </a>
-                      <span v-else class="text-slate-400 dark:text-slate-500" title="لا توجد حركة مالية مرتبطة">—</span>
+                      <div class="exp-row-actions">
+                        <a
+                          v-if="rowVoucherHref(row)"
+                          :href="rowVoucherHref(row)"
+                          target="_blank"
+                          rel="noopener"
+                          class="exp-row-print"
+                          :title="rowVoucherTitle(row)"
+                        >
+                          <print class="exp-row-print-icon" />
+                          <span>{{ row.voucher_kind === 'receipt' ? 'وصل قبض' : 'وصل صرف' }}</span>
+                        </a>
+                        <button
+                          v-if="row.journal_entry_id && row.can_void !== false"
+                          type="button"
+                          class="exp-row-del"
+                          title="حذف الحركة"
+                          :disabled="deletingRow"
+                          @click="openDeleteRow(row)"
+                        >
+                          <trash class="exp-row-del-icon" />
+                          <span>حذف</span>
+                        </button>
+                        <span
+                          v-if="!rowVoucherHref(row) && !row.journal_entry_id"
+                          class="text-slate-400 dark:text-slate-500"
+                          title="لا توجد حركة مالية مرتبطة"
+                        >—</span>
+                      </div>
                     </td>
                   </tr>
                   <tr v-if="!loading && !rows.length">
@@ -482,6 +553,46 @@ function rowVoucherTitle(row) {
 }
 
 .exp-row-print-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.exp-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.exp-row-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 0;
+  background: #e11d48;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-height: 2rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.exp-row-del:hover:not(:disabled) {
+  background: #be123c;
+}
+
+.exp-row-del:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.exp-row-del-icon {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;

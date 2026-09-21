@@ -231,6 +231,7 @@ Route::post('ledgerAccounts/{account}/toggleAccounting',[LedgerController::class
 Route::post('ledgerExpenseDisburse',[LedgerController::class, 'disburseExpense'])->name('ledgerExpenseDisburse');
 Route::post('ledgerExpenseReceive',[LedgerController::class, 'receiveExpense'])->name('ledgerExpenseReceive');
 Route::post('ledgerExpenseAccountDelete',[LedgerController::class, 'deleteUnusedExpenseAccount'])->name('ledgerExpenseAccountDelete');
+Route::post('ledgerExpenseMovementDelete',[LedgerController::class, 'voidExpenseMovement'])->name('ledgerExpenseMovementDelete');
 Route::post('ledgerOpeningBalance',[LedgerController::class, 'storeOpeningBalance'])->name('ledgerOpeningBalance');
 Route::post('ledgerManualJournal',[LedgerController::class, 'storeManualJournal'])->name('ledgerManualJournal');
 

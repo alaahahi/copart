@@ -12,7 +12,7 @@ use App\Http\Requests\StoreOpeningBalanceRequest;
 use App\Http\Requests\ToggleLedgerAccountAccountingRequest;
 use App\Http\Requests\UpdateLedgerAccountRequest;
 use App\Http\Requests\UpdatePurchasesVaultRequest;
-use App\Http\Requests\UpdateReceiptsVaultRequest;
+use App\Http\Requests\VoidLedgerAccountMovementRequest;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\LedgerAccount;
@@ -70,6 +70,8 @@ class LedgerController extends Controller
         $ledger->resolveCarPurchasesExpenseAccount($ownerId);
         $account->refresh();
 
+        $allowsCash = $ledger->expenseAccountAllowsCashMovement($account);
+
         $cashVaults = app(VaultService::class)->systemQasaClientRows($ownerId)->map(fn ($row) => [
             'vault_id' => $row->vault_id,
             'id' => $row->id,
@@ -87,8 +89,8 @@ class LedgerController extends Controller
                 'name_ar' => $account->name_ar,
                 'type' => $account->type,
                 'is_system' => (bool) $account->is_system,
-                'can_disburse' => true,
-                'can_receive' => true,
+                'can_disburse' => $allowsCash,
+                'can_receive' => $allowsCash,
                 'can_delete' => ! $account->is_system && ! $account->hasMovements() && ! $account->children()->exists(),
                 'has_movements' => $account->hasMovements(),
                 'balance' => $account->balance('$'),
@@ -189,6 +191,11 @@ class LedgerController extends Controller
         $cashUserId = (int) ($vault->legacy_user_id ?? 0);
         if ($cashUserId <= 0) {
             return Response::json(['message' => 'القاصة غير مرتبطة بحساب تشغيلي.'], 422);
+        }
+
+        $coaPreview = $ledger->resolveExpenseOrIncomeAccount($ownerId, $expenseAccountId);
+        if (! $ledger->expenseAccountAllowsCashMovement($coaPreview)) {
+            return Response::json(['message' => 'مشتريات السيارات لا تُنزل من الصندوق ولا يُقبض عليها نقداً.'], 422);
         }
 
         try {
@@ -299,6 +306,11 @@ class LedgerController extends Controller
         $cashUserId = (int) ($vault->legacy_user_id ?? 0);
         if ($cashUserId <= 0) {
             return Response::json(['message' => 'القاصة غير مرتبطة بحساب تشغيلي.'], 422);
+        }
+
+        $coaPreview = $ledger->resolveExpenseOrIncomeAccount($ownerId, $coaAccountId);
+        if (! $ledger->expenseAccountAllowsCashMovement($coaPreview)) {
+            return Response::json(['message' => 'مشتريات السيارات لا تُنزل من الصندوق ولا يُقبض عليها نقداً.'], 422);
         }
 
         try {
@@ -419,6 +431,32 @@ class LedgerController extends Controller
             'message' => 'تم حذف الحساب بنجاح',
             'deleted' => $deleted,
         ], 200);
+    }
+
+    /**
+     * Void a journal line's entry from an expense/income account screen.
+     */
+    public function voidExpenseMovement(VoidLedgerAccountMovementRequest $request, LedgerService $ledger)
+    {
+        $ownerId = (int) Auth::user()->owner_id;
+        $data = $request->validated();
+
+        try {
+            $ledger->voidExpenseAccountMovement(
+                $ownerId,
+                (int) $data['ledger_account_id'],
+                (int) $data['journal_entry_id'],
+                'حذف حركة من شاشة المصروف #'.$data['ledger_account_id']
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return Response::json(['message' => 'تعذر حذف الحركة'], 500);
+        }
+
+        return Response::json(['message' => 'تم حذف الحركة وإلغاء القيد'], 200);
     }
 
     public function chartOfAccounts(Request $request, LedgerService $ledger)
@@ -821,6 +859,7 @@ class LedgerController extends Controller
                 // print=3 → receiptPayment (وصل صرف); print=2 → receipt (وصل قبض)
                 'voucher_kind' => $isPayment ? 'payment' : 'receipt',
                 'print' => $isPayment ? 3 : 2,
+                'can_void' => true,
                 'date' => optional($line->entry?->entry_date)->format('Y-m-d'),
                 'voucher_no' => $line->entry?->voucher_no,
                 'memo' => $line->memo ?: $line->entry?->memo,

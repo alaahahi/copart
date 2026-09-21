@@ -1109,6 +1109,25 @@ class LedgerService
         return $this->systemAccount($ownerId, self::CODE_EXPENSE);
     }
 
+    public function isCarPurchasesAccount(LedgerAccount $account): bool
+    {
+        if ((string) $account->code === self::CODE_CAR_PURCHASES) {
+            return true;
+        }
+
+        $name = (string) ($account->name_ar ?: $account->name);
+
+        return str_contains($name, 'مشتريات سيارات');
+    }
+
+    /**
+     * مشتريات سيارات is cost/recovery from car records — never Dr/Cr الصندوق.
+     */
+    public function expenseAccountAllowsCashMovement(LedgerAccount $account): bool
+    {
+        return ! $this->isCarPurchasesAccount($account);
+    }
+
     /**
      * Expense (+ optional commission-like income) COA rows for the Vaults «مصاريف وعمولات» tab.
      *
@@ -1165,6 +1184,8 @@ class LedgerService
                 && ! (bool) $account->is_system
                 && ! $account->children()->exists();
 
+            $canCash = $this->expenseAccountAllowsCashMovement($account);
+
             return [
                 'id' => $account->id,
                 'code' => $account->code,
@@ -1175,9 +1196,8 @@ class LedgerService
                 'is_system' => (bool) $account->is_system,
                 'show_in_accounting' => (bool) $account->show_in_accounting,
                 'has_movements' => $hasMovements,
-                // Vaults detail page always allows قبض + صرف for expense/income COAs
-                'can_disburse' => true,
-                'can_receive' => true,
+                'can_disburse' => $canCash,
+                'can_receive' => $canCash,
                 'can_delete' => $canDelete,
                 'balance' => $account->balance($currency),
                 'balance_dinar' => $account->balance('IQD'),
@@ -1317,17 +1337,43 @@ class LedgerService
 
         return match ($kind) {
             'client' => $this->postClientPayment($ownerId, $userId, $amount, $currency, $memo, $reference),
-            'cash_box' => $this->postCashDisbursement(
-                $ownerId,
-                $amount,
-                $currency,
-                $memo,
-                $reference,
-                $userId,
-                $this->resolveExpenseAccountIdForCashDisbursement($ownerId, $userId, $reference, $memo)
-            ),
+            'cash_box' => $this->postCashBoxDecrease($ownerId, $userId, $amount, $currency, $memo, $reference),
             default => $this->postSystemWalletDecrease($ownerId, $userId, $amount, $currency, $memo, $reference),
         };
+    }
+
+    /**
+     * Cash-box outflow. Car purchase cost/payment never credits الصندوق.
+     */
+    protected function postCashBoxDecrease(
+        int $ownerId,
+        int $userId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null
+    ): JournalEntry {
+        $carService = app(CarService::class);
+        $morph = $reference instanceof Transactions ? $reference->morphed_type : null;
+        if (
+            $carService->shouldSkipCashBoxOutForCarMorph('cash_box', $morph)
+            || (
+                ! $carService->shouldPostPurchaseCash()
+                && $this->isCarPurchaseDisbursement($ownerId, $userId, $reference, $memo)
+            )
+        ) {
+            throw new InvalidArgumentException('مشتريات السيارات لا تُنزل من الصندوق.');
+        }
+
+        return $this->postCashDisbursement(
+            $ownerId,
+            $amount,
+            $currency,
+            $memo,
+            $reference,
+            $userId,
+            $this->resolveExpenseAccountIdForCashDisbursement($ownerId, $userId, $reference, $memo)
+        );
     }
 
     /**
@@ -1962,8 +2008,65 @@ class LedgerService
     }
 
     /**
-     * Soft-void a journal entry so it no longer affects balances (audit kept via SoftDeletes).
+     * Soft-void a journal that posted to an expense/income COA, plus its linked transactions.
      */
+    public function voidExpenseAccountMovement(int $ownerId, int $accountId, int $journalEntryId, string $reason = 'حذف حركة مصروف'): bool
+    {
+        $account = LedgerAccount::query()
+            ->where('owner_id', $ownerId)
+            ->where('id', $accountId)
+            ->first();
+        if (! $account || ! in_array($account->type, ['expense', 'income'], true)) {
+            throw new InvalidArgumentException('الحساب غير موجود أو ليس مصروفاً/إيراداً.');
+        }
+
+        $entry = JournalEntry::query()
+            ->with('lines')
+            ->where('owner_id', $ownerId)
+            ->find($journalEntryId);
+        if (! $entry) {
+            throw new InvalidArgumentException('القيد غير موجود.');
+        }
+
+        $hitsAccount = $entry->lines->contains(
+            fn ($line) => (int) $line->ledger_account_id === $accountId
+        );
+        if (! $hitsAccount) {
+            throw new InvalidArgumentException('هذا القيد لا يخص هذا الحساب.');
+        }
+
+        return DB::transaction(function () use ($entry, $reason, $ownerId, $journalEntryId) {
+            $txs = Transactions::query()->where('journal_entry_id', $journalEntryId)->get();
+            $this->voidJournalEntry($journalEntryId, $reason);
+            foreach ($txs as $tx) {
+                $tx->delete();
+                Log::info('Expense movement transaction deleted', [
+                    'transaction_id' => $tx->id,
+                    'journal_entry_id' => $journalEntryId,
+                    'by' => Auth::id(),
+                ]);
+            }
+
+            try {
+                $mainBoxId = (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
+                $this->syncWalletFromLedger($ownerId, $mainBoxId);
+            } catch (\Throwable $e) {
+                //
+            }
+
+            $refType = (string) ($entry->reference_type ?? '');
+            $refId = (int) ($entry->reference_id ?? 0);
+            if ($refId > 0 && (str_ends_with($refType, '\\Car') || $refType === 'App\\Models\\Car')) {
+                $clientId = (int) (\App\Models\Car::query()->where('id', $refId)->value('client_id') ?? 0);
+                if ($clientId > 0) {
+                    $this->syncWalletFromLedger($ownerId, $clientId);
+                }
+            }
+
+            return true;
+        });
+    }
+
     public function voidJournalEntry(?int $journalEntryId, ?string $reason = null): bool
     {
         if (!$journalEntryId) {
