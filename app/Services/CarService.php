@@ -5,6 +5,10 @@ namespace App\Services;
 use App\Models\Auction;
 use App\Models\Car;
 use App\Models\ShippingRoute;
+use App\Models\Transactions;
+use App\Services\LedgerService;
+use App\Services\SystemWalletService;
+use App\Services\VaultService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -141,7 +145,7 @@ class CarService
      * force-deletes.
      *
      * The caller is responsible for wrapping this together with any
-     * wallet/accounting reversal in a single DB::transaction so the whole
+     * accounting reversal in a single DB::transaction so the whole
      * delete stays atomic and no accounting history is lost mid-way.
      */
     public function softDelete(Car $car, int $ownerId): void
@@ -158,6 +162,96 @@ class CarService
             'deleted_by' => Auth::id(),
             'deleted_at' => now()->toDateTimeString(),
         ]));
+    }
+
+    /**
+     * Purchase cost / expense recording is operational on the car row only.
+     * It must not post cash-box journals (حركة صندوق) — those throw the trial
+     * balance when later reversed via increaseWallet (Dr Cash / Cr Revenue).
+     */
+    public function shouldPostPurchaseCash(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Void non-payment journals tied to this car (purchase cost, expense
+     * adjustments, unpaid AR recognition). Client cash payments (is_pay=1)
+     * stay — delete is already blocked when paid > 0.
+     *
+     * Soft-voids journals so the trial balance and الصندوق return to the
+     * pre-car state without posting a new cash receipt.
+     */
+    public function voidNonPaymentAccounting(Car $car, LedgerService $ledger): void
+    {
+        $reason = 'حذف سيارة #'.$car->id;
+        $carMorphs = [Car::class, 'App\\Models\\Car', 'App\Models\Car'];
+
+        $txs = Transactions::query()
+            ->whereIn('morphed_type', $carMorphs)
+            ->where('morphed_id', $car->id)
+            ->where(function ($q) {
+                $q->whereNull('is_pay')->orWhere('is_pay', 0);
+            })
+            ->get();
+
+        foreach ($txs as $tx) {
+            $ledger->voidJournalForTransaction($tx, $reason);
+            $tx->delete();
+            Log::info('Car non-payment transaction voided on delete', [
+                'car_id' => $car->id,
+                'transaction_id' => $tx->id,
+                'deleted_by' => Auth::id(),
+            ]);
+        }
+
+        \App\Models\JournalEntry::query()
+            ->whereIn('reference_type', $carMorphs)
+            ->where('reference_id', $car->id)
+            ->get()
+            ->each(function ($entry) use ($ledger, $reason) {
+                $ledger->voidJournalEntry((int) $entry->id, $reason);
+            });
+
+        $this->syncPartiesAfterCarVoid($car, $ledger);
+    }
+
+    protected function syncPartiesAfterCarVoid(Car $car, LedgerService $ledger): void
+    {
+        $ownerId = (int) $car->owner_id;
+        $userIds = [];
+        if ((int) ($car->client_id ?? 0) > 0) {
+            $userIds[] = (int) $car->client_id;
+        }
+
+        try {
+            $vaults = app(VaultService::class);
+            $userIds[] = $vaults->purchasesCashUserId($ownerId);
+        } catch (\Throwable $e) {
+            // purchases vault optional when no cash was posted
+        }
+        try {
+            $userIds[] = app(VaultService::class)->receiptsCashUserId($ownerId);
+        } catch (\Throwable $e) {
+            //
+        }
+        try {
+            $userIds[] = (int) app(SystemWalletService::class)->requireMainBox($ownerId)->id;
+        } catch (\Throwable $e) {
+            //
+        }
+
+        foreach (array_unique(array_filter($userIds)) as $uid) {
+            try {
+                $ledger->syncWalletFromLedger($ownerId, (int) $uid);
+            } catch (\Throwable $e) {
+                Log::warning('Car delete wallet sync skipped', [
+                    'car_id' => $car->id,
+                    'user_id' => $uid,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

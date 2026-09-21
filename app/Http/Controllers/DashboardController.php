@@ -108,13 +108,20 @@ class DashboardController extends Controller
     {
         $owner_id=Auth::user()->owner_id;
         $mainBox = $this->mainBox->where('owner_id', $owner_id)->first();
+        $vaultService = app(\App\Services\VaultService::class);
+        $cashVaultIds = $vaultService->cashVaultIds((int) $owner_id);
         $mainBoxVaultId = $mainBox
-            ? app(\App\Services\VaultService::class)->resolveVaultIdForLegacyUser((int) $mainBox->id)
+            ? $vaultService->resolveVaultIdForLegacyUser((int) $mainBox->id)
             : null;
 
         $today = Carbon::now()->toDateString();
+        $cashInTypes = ['in', 'inUser', 'inUserBox', 'transfer_in'];
+        $cashOutTypes = ['out', 'outUser', 'outUserBox', 'debt', 'transfer_out'];
 
-        $mainBoxTx = function () use ($mainBoxVaultId, $mainBox) {
+        $mainBoxTx = function () use ($cashVaultIds, $mainBoxVaultId, $mainBox) {
+            if ($cashVaultIds !== []) {
+                return Transactions::whereIn('vault_id', $cashVaultIds);
+            }
             if ($mainBoxVaultId) {
                 return Transactions::where('vault_id', $mainBoxVaultId);
             }
@@ -141,22 +148,22 @@ class DashboardController extends Controller
 
         $transactionIn = (int) (($q = $mainBoxTx())
             ? $q->where('currency', '$')
-                ->whereIn('type', ['in', 'inUserBox'])
+                ->whereIn('type', $cashInTypes)
                 ->whereNull('deleted_at')
                 ->sum('amount')
             : 0);
 
         $transactionOut = (int) (($q = $mainBoxTx())
             ? $q->where('currency', '$')
-                ->whereIn('type', ['out', 'debt', 'outUserBox'])
+                ->whereIn('type', $cashOutTypes)
                 ->whereNull('deleted_at')
                 ->sum('amount')
             : 0);
 
-        $transactionInTodayDollar = $sumBox('$', ['in', 'inUserBox']);
-        $transactionOutTodayDollar = $sumBox('$', ['out', 'debt', 'outUserBox']);
-        $transactionInTodayDinar = $sumBox('IQD', ['in', 'inUserBox']);
-        $transactionOutTodayDinar = $sumBox('IQD', ['out', 'debt', 'outUserBox']);
+        $transactionInTodayDollar = $sumBox('$', $cashInTypes);
+        $transactionOutTodayDollar = $sumBox('$', $cashOutTypes);
+        $transactionInTodayDinar = $sumBox('IQD', $cashInTypes);
+        $transactionOutTodayDinar = $sumBox('IQD', $cashOutTypes);
 
         $car = Car::query()->where('owner_id', $owner_id)->get();
         $exitCar = 0;
@@ -437,19 +444,6 @@ class DashboardController extends Controller
         // purge it after validation confirmed no *active* duplicate.
         $carService->releaseSoftDeletedVin((string) $request->vin, (int) $owner_id);
 
-        // Resolve cash box before insert so a missing vault fails cleanly (no orphan car).
-        $cashUserId = null;
-        if ($total_amount) {
-            try {
-                $cashUserId = $this->resolveCashUserId((int) $owner_id);
-            } catch (\Throwable $e) {
-                return Response::json([
-                    'message' => 'حساب الصندوق الرئيسي غير موجود — لا يمكن تسجيل تكلفة السيارة.',
-                    'errors' => ['total' => ['حساب الصندوق الرئيسي غير موجود']],
-                ], 422);
-            }
-        }
-
         $car=Car::create([
             'note'=> $request->note??'',
             'no'=>$no,
@@ -481,12 +475,8 @@ class DashboardController extends Controller
             // No sale pricing yet — do not store purchase cost as negative "profit".
             'profit'=> $carService->computeProfit(0, $total_amount),
              ]);
-                if($total_amount && $cashUserId){
-                    $desc='اضافة سيارة من المشتريات رقم شانصى '.$request->vin;
-                    // After vaults migration, optional الخزينة (main@account.com) may be null —
-                    // post purchase cost against purchases/mainBox cash user instead.
-                    $this->accountingController->decreaseWallet(($total_amount),$desc,$cashUserId,$car->id,'App\Models\Car');
-                }
+        // Purchase cost + expenses stay on the car row only — no cash-box journal.
+        // Posting decreaseWallet here credited الصندوق and left leftover cash after delete.
 
         $carId = (int) $car->id;
         DB::afterCommit(function () use ($carId) {
@@ -574,15 +564,7 @@ class DashboardController extends Controller
             // Never trust the frontend-supplied auction id directly — re-resolve it against this tenant's list.
             $dataToUpdate['auction_id'] = $carService->resolveAuctionId((int) $owner_id, $request->auction_id);
             $dataToUpdate['shipping_route_id'] = $carService->resolveShippingRouteId((int) $owner_id, $request->shipping_route_id);
-            $cashUserId = $this->resolveCashUserId((int) $owner_id);
-            if($total >$car->total){
-                $descClient = trans('text.addExpenses').' '.($total-$car->total).' '.trans('text.for_car').$car->car_type.' '.$car->vin;
-                $this->accountingController->decreaseWallet(($total-$car->total), $descClient,$cashUserId,$car->id,'App\Models\Car');
-            }else{
-                $descClient = 'مرتجع للصندوق مصاريف';
-                $this->accountingController->increaseWallet(($car->total-$total), $descClient,$cashUserId,$car->id,'App\Models\Car');
-
-            }
+            // Expense / purchase-total edits are car fields only — no الصندوق movement.
             // Payment color uses sales remaining (total_s), not purchase total.
             $paid = (float) ($dataToUpdate['paid'] ?? $car->paid);
             $discount = (float) ($dataToUpdate['discount'] ?? $car->discount ?? 0);
@@ -893,18 +875,51 @@ class DashboardController extends Controller
     }
     public function addToBox()
     {
-        $user_id = $_GET['user_id']??0;
-        $desc=trans('text.addToBox').' '.($_GET['amount']??0).'$'.' || '.$_GET['note']??'';
-        $this->accountingController->increaseWallet(($_GET['amount']??0), $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$user_id,'App\Models\User',$user_id);
-        return Response::json('ok', 200);    
+        $owner_id = Auth::user()->owner_id;
+        $amount = (int) ($_GET['amount'] ?? 0);
+        $note = (string) ($_GET['note'] ?? '');
+        $morphId = (int) ($_GET['user_id'] ?? 0);
+        $desc = trans('text.addToBox').' '.$amount.'$'.' || '.$note;
+        $mainBoxId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        $this->accountingController->increaseWallet(
+            $amount,
+            $desc,
+            $mainBoxId,
+            $morphId ?: $mainBoxId,
+            'App\\Models\\User',
+            0,
+            0,
+            '$',
+            0,
+            0,
+            'inUserBox'
+        );
+
+        return Response::json('ok', 200);
     }
     public function withDrawFromBox()
     {
-        $user_id = $_GET['user_id']??0;
-        $desc=trans('text.withDrawFromBox').' '.($_GET['amount']??'').'$'.' || '.$_GET['note']??'';
-        $this->accountingController->decreaseWallet(($_GET['amount']??0), $desc,$this->mainAccount->where('owner_id',$owner_id)->first()->id,$user_id,'App\Models\User',$user_id);
-        
-        return Response::json('ok', 200);    
+        $owner_id = Auth::user()->owner_id;
+        $amount = (int) ($_GET['amount'] ?? 0);
+        $note = (string) ($_GET['note'] ?? '');
+        $morphId = (int) ($_GET['user_id'] ?? 0);
+        $desc = trans('text.withDrawFromBox').' '.$amount.'$'.' || '.$note;
+        $mainBoxId = (int) app(SystemWalletService::class)->requireMainBox((int) $owner_id)->id;
+        $this->accountingController->decreaseWallet(
+            $amount,
+            $desc,
+            $mainBoxId,
+            $morphId ?: $mainBoxId,
+            'App\\Models\\User',
+            0,
+            0,
+            '$',
+            0,
+            0,
+            'outUserBox'
+        );
+
+        return Response::json('ok', 200);
     }
 
     public function DelCar(DeleteCarRequest $request, CarService $carService){
@@ -916,7 +931,6 @@ class DashboardController extends Controller
 
         $this->authorize('delete', $car);
 
-        // Block delete when partially/fully paid or settled (incl. discount-only).
         $paid = (float) ($car->paid ?? 0);
         $totalS = (float) ($car->total_s ?? 0);
         $remaining = $totalS - $paid - (float) ($car->discount ?? 0) - (float) ($car->damage_compensation ?? 0);
@@ -926,47 +940,8 @@ class DashboardController extends Controller
             ], 422);
         }
 
-        try {
-            $cashUserId = $this->resolveCashUserId((int) $owner_id);
-        } catch (\Throwable $e) {
-            return Response::json(['message' => 'حساب الصندوق الرئيسي غير موجود — لا يمكن حذف السيارة بأمان.'], 422);
-        }
-
-        DB::transaction(function () use ($car, $owner_id, $carService, $cashUserId) {
-            // Opposite wallet/ledger entries (never hard-delete journals).
-            // Soft-deleted cars are excluded from profit/AR via SoftDeletes.
-            $desc = 'مرتجع حذف سيارة #' . $car->id . ' | تكلفة ' . (int) $car->total;
-
-            $purchaseTotal = (int) ($car->total ?? 0);
-            if ($purchaseTotal > 0) {
-                $this->accountingController->increaseWallet(
-                    $purchaseTotal,
-                    $desc,
-                    $cashUserId,
-                    $car->id,
-                    'App\Models\Car'
-                );
-            }
-
-            // Clear any remaining client AR for this car (unpaid / partial).
-            // Paid cash history stays; SoftDeletes keeps the car out of KPIs.
-            $remainingAr = max(
-                0,
-                (int) ($car->total_s ?? 0) - (int) ($car->paid ?? 0) - (int) ($car->discount ?? 0) - (int) ($car->damage_compensation ?? 0)
-            );
-            if ($remainingAr > 0 && $car->client_id) {
-                $this->accountingController->decreaseWallet(
-                    $remainingAr,
-                    $desc,
-                    $car->client_id,
-                    $car->id,
-                    'App\Models\Car'
-                );
-            }
-
-            // Soft delete only (Car uses SoftDeletes) — row & history are kept,
-            // never force-deleted. Renumbering + audit log happen here too,
-            // inside the same transaction as the wallet reversal above.
+        DB::transaction(function () use ($car, $owner_id, $carService) {
+            $carService->voidNonPaymentAccounting($car, app(LedgerService::class));
             $carService->softDelete($car, $owner_id);
         });
 

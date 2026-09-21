@@ -814,6 +814,21 @@ class VaultService
     }
 
     /**
+     * Active cash-box vault ids (نقد/بنك/خزنة + mainBox) for an owner.
+     *
+     * @return list<int>
+     */
+    public function cashVaultIds(int $ownerId): array
+    {
+        return $this->listForOwner($ownerId)
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Accounting page orange shortcut buttons — cash vaults only, never traders.
      *
      * Shape matches legacy flaggedWallets: { id: legacy_user_id, name, wallet }.

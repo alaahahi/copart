@@ -239,8 +239,14 @@ class AccountingController extends Controller
          return response()->json(['message' => 'الحساب غير موجود'], 404);
      }
 
-     // رصيد/حركات المحاسبة = من vault_id + الدفتر (بدون جدول wallets).
-     $transactions = $this->transactionsQueryForUser($user)
+     $vaultService = app(\App\Services\VaultService::class);
+     $isCashVaultUser = $vaultService->isCashVaultLegacyUser((int) $owner_id, (int) $user->id);
+     $allCash = $request->boolean('all_cash');
+
+     // صفحة المحاسبة: كل إيداع/سحب صناديق نقدية، مو بس الصندوق الرئيسي.
+     $transactions = ($allCash
+         ? $this->transactionsQueryForCashBoxes((int) $owner_id)
+         : $this->transactionsQueryForUser($user))
          ->with(['TransactionsImages', 'morphed'])
          ->orderBy('id', 'desc');
      if ($from && $to) {
@@ -273,18 +279,15 @@ class AccountingController extends Controller
              $transactions = $transactions->whereRaw("JSON_EXTRACT(details, '$.loan') = true");
          }
      }
-     $vaultService = app(\App\Services\VaultService::class);
-     $isCashVaultUser = $vaultService->isCashVaultLegacyUser((int) $owner_id, (int) $user->id);
-
-     if ($type == 'wallet') {
+     if ($type == 'wallet' || $allCash) {
          // Cash vaults: ledger balance includes inUserBox/outUserBox, transfers, purchases (in/out).
          // Legacy filter (inUser/outUser only) hid those movements and emptied the detail page.
-         $walletTypes = $isCashVaultUser
+         $walletTypes = ($isCashVaultUser || $allCash)
              ? \App\Services\VaultService::CASH_BOX_MOVEMENT_TYPES
              : ['inUser', 'outUser', 'inUserAmanah', 'outUserAmanah'];
          $allTransactions = $transactions
              ->whereIn('type', $walletTypes)
-             ->paginate(1000);
+             ->paginate($allCash ? 100 : 1000);
      } elseif ($type == 'printExcel') {
          $allTransactions = $transactions->paginate(1000);
      } else {
@@ -2388,6 +2391,31 @@ class AccountingController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * All cash-box in/out (main box + bank/safe vaults) for the accounting page.
+     */
+    protected function transactionsQueryForCashBoxes(int $ownerId)
+    {
+        $vaults = app(\App\Services\VaultService::class);
+        $rows = $vaults->listForOwner($ownerId, true);
+        $vaultIds = $rows->pluck('id')->filter()->unique()->values();
+        $legacyIds = $rows->pluck('legacy_user_id')->filter()->unique()->values();
+
+        return Transactions::with(['journalEntry.lines.account', 'parent.journalEntry.lines.account'])
+            ->where(function ($q) use ($vaultIds, $legacyIds) {
+                if ($vaultIds->isNotEmpty()) {
+                    $q->orWhereIn('vault_id', $vaultIds);
+                }
+                if ($legacyIds->isNotEmpty()) {
+                    $q->orWhere(function ($inner) use ($legacyIds) {
+                        $inner->whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                            ->whereIn('morphed_id', $legacyIds);
+                    });
+                }
+            })
+            ->whereIn('type', \App\Services\VaultService::CASH_BOX_MOVEMENT_TYPES);
     }
 
     /**

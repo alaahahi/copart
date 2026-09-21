@@ -74,12 +74,18 @@ const debouncedGetResultsCar = debounce(refresh, 500);
 
 const getResults = async ($state) => {
   try {
+    if (!props.boxes?.[0]?.id) {
+      $state.complete();
+      return;
+    }
     const response = await axios.get(`/getIndexAccounting`, {
       params: {
         limit: 100,
         page: page,
         q: q,
         user_id: props.boxes[0].id,
+        type: 'wallet',
+        all_cash: 1,
         from:from.value,
         to: to.value
       }
@@ -363,8 +369,8 @@ function safeNum(v) {
 const todayDiffDollar = () => safeNum(transactionInTodayDollar.value) + safeNum(transactionOutTodayDollar.value);
 const todayDiffDinar = () => safeNum(transactionInTodayDinar.value) + safeNum(transactionOutTodayDinar.value);
 
-const IN_TYPES = ['in', 'inUser', 'inUserBox'];
-const OUT_TYPES = ['out', 'outUser', 'outUserBox', 'debt'];
+const IN_TYPES = ['in', 'inUser', 'inUserBox', 'inUserAmanah', 'transfer_in'];
+const OUT_TYPES = ['out', 'outUser', 'outUserBox', 'outUserAmanah', 'debt', 'transfer_out'];
 
 function getAmountParts(tran, direction) {
   if (!tran) {

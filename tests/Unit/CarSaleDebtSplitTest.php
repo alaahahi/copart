@@ -66,4 +66,9 @@ class CarSaleDebtSplitTest extends TestCase
         $this->assertLessThan($a['sales_delta'], $a['revenue_delta']);
         $this->assertLessThan($b['sales_delta'], $b['revenue_delta']);
     }
+
+    public function test_purchase_cost_is_not_posted_to_cash_box(): void
+    {
+        $this->assertFalse($this->cars->shouldPostPurchaseCash());
+    }
 }
