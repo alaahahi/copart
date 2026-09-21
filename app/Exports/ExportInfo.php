@@ -121,8 +121,8 @@ class ExportInfo implements FromCollection, WithHeadings
             'رقم اللوت',            // car_number
             'ملاحظة',               // note
             'سعر السيارة أمريكا',   // car_price_usa
-            'نقل أمريكا',           // transfer_usa
-            'ريكفري',               // recovery
+            'توينج',                // transfer_usa
+            'شحن',                  // recovery
             'مصاريف تصليح',         // repair_expenses
             'نقل أربيل',            // transfer_erbil
             'مصاريف أربيل',         // erbil_expenses

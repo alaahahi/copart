@@ -58,8 +58,8 @@
                     <th scope="col">اللون</th>
                     <th scope="col">الموديل</th>
                     <th scope="col">سعر أمريكا</th>
-                    <th scope="col">نقل أمريكا</th>
-                    <th scope="col">ريكفري</th>
+                    <th scope="col">توينج</th>
+                    <th scope="col">شحن</th>
                     <th scope="col">مصاريف تصليح</th>
                     <th scope="col">نقل أربيل</th>
                     <th scope="col">مصاريف أربيل</th>

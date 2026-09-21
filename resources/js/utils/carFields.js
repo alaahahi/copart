@@ -1,15 +1,15 @@
 export const CAR_FIELD_LABELS = {
-  americaPrice: 'سعر السيارة امريكا',
-  americaTransfer: 'نقل امريكا',
-  recovery: 'ريكفري',
+  americaPrice: 'سعر السيارة أمريكا',
+  americaTransfer: 'توينج',
+  recovery: 'شحن',
   repairExpenses: 'مصاريف تصليح',
-  erbilTransfer: 'نقل اربيل',
-  erbilShipping: 'شحن اربيل وتخليص',
+  erbilTransfer: 'نقل أربيل',
+  erbilShipping: 'شحن أربيل وتخليص',
   erbilClearance: 'تخليص',
   erbilTransferFee: 'نقل',
   erbilBorderRepair: 'تصليح حدود',
   erbilCustoms: 'جمرك',
-  erbilExpenses: 'مصاريف اربيل',
+  erbilExpenses: 'مصاريف أربيل',
 };
 
 export const asCarNumber = (v) => {
