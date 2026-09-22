@@ -952,6 +952,44 @@ class LedgerService
     }
 
     /**
+     * Client AR transfer (نقل السيارة بين زبائن): move receivable only.
+     * Debit AR(to) / Credit AR(from). Does NOT touch cash 1100 or revenue 4100.
+     */
+    public function postClientArTransfer(
+        int $ownerId,
+        int $fromClientId,
+        int $toClientId,
+        float $amount,
+        string $currency,
+        string $memo,
+        $reference = null
+    ): ?JournalEntry {
+        $amount = round(abs($amount), 2);
+        if ($amount < 0.005) {
+            return null;
+        }
+        if ($fromClientId <= 0 || $toClientId <= 0 || $fromClientId === $toClientId) {
+            throw new InvalidArgumentException('نقل الذمة يتطلب زبونين مختلفين.');
+        }
+
+        $fromAr = $this->clientReceivableAccount($ownerId, $fromClientId);
+        $toAr = $this->clientReceivableAccount($ownerId, $toClientId);
+
+        return $this->post([
+            'owner_id' => $ownerId,
+            'entry_date' => now()->toDateString(),
+            'memo' => $memo,
+            'source' => 'car_client_transfer',
+            'currency' => $currency,
+            'reference_type' => $reference ? get_class($reference) : null,
+            'reference_id' => $reference?->id ?? null,
+        ], [
+            ['account_id' => $toAr->id, 'debit' => $amount, 'credit' => 0, 'currency' => $currency, 'memo' => $memo],
+            ['account_id' => $fromAr->id, 'debit' => 0, 'credit' => $amount, 'currency' => $currency, 'memo' => $memo],
+        ]);
+    }
+
+    /**
      * Damage compensation (تعويض ضرر) — AR write-off without cash, same COA pattern as payment discount:
      * delta > 0 → Dr expense 5100 / Cr AR (reduce client debt)
      * delta < 0 → reverse (restore debt)
@@ -2144,6 +2182,230 @@ class LedgerService
         }
 
         return $this->restoreJournalEntry($journalId ? (int) $journalId : null);
+    }
+
+    /**
+     * Void historical buggy «نقل السيارة» journals that wrongly hit Cash (1100) and/or Revenue (4100).
+     * Optionally re-post correct AR↔AR transfers for paired from/to clients.
+     *
+     * @return array{voided:int,repested:int,synced_users:list<int>,details:list<array>,dry_run:bool}
+     */
+    public function repairBadCarClientTransfers(?int $ownerId, bool $dryRun = true, bool $repost = true): array
+    {
+        $query = JournalEntry::query()
+            ->with(['lines.account'])
+            ->where(function ($q) {
+                $q->where('memo', 'نقل السيارة')
+                    ->orWhere('memo', 'like', 'نقل السيارة%');
+            })
+            ->where(function ($q) {
+                // Legacy bug posted via wallet helpers; correct transfers use car_client_transfer.
+                $q->whereNull('source')->orWhere('source', 'wallet');
+            })
+            ->where('memo', 'not like', '%VOID:%');
+
+        if ($ownerId) {
+            $query->where('owner_id', $ownerId);
+        }
+
+        $entries = $query->orderBy('id')->get();
+        $cashCodes = [self::CODE_CASH_USD, self::CODE_CASH_IQD];
+        $prefix = self::CODE_CLIENT_AR_PREFIX . '-';
+
+        $cashHits = [];
+        $revenueHits = [];
+        $otherBad = [];
+
+        foreach ($entries as $entry) {
+            // Skip already-correct transfers if source was filtered loosely.
+            if ((string) $entry->source === 'car_client_transfer') {
+                continue;
+            }
+
+            $codes = $entry->lines->map(fn ($l) => (string) ($l->account->code ?? ''))->filter()->values();
+            $hasCash = $codes->contains(fn ($c) => in_array($c, $cashCodes, true));
+            $hasRevenue = $codes->contains(self::CODE_REVENUE);
+            $arLine = $entry->lines->first(function ($l) use ($prefix) {
+                $code = (string) ($l->account->code ?? '');
+
+                return str_starts_with($code, $prefix);
+            });
+
+            $clientId = 0;
+            if ($arLine) {
+                $code = (string) $arLine->account->code;
+                $clientId = (int) substr($code, strlen($prefix));
+            }
+
+            $amount = round((float) $entry->lines->sum('debit'), 2);
+            $row = [
+                'journal_id' => (int) $entry->id,
+                'voucher' => $entry->voucher_number,
+                'owner_id' => (int) $entry->owner_id,
+                'entry_date' => (string) $entry->entry_date,
+                'amount' => $amount,
+                'client_id' => $clientId,
+                'currency' => (string) ($entry->currency ?: '$'),
+                'kind' => $hasCash ? 'fake_cash' : ($hasRevenue ? 'fake_revenue' : 'other'),
+            ];
+
+            if ($hasCash) {
+                $cashHits[] = $row;
+            } elseif ($hasRevenue) {
+                $revenueHits[] = $row;
+            } elseif ((string) $entry->source === 'wallet') {
+                $otherBad[] = $row;
+            }
+        }
+
+        $toVoid = collect($cashHits)->merge($revenueHits)->merge($otherBad)->unique('journal_id')->values();
+        $pairs = [];
+        $usedRevenue = [];
+
+        foreach ($cashHits as $cash) {
+            foreach ($revenueHits as $idx => $rev) {
+                if (isset($usedRevenue[$idx])) {
+                    continue;
+                }
+                if ((int) $cash['owner_id'] !== (int) $rev['owner_id']) {
+                    continue;
+                }
+                if ((string) $cash['entry_date'] !== (string) $rev['entry_date']) {
+                    continue;
+                }
+                if (abs((float) $cash['amount'] - (float) $rev['amount']) > 0.009) {
+                    continue;
+                }
+                if ((int) $cash['client_id'] === (int) $rev['client_id'] || $cash['client_id'] <= 0 || $rev['client_id'] <= 0) {
+                    continue;
+                }
+                $pairs[] = [
+                    'from_client_id' => (int) $cash['client_id'],
+                    'to_client_id' => (int) $rev['client_id'],
+                    'amount' => (float) $cash['amount'],
+                    'owner_id' => (int) $cash['owner_id'],
+                    'currency' => $cash['currency'] === 'IQD' ? 'IQD' : '$',
+                    'cash_journal_id' => (int) $cash['journal_id'],
+                    'revenue_journal_id' => (int) $rev['journal_id'],
+                ];
+                $usedRevenue[$idx] = true;
+                break;
+            }
+        }
+
+        $details = [
+            'cash_hits' => $cashHits,
+            'revenue_hits' => $revenueHits,
+            'other_bad' => $otherBad,
+            'pairs' => $pairs,
+        ];
+
+        if ($dryRun) {
+            return [
+                'voided' => 0,
+                'reposted' => 0,
+                'synced_users' => [],
+                'would_void' => $toVoid->pluck('journal_id')->all(),
+                'details' => $details,
+                'dry_run' => true,
+            ];
+        }
+
+        $voided = 0;
+        $reposted = 0;
+        $syncUsers = [];
+
+        DB::transaction(function () use (
+            $toVoid,
+            $pairs,
+            $repost,
+            &$voided,
+            &$reposted,
+            &$syncUsers
+        ) {
+            foreach ($toVoid as $row) {
+                $journalId = (int) $row['journal_id'];
+                $txs = Transactions::query()->where('journal_entry_id', $journalId)->get();
+                // Also catch orphan client txs with same description and no journal link.
+                $orphan = Transactions::query()
+                    ->whereNull('deleted_at')
+                    ->where('description', 'نقل السيارة')
+                    ->where(function ($q) use ($journalId) {
+                        $q->whereNull('journal_entry_id')->orWhere('journal_entry_id', $journalId);
+                    })
+                    ->whereIn('user_id', array_filter([(int) ($row['client_id'] ?? 0)]))
+                    ->get();
+
+                $this->voidJournalEntry($journalId, 'إصلاح نقل سيارة خاطئ (بدون صندوق/إيراد)');
+                foreach ($txs->merge($orphan) as $tx) {
+                    if (! $tx->trashed()) {
+                        $tx->delete();
+                    }
+                    $uid = (int) ($tx->user_id ?? 0);
+                    if ($uid > 0) {
+                        $syncUsers[$uid] = true;
+                    }
+                }
+                $voided++;
+                if (! empty($row['owner_id'])) {
+                    try {
+                        $mainBoxId = (int) app(SystemWalletService::class)->requireMainBox((int) $row['owner_id'])->id;
+                        $syncUsers[$mainBoxId] = true;
+                    } catch (\Throwable $e) {
+                        //
+                    }
+                }
+            }
+
+            // Soft-delete any remaining «نقل السيارة» wallet txs still alive without journal.
+            $leftover = Transactions::query()
+                ->whereNull('deleted_at')
+                ->where('description', 'نقل السيارة')
+                ->where(function ($q) {
+                    $q->whereNull('journal_entry_id')->orWhere('journal_entry_id', 0);
+                })
+                ->get();
+            foreach ($leftover as $tx) {
+                $tx->delete();
+                $uid = (int) ($tx->user_id ?? 0);
+                if ($uid > 0) {
+                    $syncUsers[$uid] = true;
+                }
+            }
+
+            if ($repost) {
+                foreach ($pairs as $pair) {
+                    $journal = $this->postClientArTransfer(
+                        (int) $pair['owner_id'],
+                        (int) $pair['from_client_id'],
+                        (int) $pair['to_client_id'],
+                        (float) $pair['amount'],
+                        (string) $pair['currency'],
+                        'نقل السيارة (إصلاح)'
+                    );
+                    if ($journal) {
+                        $reposted++;
+                        $syncUsers[(int) $pair['from_client_id']] = true;
+                        $syncUsers[(int) $pair['to_client_id']] = true;
+                    }
+                }
+            }
+
+            foreach (array_keys($syncUsers) as $userId) {
+                $ownerForUser = (int) (User::query()->where('id', $userId)->value('owner_id') ?? 0);
+                if ($ownerForUser > 0) {
+                    $this->syncWalletFromLedger($ownerForUser, (int) $userId);
+                }
+            }
+        });
+
+        return [
+            'voided' => $voided,
+            'reposted' => $reposted,
+            'synced_users' => array_map('intval', array_keys($syncUsers)),
+            'details' => $details,
+            'dry_run' => false,
+        ];
     }
 
     /**

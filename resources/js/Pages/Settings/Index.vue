@@ -340,6 +340,58 @@ function preview(type) {
 
 const showSystemReset = ref(false);
 
+// ─── Ledger maintenance (إصلاح نقل السيارات) ───────────────────────────────
+const repairBusy = ref(false);
+const repairRepost = ref(true);
+const repairOutput = ref("");
+const repairMessage = ref("");
+const repairError = ref("");
+const repairLastResult = ref(null);
+
+async function runRepairBadCarTransfers(execute) {
+  if (repairBusy.value) return;
+  repairBusy.value = true;
+  repairError.value = "";
+  repairMessage.value = "";
+  try {
+    if (execute) {
+      const cash = repairLastResult.value?.details?.cash_hits?.length || 0;
+      const rev = repairLastResult.value?.details?.revenue_hits?.length || 0;
+      if (
+        !confirm(
+          cash || rev
+            ? `تنفيذ الإصلاح؟ سيتم إلغاء ${cash + rev} قيد خاطئ${repairRepost.value ? " وإعادة ترحيل الذمم" : " بدون إعادة ترحيل"}.`
+            : "لم تُعرض معاينة بعد — المتابعة قد تلغي قيوداً إن وُجدت. تنفيذ؟"
+        )
+      ) {
+        return;
+      }
+      const { data } = await axios.post("/api/ledgerRepairBadCarTransfers", {
+        execute: 1,
+        no_repost: repairRepost.value ? 0 : 1,
+      });
+      repairMessage.value = data.message || "تم التنفيذ";
+      repairOutput.value = data.output || JSON.stringify(data.result || {}, null, 2);
+      repairLastResult.value = data.result || null;
+      toast.success(repairMessage.value);
+    } else {
+      const { data } = await axios.get("/api/ledgerRepairBadCarTransfers", {
+        params: { no_repost: repairRepost.value ? 0 : 1 },
+      });
+      repairMessage.value = data.message || "معاينة";
+      repairOutput.value = data.output || JSON.stringify(data.result || {}, null, 2);
+      repairLastResult.value = data.result || null;
+      toast.info(repairMessage.value);
+    }
+  } catch (e) {
+    repairError.value =
+      e.response?.data?.message || t("settingsFailed");
+    toast.error(repairError.value);
+  } finally {
+    repairBusy.value = false;
+  }
+}
+
 async function confirmSystemReset({ password, confirmation, done }) {
   try {
     const { data } = await axios.post(route("settings.reset"), {
@@ -945,6 +997,61 @@ onMounted(loadDbInsights);
             @add="addShippingRoute"
             @remove="removeShippingRoute"
           />
+        </section>
+
+        <section
+          v-if="Number($page.props.auth.user.type_id) === 1 || Number($page.props.auth.user.type_id) === 6"
+          class="bg-slate-900 shadow rounded-xl p-6 border border-amber-600/40"
+        >
+          <h3 class="text-lg font-bold mb-1 text-amber-300">
+            {{ $t("ledger_maintenance_title") }}
+          </h3>
+          <p class="text-sm text-slate-300 mb-4 leading-relaxed">
+            {{ $t("ledger_maintenance_hint") }}
+          </p>
+
+          <label class="mb-4 flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+            <input
+              v-model="repairRepost"
+              type="checkbox"
+              class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-emerald-500 focus:ring-emerald-500"
+            />
+            {{ $t("ledger_maintenance_repost") }}
+          </label>
+
+          <div class="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="min-h-[42px] rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+              :disabled="repairBusy"
+              @click="runRepairBadCarTransfers(false)"
+            >
+              {{ repairBusy ? $t("ledger_maintenance_running") : $t("ledger_maintenance_preview") }}
+            </button>
+            <button
+              type="button"
+              class="min-h-[42px] rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              :disabled="repairBusy"
+              @click="runRepairBadCarTransfers(true)"
+            >
+              {{ $t("ledger_maintenance_execute") }}
+            </button>
+          </div>
+
+          <p v-if="repairMessage" class="mb-2 text-sm font-semibold text-emerald-300">
+            {{ repairMessage }}
+          </p>
+          <p v-if="repairError" class="mb-2 text-sm font-semibold text-rose-300">
+            {{ repairError }}
+          </p>
+
+          <label class="mb-1 block text-xs font-semibold text-slate-300">
+            {{ $t("ledger_maintenance_output") }}
+          </label>
+          <pre
+            class="max-h-80 overflow-auto rounded-lg border border-slate-600 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-100 whitespace-pre-wrap"
+            dir="ltr"
+          >{{ repairOutput || $t("ledger_maintenance_output_empty") }}</pre>
         </section>
 
         <section

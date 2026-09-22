@@ -459,6 +459,80 @@ class LedgerController extends Controller
         return Response::json(['message' => 'تم حذف الحركة وإلغاء القيد'], 200);
     }
 
+    /**
+     * Preview or execute repair of buggy «نقل السيارة» cash/revenue journals.
+     * GET ?dry_run=1 (default) | POST with execute=1
+     */
+    public function repairBadCarTransfers(Request $request, LedgerService $ledger)
+    {
+        $this->authorizeLedger();
+        $ownerId = (int) Auth::user()->owner_id;
+        $execute = $request->boolean('execute');
+        $repost = ! $request->boolean('no_repost');
+
+        $result = $ledger->repairBadCarClientTransfers($ownerId, ! $execute, $repost);
+
+        $details = $result['details'] ?? [];
+        $cashN = count($details['cash_hits'] ?? []);
+        $revN = count($details['revenue_hits'] ?? []);
+        $pairsN = count($details['pairs'] ?? []);
+        $lines = [];
+        $lines[] = $execute ? '[EXECUTE]' : '[DRY-RUN / معاينة]';
+        $lines[] = 'قيود صندوق وهمية (Cash): '.$cashN;
+        $lines[] = 'قيود إيراد وهمية (Revenue): '.$revN;
+        $lines[] = 'أزواج قابلة لإعادة الترحيل (AR→AR): '.$pairsN;
+        if (! empty($result['would_void'])) {
+            $lines[] = 'سيتم إلغاء القيود: '.implode(', ', $result['would_void']);
+        }
+        if ($execute) {
+            $lines[] = 'تم الإلغاء (voided): '.((int) ($result['voided'] ?? 0));
+            $lines[] = 'تم إعادة الترحيل (reposted): '.((int) ($result['reposted'] ?? 0));
+            $synced = $result['synced_users'] ?? [];
+            if ($synced) {
+                $lines[] = 'مزامنة محافظ: '.implode(', ', $synced);
+            }
+        }
+        foreach ($details['cash_hits'] ?? [] as $row) {
+            $lines[] = sprintf(
+                '  CASH  JV#%s %s amt=%s client=%s date=%s',
+                $row['voucher'] ?? $row['journal_id'],
+                $row['currency'] ?? '$',
+                $row['amount'] ?? 0,
+                $row['client_id'] ?? 0,
+                $row['entry_date'] ?? ''
+            );
+        }
+        foreach ($details['revenue_hits'] ?? [] as $row) {
+            $lines[] = sprintf(
+                '  REV   JV#%s %s amt=%s client=%s date=%s',
+                $row['voucher'] ?? $row['journal_id'],
+                $row['currency'] ?? '$',
+                $row['amount'] ?? 0,
+                $row['client_id'] ?? 0,
+                $row['entry_date'] ?? ''
+            );
+        }
+        foreach ($details['pairs'] ?? [] as $pair) {
+            $lines[] = sprintf(
+                '  PAIR  from=%s → to=%s amt=%s',
+                $pair['from_client_id'] ?? 0,
+                $pair['to_client_id'] ?? 0,
+                $pair['amount'] ?? 0
+            );
+        }
+        if ($cashN === 0 && $revN === 0) {
+            $lines[] = 'لا توجد قيود نقل سيارة خاطئة.';
+        }
+
+        return Response::json([
+            'message' => $execute
+                ? 'تم حذف قيود النقل الخاطئة'.($repost ? ' وإعادة ترحيل الذمم' : '')
+                : 'معاينة فقط — أرسل execute=1 للتطبيق',
+            'result' => $result,
+            'output' => implode("\n", $lines),
+        ], 200);
+    }
+
     public function chartOfAccounts(Request $request, LedgerService $ledger)
     {
         $this->authorizeLedger();

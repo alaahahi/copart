@@ -2028,6 +2028,109 @@ class AccountingController extends Controller
     }
 
     /**
+     * نقل دين سيارة من زبون لآخر — ذمم فقط (بدون صندوق وبدون إيراد).
+     *
+     * @return \App\Models\Transactions|int|null
+     */
+    public function transferCarClientDebt(
+        float $amount,
+        string $desc,
+        int $fromClientId,
+        int $toClientId,
+        $morphedId = '',
+        $morphedType = 'App\\Models\\Car',
+        string $currency = '$',
+        $ownerId = null
+    ) {
+        $ownerId = $ownerId ?? Auth::user()->owner_id;
+        $this->accounting->loadAccounts($ownerId);
+        $amount = round(abs($amount), 2);
+
+        if ($amount < 0.005 || $fromClientId <= 0 || $toClientId <= 0 || $fromClientId === $toClientId) {
+            return 0;
+        }
+
+        if (! User::find($fromClientId) || ! User::find($toClientId)) {
+            return null;
+        }
+
+        return DB::transaction(function () use (
+            $amount,
+            $desc,
+            $fromClientId,
+            $toClientId,
+            $morphedId,
+            $morphedType,
+            $currency,
+            $ownerId
+        ) {
+            $ledger = app(LedgerService::class);
+            $currencyNorm = $currency === 'IQD' ? 'IQD' : '$';
+
+            // Audit trail on both clients (no cash, not is_pay).
+            $fromTx = Transactions::create($this->transactionAttrsForUser((int) $fromClientId, [
+                'type' => 'out',
+                'description' => $desc,
+                'amount' => $amount * -1,
+                'is_pay' => 0,
+                'morphed_id' => $morphedId,
+                'morphed_type' => $morphedType,
+                'user_added' => 0,
+                'created' => $this->currentDate,
+                'discount' => 0,
+                'currency' => $currencyNorm,
+                'parent_id' => 0,
+                'details' => [
+                    'car_client_transfer' => true,
+                    'from_client_id' => $fromClientId,
+                    'to_client_id' => $toClientId,
+                    'role' => 'from',
+                ],
+            ]));
+
+            $toTx = Transactions::create($this->transactionAttrsForUser((int) $toClientId, [
+                'type' => 'in',
+                'description' => $desc,
+                'amount' => $amount,
+                'is_pay' => 0,
+                'morphed_id' => $morphedId,
+                'morphed_type' => $morphedType,
+                'user_added' => 0,
+                'created' => $this->currentDate,
+                'discount' => 0,
+                'currency' => $currencyNorm,
+                'parent_id' => $fromTx->id,
+                'details' => [
+                    'car_client_transfer' => true,
+                    'from_client_id' => $fromClientId,
+                    'to_client_id' => $toClientId,
+                    'role' => 'to',
+                ],
+            ]));
+
+            $journal = $ledger->postClientArTransfer(
+                (int) $ownerId,
+                (int) $fromClientId,
+                (int) $toClientId,
+                $amount,
+                $currencyNorm,
+                (string) $desc,
+                $fromTx
+            );
+
+            if ($journal && Schema::hasColumn('transactions', 'journal_entry_id')) {
+                $fromTx->forceFill(['journal_entry_id' => $journal->id])->save();
+                $toTx->forceFill(['journal_entry_id' => $journal->id])->save();
+            }
+
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $fromClientId);
+            $ledger->syncWalletFromLedger((int) $ownerId, (int) $toClientId);
+
+            return $fromTx;
+        });
+    }
+
+    /**
      * تعويض ضرر on a car: reduce (or restore) client AR without cash.
      * Mirrors payment-discount COA (expense 5100 ↔ AR). Positive $delta reduces debt.
      *

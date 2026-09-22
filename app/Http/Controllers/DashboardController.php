@@ -532,24 +532,28 @@ class DashboardController extends Controller
         }
 
         $total = (int)(($checkout+$shipping_dolar+ $coc_dolar +(int)($dinar / ($dolar_price))+$erbilTotal) ??0);
-        if($car->client_id == $request->client_id)
-        {
-
-        }else{
-            $desc="نقل السيارة";
-            if($car->results==0){
-                if($car->total_s){
-                    $this->accountingController->decreaseWallet($car->total_s, $desc,$car->client_id,$car->id,'App\Models\User');
-                    $this->accountingController->increaseWallet($car->total_s, $desc,$request->client_id,$car->id,'App\Models\User');
-                }
-            }
-            if($car->results==1){
-                if($car->total_s){
-                    $this->accountingController->decreaseWallet($car->total_s-$car->paid, $desc,$car->client_id,$car->id,'App\Models\User');
-                    $this->accountingController->increaseWallet($car->total_s-$car->paid, $desc,$request->client_id,$car->id,'App\Models\User');
-
-                
-                }
+        if ((int) $car->client_id !== (int) $request->client_id
+            && (int) $car->client_id > 0
+            && (int) $request->client_id > 0
+        ) {
+            // Remaining sales AR only — never touch الصندوق / إيرادات.
+            $remaining = max(
+                0,
+                (float) ($car->total_s ?? 0)
+                - (float) ($car->paid ?? 0)
+                - (float) ($car->discount ?? 0)
+                - (float) ($car->damage_compensation ?? 0)
+            );
+            if ($remaining >= 0.005) {
+                $desc = 'نقل السيارة';
+                $this->accountingController->transferCarClientDebt(
+                    $remaining,
+                    $desc,
+                    (int) $car->client_id,
+                    (int) $request->client_id,
+                    $car->id,
+                    'App\\Models\\Car'
+                );
             }
         }
             $dataToUpdate = $request->all();
@@ -647,7 +651,10 @@ class DashboardController extends Controller
             $newDamageCompensation,
             $damageDelta
         ) {
-            if ($car->client_id && (
+            $fromClientId = (int) ($car->client_id ?? 0);
+            $toClientId = (int) ($request->client_id ?? $fromClientId);
+
+            if ($fromClientId && (
                 abs($salesDelta) >= 0.005
                 || abs((float) $split['cost_recovery_delta']) >= 0.005
                 || abs((float) $split['revenue_delta']) >= 0.005
@@ -657,7 +664,7 @@ class DashboardController extends Controller
                     (float) $split['cost_recovery_delta'],
                     (float) $split['revenue_delta'],
                     $descClient,
-                    (int) $car->client_id,
+                    $fromClientId,
                     $car->id,
                     'App\Models\Car'
                 );
@@ -681,15 +688,30 @@ class DashboardController extends Controller
 
             $car->update($dataToUpdate);
 
-            if ($car->client_id && abs($damageDelta) >= 0.005) {
+            if ($fromClientId && abs($damageDelta) >= 0.005) {
                 $damageDesc = 'تعويض ضرر سيارة '.$car->car_type.' '.$car->vin.' (Δ '.$damageDelta.')';
                 $this->accountingController->adjustClientDamageCompensation(
                     $damageDelta,
                     $damageDesc,
-                    (int) $car->client_id,
+                    $fromClientId,
                     $car->id,
                     'App\Models\Car'
                 );
+            }
+
+            // Reassign remaining AR when client changes — never touch الصندوق.
+            if ($fromClientId > 0 && $toClientId > 0 && $fromClientId !== $toClientId) {
+                $remaining = max(0, (float) $total_s - $paid - $discount - (float) $newDamageCompensation);
+                if ($remaining >= 0.005) {
+                    $this->accountingController->transferCarClientDebt(
+                        $remaining,
+                        'نقل السيارة',
+                        $fromClientId,
+                        $toClientId,
+                        $car->id,
+                        'App\\Models\\Car'
+                    );
+                }
             }
         });
 

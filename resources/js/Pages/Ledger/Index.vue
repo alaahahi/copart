@@ -429,6 +429,63 @@ async function loadJournals() {
   }
 }
 
+const repairTransferBusy = ref(false);
+const repairTransferPreview = ref(null);
+
+async function previewBadCarTransfers() {
+  repairTransferBusy.value = true;
+  errorMsg.value = "";
+  successMsg.value = "";
+  try {
+    const { data } = await axios.get("/api/ledgerRepairBadCarTransfers");
+    repairTransferPreview.value = data.result || null;
+    const cash = data.result?.details?.cash_hits?.length || 0;
+    const rev = data.result?.details?.revenue_hits?.length || 0;
+    if (!cash && !rev) {
+      successMsg.value = "لا توجد قيود نقل سيارة خاطئة";
+    } else {
+      successMsg.value = `معاينة: ${cash} قيد صندوق وهمي + ${rev} قيد إيراد وهمي — اضغط تنفيذ للحذف والإصلاح`;
+    }
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "تعذر معاينة إصلاح النقل";
+  } finally {
+    repairTransferBusy.value = false;
+  }
+}
+
+async function executeBadCarTransfersRepair() {
+  repairTransferBusy.value = true;
+  errorMsg.value = "";
+  successMsg.value = "";
+  try {
+    if (!repairTransferPreview.value) {
+      const { data: preview } = await axios.get("/api/ledgerRepairBadCarTransfers");
+      repairTransferPreview.value = preview.result || null;
+    }
+    const cash2 = repairTransferPreview.value?.details?.cash_hits?.length || 0;
+    const rev2 = repairTransferPreview.value?.details?.revenue_hits?.length || 0;
+    if (!cash2 && !rev2) {
+      successMsg.value = "لا توجد قيود نقل سيارة خاطئة";
+      return;
+    }
+    if (
+      !confirm(
+        `حذف ${cash2 + rev2} قيد نقل سيارة خاطئ من الصندوق/الإيراد وإعادة ترحيل الذمم فقط؟`
+      )
+    ) {
+      return;
+    }
+    const { data } = await axios.post("/api/ledgerRepairBadCarTransfers", { execute: 1 });
+    successMsg.value = data.message || "تم الإصلاح";
+    repairTransferPreview.value = data.result || null;
+    await loadJournals();
+  } catch (e) {
+    errorMsg.value = e?.response?.data?.message || "فشل إصلاح النقل";
+  } finally {
+    repairTransferBusy.value = false;
+  }
+}
+
 // --- تحويل بين الحسابات ---
 async function loadTransferAccounts() {
   transferLoading.value = true;
@@ -1329,9 +1386,40 @@ onMounted(() => {
             </template>
 
             <template v-else-if="tab === 'journals'">
-              <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                آخر قيود اليومية (مدين/دائن) من سجل القيود المحاسبية — ليست تحويلات نقدية مباشرة.
-              </p>
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  آخر قيود اليومية (مدين/دائن) من سجل القيود المحاسبية — ليست تحويلات نقدية مباشرة.
+                </p>
+                <div class="flex flex-wrap gap-2 print:hidden">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 disabled:opacity-50"
+                    :disabled="repairTransferBusy"
+                    @click="previewBadCarTransfers"
+                  >
+                    معاينة نقل خاطئ
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                    :disabled="repairTransferBusy"
+                    @click="executeBadCarTransfersRepair"
+                  >
+                    حذف دفعة النقل الغلط + إصلاح
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="repairTransferPreview?.details"
+                class="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-100"
+              >
+                صندوق وهمي: {{ repairTransferPreview.details.cash_hits?.length || 0 }}
+                · إيراد وهمي: {{ repairTransferPreview.details.revenue_hits?.length || 0 }}
+                · أزواج لإعادة ترحيل: {{ repairTransferPreview.details.pairs?.length || 0 }}
+                <span v-if="repairTransferPreview.voided != null" class="ms-2 text-emerald-300">
+                  (محذوف: {{ repairTransferPreview.voided }} · معاد: {{ repairTransferPreview.reposted }})
+                </span>
+              </div>
               <div class="space-y-3">
                 <div
                   v-for="entry in journals"
