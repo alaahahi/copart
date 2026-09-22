@@ -234,6 +234,9 @@ Route::post('ledgerExpenseAccountDelete',[LedgerController::class, 'deleteUnused
 Route::post('ledgerExpenseMovementDelete',[LedgerController::class, 'voidExpenseMovement'])->name('ledgerExpenseMovementDelete');
 Route::get('ledgerRepairBadCarTransfers',[LedgerController::class, 'repairBadCarTransfers'])->name('ledgerRepairBadCarTransfers.preview');
 Route::post('ledgerRepairBadCarTransfers',[LedgerController::class, 'repairBadCarTransfers'])->name('ledgerRepairBadCarTransfers');
+Route::get('maintenanceCommands',[LedgerController::class, 'maintenanceCommands'])->name('maintenanceCommands');
+Route::post('maintenanceCommands/dismiss',[LedgerController::class, 'dismissMaintenanceCommand'])->name('maintenanceCommands.dismiss');
+Route::post('maintenanceCommands/restore',[LedgerController::class, 'restoreMaintenanceCommand'])->name('maintenanceCommands.restore');
 Route::post('ledgerOpeningBalance',[LedgerController::class, 'storeOpeningBalance'])->name('ledgerOpeningBalance');
 Route::post('ledgerManualJournal',[LedgerController::class, 'storeManualJournal'])->name('ledgerManualJournal');
 

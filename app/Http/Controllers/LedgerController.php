@@ -463,12 +463,29 @@ class LedgerController extends Controller
      * Preview or execute repair of buggy «نقل السيارة» cash/revenue journals.
      * GET ?dry_run=1 (default) | POST with execute=1
      */
-    public function repairBadCarTransfers(Request $request, LedgerService $ledger)
+    public function repairBadCarTransfers(Request $request, LedgerService $ledger, \App\Services\MaintenanceCommandService $maintenance)
     {
         $this->authorizeLedger();
         $ownerId = (int) Auth::user()->owner_id;
         $execute = $request->boolean('execute');
         $repost = ! $request->boolean('no_repost');
+        $force = $request->boolean('force');
+
+        $cmdKey = \App\Services\MaintenanceCommandService::KEY_REPAIR_BAD_CAR_TRANSFERS;
+        $cmdState = $maintenance->get($ownerId, $cmdKey);
+
+        // Block accidental re-run unless force=1 (or preview).
+        if ($execute && ! $force && ($cmdState['status'] ?? '') === 'executed') {
+            $executedAt = $cmdState['executed_at'] ?? '-';
+
+            return Response::json([
+                'message' => 'تم تنفيذ هذا الأمر سابقاً في '.$executedAt.'. أرسل force=1 لإعادة التشغيل، أو احذفه من القائمة.',
+                'already_executed' => true,
+                'command' => $cmdState,
+                'result' => null,
+                'output' => $cmdState['output'] ?? '',
+            ], 409);
+        }
 
         $result = $ledger->repairBadCarClientTransfers($ownerId, ! $execute, $repost);
 
@@ -524,12 +541,75 @@ class LedgerController extends Controller
             $lines[] = 'لا توجد قيود نقل سيارة خاطئة.';
         }
 
+        $output = implode("\n", $lines);
+        $message = $execute
+            ? 'تم حذف قيود النقل الخاطئة'.($repost ? ' وإعادة ترحيل الذمم' : '')
+            : 'معاينة فقط — أرسل execute=1 للتطبيق';
+
+        $command = $cmdState;
+        if ($execute) {
+            $summary = sprintf('voided=%d reposted=%d cash=%d revenue=%d', (int) ($result['voided'] ?? 0), (int) ($result['reposted'] ?? 0), $cashN, $revN);
+            $command = $maintenance->markExecuted($ownerId, $cmdKey, $summary, $output);
+        }
+
         return Response::json([
-            'message' => $execute
-                ? 'تم حذف قيود النقل الخاطئة'.($repost ? ' وإعادة ترحيل الذمم' : '')
-                : 'معاينة فقط — أرسل execute=1 للتطبيق',
+            'message' => $message,
             'result' => $result,
-            'output' => implode("\n", $lines),
+            'output' => $output,
+            'command' => $command,
+            'already_executed' => false,
+        ], 200);
+    }
+
+    /**
+     * List / dismiss / restore Settings maintenance commands.
+     */
+    public function maintenanceCommands(Request $request, \App\Services\MaintenanceCommandService $maintenance)
+    {
+        $this->authorizeLedger();
+        $ownerId = (int) Auth::user()->owner_id;
+        $includeDismissed = $request->boolean('include_dismissed');
+
+        return Response::json([
+            'commands' => $maintenance->listForOwner($ownerId, $includeDismissed),
+        ], 200);
+    }
+
+    public function dismissMaintenanceCommand(Request $request, \App\Services\MaintenanceCommandService $maintenance)
+    {
+        $this->authorizeLedger();
+        $ownerId = (int) Auth::user()->owner_id;
+        $key = (string) $request->input('key', '');
+
+        try {
+            $command = $maintenance->dismiss($ownerId, $key);
+        } catch (\InvalidArgumentException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        }
+
+        return Response::json([
+            'message' => 'تم إخفاء الأمر من القائمة',
+            'command' => $command,
+            'commands' => $maintenance->listForOwner($ownerId),
+        ], 200);
+    }
+
+    public function restoreMaintenanceCommand(Request $request, \App\Services\MaintenanceCommandService $maintenance)
+    {
+        $this->authorizeLedger();
+        $ownerId = (int) Auth::user()->owner_id;
+        $key = (string) $request->input('key', '');
+
+        try {
+            $command = $maintenance->restore($ownerId, $key);
+        } catch (\InvalidArgumentException $e) {
+            return Response::json(['message' => $e->getMessage()], 422);
+        }
+
+        return Response::json([
+            'message' => 'تمت إعادة الأمر للقائمة',
+            'command' => $command,
+            'commands' => $maintenance->listForOwner($ownerId),
         ], 200);
     }
 

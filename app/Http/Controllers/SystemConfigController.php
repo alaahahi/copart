@@ -71,6 +71,15 @@ class SystemConfigController extends Controller
         return Inertia::render('Settings/Index', [
             'config' => $this->configForClient($config),
             'waSources' => WhatsAppQueueService::SOURCES,
+            'maintenanceCommands' => in_array((int) (Auth::user()->type_id ?? 0), [1, 6], true)
+                ? app(\App\Services\MaintenanceCommandService::class)->listForOwner((int) Auth::user()->owner_id)
+                : [],
+            'maintenanceCommandsDismissed' => in_array((int) (Auth::user()->type_id ?? 0), [1, 6], true)
+                ? collect(app(\App\Services\MaintenanceCommandService::class)->listForOwner((int) Auth::user()->owner_id, true))
+                    ->where('status', 'dismissed')
+                    ->values()
+                    ->all()
+                : [],
         ]);
     }
 
