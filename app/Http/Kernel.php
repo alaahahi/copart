@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'admin' => \App\Http\Middleware\EnsureAdmin::class,
         'qa.e2e' => \App\Http\Middleware\EnsureQaE2eEnabled::class,
+        'vinstack.integration' => \App\Http\Middleware\VerifyVinstackIntegrationToken::class,
     ];
 }

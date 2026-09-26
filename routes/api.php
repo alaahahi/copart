@@ -28,12 +28,18 @@ use App\Http\Controllers\AuctionController;
 use App\Http\Controllers\ShippingRouteController;
 use App\Http\Controllers\VaultController;
 use App\Http\Controllers\Auth\RefreshTokenController;
+use App\Http\Controllers\Integration\VinstackImportController;
 
 
 use App\Models\SystemConfig;
 
 // Public auth endpoints (must stay outside auth:sanctum).
 Route::post('auth/refresh', RefreshTokenController::class)->name('api.auth.refresh');
+
+// Server-to-server import from vinstack-lite (Bearer VINSTACK_INTEGRATION_TOKEN).
+Route::middleware('vinstack.integration')->prefix('integration/vinstack')->group(function () {
+    Route::post('vehicles', [VinstackImportController::class, 'storeVehicle']);
+});
 
 Route::get('/clear-config-cache', function () {
 
