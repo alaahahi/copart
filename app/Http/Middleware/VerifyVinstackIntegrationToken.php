@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\VinstackIntegrationOwner;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,11 +27,11 @@ class VerifyVinstackIntegrationToken
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $ownerId = (int) config('vinstack_integration.owner_id', 0);
+        $ownerId = VinstackIntegrationOwner::resolve();
 
         if ($ownerId <= 0) {
             return response()->json([
-                'message' => 'VINSTACK_INTEGRATION_OWNER_ID is not configured.',
+                'message' => 'Could not resolve tenant owner_id. Set VINSTACK_INTEGRATION_OWNER_ID in .env.',
             ], 503);
         }
 

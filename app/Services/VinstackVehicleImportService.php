@@ -6,6 +6,7 @@ use App\Models\Auction;
 use App\Models\Car;
 use App\Models\User;
 use App\Models\UserType;
+use App\Models\VinstackImportRequest;
 use App\Support\PhoneDigits;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +19,111 @@ class VinstackVehicleImportService
         protected ClientAccountService $clientAccounts,
         protected CarService $cars,
     ) {}
+
+    /**
+     * Queue an incoming Vinstack vehicle for admin approval (does not create car yet).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{queued: bool, import_id: int, status: string, vin: string}
+     */
+    public function queuePending(int $ownerId, array $payload): array
+    {
+        $vin = strtoupper(trim((string) ($payload['vin'] ?? '')));
+
+        if ($vin === '') {
+            throw new \InvalidArgumentException('VIN is required.');
+        }
+
+        $dealer = is_array($payload['dealer'] ?? null) ? $payload['dealer'] : [];
+        $phone = PhoneDigits::normalize($dealer['phone'] ?? null);
+
+        if ($phone === null) {
+            throw new \InvalidArgumentException('Dealer phone is required to match or create a trader.');
+        }
+
+        $existing = VinstackImportRequest::query()
+            ->where('owner_id', $ownerId)
+            ->where('vin', $vin)
+            ->where('status', VinstackImportRequest::STATUS_PENDING)
+            ->first();
+
+        $attrs = [
+            'owner_id' => $ownerId,
+            'vin' => $vin,
+            'vinstack_vehicle_id' => $payload['vinstack_vehicle_id'] ?? $payload['vehicle_id'] ?? null,
+            'status' => VinstackImportRequest::STATUS_PENDING,
+            'payload' => $payload,
+            'dealer_phone' => $dealer['phone'] ?? $phone,
+            'dealer_name' => $dealer['name'] ?? null,
+            'dealer_company' => $dealer['company_name'] ?? null,
+            'make' => $payload['make'] ?? null,
+            'model' => $payload['model'] ?? null,
+            'year' => isset($payload['year']) ? (string) $payload['year'] : null,
+            'error_message' => null,
+            'reject_reason' => null,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+            'car_id' => null,
+            'client_id' => null,
+        ];
+
+        if ($existing) {
+            $existing->fill($attrs);
+            $existing->save();
+            $row = $existing;
+        } else {
+            $row = VinstackImportRequest::query()->create($attrs);
+        }
+
+        return [
+            'queued' => true,
+            'import_id' => (int) $row->id,
+            'status' => VinstackImportRequest::STATUS_PENDING,
+            'vin' => $vin,
+        ];
+    }
+
+    /**
+     * @return array{created: bool, car_id: int, client_id: int, vin: string, images: int, import_id: int}
+     */
+    public function approve(VinstackImportRequest $request, int $reviewerId): array
+    {
+        if (! $request->isPending()) {
+            throw new \InvalidArgumentException('هذا الطلب ليس بانتظار الموافقة.');
+        }
+
+        $payload = is_array($request->payload) ? $request->payload : [];
+        $result = $this->import((int) $request->owner_id, $payload);
+
+        $request->fill([
+            'status' => VinstackImportRequest::STATUS_APPROVED,
+            'car_id' => $result['car_id'],
+            'client_id' => $result['client_id'],
+            'reviewed_by' => $reviewerId,
+            'reviewed_at' => now(),
+            'error_message' => null,
+            'reject_reason' => null,
+        ])->save();
+
+        return [
+            ...$result,
+            'import_id' => (int) $request->id,
+        ];
+    }
+
+    public function reject(VinstackImportRequest $request, int $reviewerId, ?string $reason = null): void
+    {
+        if (! $request->isPending()) {
+            throw new \InvalidArgumentException('هذا الطلب ليس بانتظار الموافقة.');
+        }
+
+        $request->fill([
+            'status' => VinstackImportRequest::STATUS_REJECTED,
+            'reviewed_by' => $reviewerId,
+            'reviewed_at' => now(),
+            'reject_reason' => $reason,
+        ])->save();
+    }
 
     /**
      * @param  array<string, mixed>  $payload

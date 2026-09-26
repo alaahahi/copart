@@ -178,6 +178,9 @@ Route::group(['middleware' => ['auth','verified']], function () {
         return Inertia::render('SyncMonitor');
     })->name('sync-monitor');
 
+    Route::get('vinstack-imports', [\App\Http\Controllers\VinstackImportApprovalController::class, 'page'])
+        ->name('vinstack-imports');
+
     Route::middleware('admin')->prefix('ops')->name('ops.')->group(function () {
         Route::get('legacy-cutover', [LegacyCutoverController::class, 'index'])->name('legacy-cutover');
         Route::get('legacy-cutover/status', [LegacyCutoverController::class, 'status'])->name('legacy-cutover.status');

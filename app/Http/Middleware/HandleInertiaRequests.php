@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\VinstackImportRequest;
 use App\Services\Auth\SanctumTokenPairService;
 use App\Services\SystemConfigService;
 use App\Support\Branding;
+use App\Support\VinstackIntegrationOwner;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -56,6 +58,9 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
                 'accessToken' => $accessToken,
             ],
+            'vinstackImports' => [
+                'pending_count' => $this->pendingVinstackImportCount($user),
+            ],
             'ziggy' => function () use ($request) {
                 return array_merge((new Ziggy)->toArray(), [
                     'location' => $request->url(),
@@ -66,6 +71,32 @@ class HandleInertiaRequests extends Middleware
                 'success' => session('success'),
             ],
         ]);
+    }
+
+    private function pendingVinstackImportCount($user): int
+    {
+        if (! $user) {
+            return 0;
+        }
+
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('vinstack_import_requests')) {
+                return 0;
+            }
+
+            $ownerId = (int) ($user->owner_id ?: VinstackIntegrationOwner::resolve());
+
+            if ($ownerId <= 0) {
+                return 0;
+            }
+
+            return (int) VinstackImportRequest::query()
+                ->where('owner_id', $ownerId)
+                ->where('status', VinstackImportRequest::STATUS_PENDING)
+                ->count();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**

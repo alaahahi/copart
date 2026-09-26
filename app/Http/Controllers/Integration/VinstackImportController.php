@@ -47,23 +47,24 @@ class VinstackImportController extends Controller
         ]);
 
         try {
-            $result = $import->import($ownerId, $data);
+            $result = $import->queuePending($ownerId, $data);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (Throwable $e) {
-            Log::error('vinstack vehicle import failed', [
+            Log::error('vinstack vehicle queue failed', [
                 'vin' => $data['vin'] ?? null,
                 'message' => $e->getMessage(),
             ]);
 
             return response()->json([
-                'message' => 'Import failed: '.$e->getMessage(),
+                'message' => 'Queue failed: '.$e->getMessage(),
             ], 500);
         }
 
         return response()->json([
             'ok' => true,
             'data' => $result,
-        ], $result['created'] ? 201 : 200);
+            'message' => 'تم إرسال السيارة لقائمة موافقة المحاسبة.',
+        ], 202);
     }
 }

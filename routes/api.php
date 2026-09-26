@@ -36,9 +36,14 @@ use App\Models\SystemConfig;
 // Public auth endpoints (must stay outside auth:sanctum).
 Route::post('auth/refresh', RefreshTokenController::class)->name('api.auth.refresh');
 
-// Server-to-server import from vinstack-lite (Bearer VINSTACK_INTEGRATION_TOKEN).
 Route::middleware('vinstack.integration')->prefix('integration/vinstack')->group(function () {
     Route::post('vehicles', [VinstackImportController::class, 'storeVehicle']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('vinstack-imports', [\App\Http\Controllers\VinstackImportApprovalController::class, 'index']);
+    Route::post('vinstack-imports/{import}/approve', [\App\Http\Controllers\VinstackImportApprovalController::class, 'approve']);
+    Route::post('vinstack-imports/{import}/reject', [\App\Http\Controllers\VinstackImportApprovalController::class, 'reject']);
 });
 
 Route::get('/clear-config-cache', function () {
