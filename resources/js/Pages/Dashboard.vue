@@ -210,10 +210,6 @@ const hijriDate = computed(() => {
   }
 });
 
-const authHeaders = () => ({
-  Authorization: 'Bearer ' + auth.auth.accessToken,
-});
-
 function openModal() {
   showModal.value = true;
 }
@@ -225,9 +221,7 @@ const formData = ref({});
  * so the sum and the colored cards cannot diverge.
  */
 const getcountTotalInfo = async () => {
-  const response = await axios.get('/api/totalInfo', {
-    headers: authHeaders(),
-  });
+  const response = await axios.get('/api/totalInfo');
   const payload = response.data.data || {};
   mainAccount.value = payload.mainAccount;
   allCars.value = payload.allCars;
@@ -258,7 +252,6 @@ const loadRecentActivity = async () => {
   try {
     const response = await axios.get('/api/dashboardRecentActivity', {
       params: { limit: 12 },
-      headers: authHeaders(),
     });
     recentOps.value = Array.isArray(response.data.data) ? response.data.data : [];
   } catch (error) {
@@ -313,9 +306,7 @@ const loadWeather = async () => {
   }
 
   try {
-    const response = await axios.get('/api/dashboardWeather', {
-      headers: authHeaders(),
-    });
+    const response = await axios.get('/api/dashboardWeather');
     const data = response.data?.data || {};
     if (data.temperature != null && !Number.isNaN(Number(data.temperature))) {
       weatherTemp.value = Number(data.temperature);
@@ -413,9 +404,7 @@ const loadExchangeRates = async () => {
   }
 
   try {
-    const response = await axios.get('/api/dashboardExchangeRates', {
-      headers: authHeaders(),
-    });
+    const response = await axios.get('/api/dashboardExchangeRates');
     const data = response.data?.data || {};
     if (applyFxData(data)) {
       writeFxLocalCache(data);

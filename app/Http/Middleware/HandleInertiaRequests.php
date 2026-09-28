@@ -3,13 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Models\VinstackImportRequest;
-use App\Services\Auth\SanctumTokenPairService;
 use App\Services\SystemConfigService;
 use App\Support\Branding;
 use App\Support\VinstackIntegrationOwner;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
-use Laravel\Sanctum\PersonalAccessToken;
 use Tightenco\Ziggy\Ziggy;
 
 class HandleInertiaRequests extends Middleware
@@ -41,7 +39,6 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request)
     {
         $user = $request->user();
-        $accessToken = $this->resolveSessionAccessToken($request, $user);
 
         $branding = app(SystemConfigService::class)->branding();
 
@@ -56,7 +53,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'auth' => [
                 'user' => $user,
-                'accessToken' => $accessToken,
+                // SPA uses the browser session cookie (Sanctum stateful) — no DB PAT.
+                'accessToken' => null,
             ],
             'vinstackImports' => [
                 'pending_count' => $this->pendingVinstackImportCount($user),
@@ -99,31 +97,4 @@ class HandleInertiaRequests extends Middleware
         }
     }
 
-    /**
-     * Prefer the session-stored Sanctum access token; re-issue when missing/expired
-     * while the web session is still authenticated (SPA silent refresh).
-     */
-    private function resolveSessionAccessToken(Request $request, $user): ?string
-    {
-        if (! $user) {
-            return null;
-        }
-
-        $plain = $request->session()->get('sanctum_access_token');
-        if (is_string($plain) && $plain !== '') {
-            $token = PersonalAccessToken::findToken($plain);
-            if ($token
-                && $token->name === SanctumTokenPairService::ACCESS_TOKEN_NAME
-                && (! $token->expires_at || ! $token->expires_at->isPast())
-            ) {
-                return $plain;
-            }
-        }
-
-        $pair = app(SanctumTokenPairService::class)->issue($user);
-        $request->session()->put('sanctum_access_token', $pair['access_token']);
-        $request->session()->put('sanctum_refresh_token', $pair['refresh_token']);
-
-        return $pair['access_token'];
-    }
 }
