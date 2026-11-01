@@ -4,6 +4,7 @@
         "dev": "vite",
         "build": "vite build",
         "test:e2e": "playwright test",
+        "test:e2e:full": "playwright test --grep \"@full|@setup\"",
         "test:e2e:accounting": "playwright test --grep \"@accounting|@setup\"",
         "test:e2e:system": "playwright test --grep \"@system-core|@system-accounting|@system-admin|@system|@health|@setup\"",
         "test:e2e:health": "playwright test --grep \"@system-core|@system-accounting|@system-admin|@system|@health|@setup\"",
