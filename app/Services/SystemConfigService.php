@@ -57,6 +57,37 @@ class SystemConfigService
         ];
     }
 
+    /**
+     * Dashboard widget visibility (defaults to shown when column/row missing).
+     *
+     * @return array{clock: bool, exchange: bool, today_cash: bool}
+     */
+    public function dashboardWidgets(): array
+    {
+        $config = $this->current();
+
+        return [
+            'clock' => $this->flag($config, 'dash_show_clock', true),
+            'exchange' => $this->flag($config, 'dash_show_exchange', true),
+            'today_cash' => $this->flag($config, 'dash_show_today_cash', true),
+        ];
+    }
+
+    protected function flag(SystemConfig $config, string $column, bool $default): bool
+    {
+        try {
+            if (! Schema::hasTable('system_config') || ! Schema::hasColumn('system_config', $column)) {
+                return $default;
+            }
+        } catch (Throwable) {
+            return $default;
+        }
+
+        $value = $config->getAttribute($column);
+
+        return $value === null ? $default : (bool) $value;
+    }
+
     /** Forget the cached instance (after saving settings, or in tests). */
     public function flush(): void
     {
@@ -88,6 +119,9 @@ class SystemConfigService
             'third_title_ar' => '',
             'third_title_kr' => '',
             'receipt_template' => 'default',
+            'dash_show_clock' => true,
+            'dash_show_exchange' => true,
+            'dash_show_today_cash' => true,
         ]);
     }
 }

@@ -48,6 +48,10 @@ class UpdateSystemConfigRequest extends FormRequest
             'wa_notify_debt' => 'sometimes|boolean',
             'wa_notify_car_created' => 'sometimes|boolean',
             'wa_notify_payment' => 'sometimes|boolean',
+
+            'dash_show_clock' => 'sometimes|boolean',
+            'dash_show_exchange' => 'sometimes|boolean',
+            'dash_show_today_cash' => 'sometimes|boolean',
         ];
     }
 
@@ -58,6 +62,9 @@ class UpdateSystemConfigRequest extends FormRequest
             'wa_notify_debt',
             'wa_notify_car_created',
             'wa_notify_payment',
+            'dash_show_clock',
+            'dash_show_exchange',
+            'dash_show_today_cash',
             'remove_app_logo',
             'remove_app_cover',
         ];

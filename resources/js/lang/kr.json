@@ -208,6 +208,8 @@
     "logoLeft3": "لۆگۆی چەپ 3",
     "logoHaulf": "لۆگۆی HAULF (دەق دەردەکەوێت ئەگەر بەتاڵ بێت)",
     "logoMain": "لۆگۆی سەرەکی",
+    "dashboardWidgetsTitle": "کارتەکانی داشبۆرد",
+    "dashboardWidgetsHint": "هەر کارتێک بە جیا پیشان بدە یان بیشارەوە لە پەڕەی سەرەکی.",
     "brandingTitle": "ناسنامەی پرۆژە",
     "brandingHint": "لۆگۆ و کاڤەر لە لاگین و پەڕەی سەرەکی دەردەکەون.",
     "companyName": "ناوی پرۆژە",

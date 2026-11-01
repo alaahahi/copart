@@ -198,6 +198,8 @@
     "logoLeft3": "Left logo 3",
     "logoHaulf": "HAULF logo (text shown if empty)",
     "logoMain": "Main logo",
+    "dashboardWidgetsTitle": "Dashboard widgets",
+    "dashboardWidgetsHint": "Show or hide each home dashboard card individually.",
     "brandingTitle": "Project branding",
     "brandingHint": "Logo and cover shown on login and the welcome page.",
     "companyName": "Company name",

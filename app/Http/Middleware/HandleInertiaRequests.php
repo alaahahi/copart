@@ -40,7 +40,8 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        $branding = app(SystemConfigService::class)->branding();
+        $configService = app(SystemConfigService::class);
+        $branding = $configService->branding();
 
         return array_merge(parent::share($request), [
             'appName' => $branding['appName'],
@@ -51,6 +52,7 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $branding['logo'],
                 'cover' => $branding['cover'],
             ],
+            'dashboardWidgets' => $configService->dashboardWidgets(),
             'auth' => [
                 'user' => $user,
                 // SPA uses the browser session cookie (Sanctum stateful) — no DB PAT.

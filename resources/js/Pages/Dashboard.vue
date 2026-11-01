@@ -11,10 +11,30 @@ import DashboardCadConverter from "@/Components/DashboardCadConverter.vue";
 import { formatMoney } from "@/utils/formatMoney";
 
 const auth = defineProps(['auth']);
-const appName = usePage().props.value.appName;
+const page = usePage();
+const appName = page.props.value.appName;
 
 const { t } = useI18n();
 let userType = ref(auth.auth.user.type_id);
+
+const showClockWidget = computed(
+  () => page.props.value.dashboardWidgets?.clock !== false
+);
+const showExchangeWidget = computed(
+  () => page.props.value.dashboardWidgets?.exchange !== false
+);
+const showTodayCashWidget = computed(
+  () => page.props.value.dashboardWidgets?.today_cash !== false
+);
+const showWidgetsSection = computed(
+  () => showClockWidget.value || showExchangeWidget.value || showTodayCashWidget.value
+);
+const widgetsGridClass = computed(() => {
+  const count = [showClockWidget.value, showExchangeWidget.value, showTodayCashWidget.value].filter(Boolean).length;
+  if (count <= 1) return 'grid-cols-1';
+  if (count === 2) return 'grid-cols-1 md:grid-cols-2';
+  return 'grid-cols-1 md:grid-cols-3';
+});
 
 function selectUser() {
   return 'getIndexClients';
@@ -476,10 +496,15 @@ watch(searchTerm, (term) => {
 
 getcountTotalInfo().catch((e) => console.error(e));
 loadRecentActivity().catch((e) => console.error(e));
-loadWeather().catch((e) => console.error(e));
-loadExchangeRates().catch((e) => console.error(e));
+if (showClockWidget.value) {
+  loadWeather().catch((e) => console.error(e));
+}
+if (showExchangeWidget.value) {
+  loadExchangeRates().catch((e) => console.error(e));
+}
 
 onMounted(() => {
+  if (!showClockWidget.value) return;
   clockTimer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
@@ -771,10 +796,11 @@ function directionClass(direction) {
         </section>
 
         <!-- Useful widgets: clock + exchange + today cash -->
-        <section class="mt-6 sm:mt-8">
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-3 sm:gap-4">
+        <section v-if="showWidgetsSection" class="mt-6 sm:mt-8">
+          <div class="grid gap-3 sm:gap-4" :class="widgetsGridClass">
             <!-- Live clock + sky / weather — full-card phase gradient -->
             <div
+              v-if="showClockWidget"
               class="dash-sky-card relative min-w-0 overflow-hidden rounded-2xl border border-white/15 p-4 pb-36 shadow-sm sm:p-5 sm:pb-36"
               :class="skyPanelClass"
               :aria-label="weatherTempLabel || $t(dayPhaseLabelKey)"
@@ -935,6 +961,7 @@ function directionClass(direction) {
 
             <!-- Exchange rates (USD → IQD, CAD → USD) -->
             <div
+              v-if="showExchangeWidget"
               class="min-w-0 rounded-2xl border border-slate-600 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 p-4 shadow-sm sm:p-5"
               :aria-label="$t('dashboard_exchange_rate')"
             >
@@ -1079,6 +1106,7 @@ function directionClass(direction) {
 
             <!-- Today's cash movement -->
             <div
+              v-if="showTodayCashWidget"
               class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/80 sm:p-5"
             >
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

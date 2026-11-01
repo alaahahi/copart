@@ -160,6 +160,9 @@ const form = ref({
   wa_notify_debt: !!props.config?.wa_notify_debt,
   wa_notify_car_created: !!props.config?.wa_notify_car_created,
   wa_notify_payment: !!props.config?.wa_notify_payment,
+  dash_show_clock: props.config?.dash_show_clock !== false,
+  dash_show_exchange: props.config?.dash_show_exchange !== false,
+  dash_show_today_cash: props.config?.dash_show_today_cash !== false,
 });
 
 const logoPaths = ref(
@@ -317,6 +320,15 @@ async function save() {
       form.value.wa_notify_debt = !!data.config.wa_notify_debt;
       form.value.wa_notify_car_created = !!data.config.wa_notify_car_created;
       form.value.wa_notify_payment = !!data.config.wa_notify_payment;
+      form.value.dash_show_clock = data.config.dash_show_clock !== false;
+      form.value.dash_show_exchange = data.config.dash_show_exchange !== false;
+      form.value.dash_show_today_cash = data.config.dash_show_today_cash !== false;
+      if (!page.props.value.dashboardWidgets) {
+        page.props.value.dashboardWidgets = {};
+      }
+      page.props.value.dashboardWidgets.clock = form.value.dash_show_clock;
+      page.props.value.dashboardWidgets.exchange = form.value.dash_show_exchange;
+      page.props.value.dashboardWidgets.today_cash = form.value.dash_show_today_cash;
     }
 
     logoFiles.value = {};
@@ -707,6 +719,65 @@ onMounted(loadDbInsights);
                 </button>
               </div>
             </div>
+          </div>
+
+          <button
+            type="button"
+            class="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-60"
+            :disabled="saving"
+            @click="save"
+          >
+            {{ saving ? $t("saving") : $t("saveSettings") }}
+          </button>
+        </section>
+
+        <section
+          class="bg-slate-900 shadow rounded-xl p-6 border border-slate-700"
+        >
+          <h3 class="text-lg font-bold text-white mb-1">
+            {{ $t("dashboardWidgetsTitle") }}
+          </h3>
+          <p class="text-sm text-slate-300 mb-5">
+            {{ $t("dashboardWidgetsHint") }}
+          </p>
+
+          <div class="space-y-3 mb-5">
+            <label
+              class="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 cursor-pointer"
+            >
+              <input
+                v-model="form.dash_show_clock"
+                type="checkbox"
+                class="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span class="text-sm font-semibold text-slate-100">
+                {{ $t("dashboard_clock") }}
+              </span>
+            </label>
+            <label
+              class="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 cursor-pointer"
+            >
+              <input
+                v-model="form.dash_show_exchange"
+                type="checkbox"
+                class="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span class="text-sm font-semibold text-slate-100">
+                {{ $t("dashboard_exchange_rate") }}
+              </span>
+            </label>
+            <label
+              class="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 cursor-pointer"
+            >
+              <input
+                v-model="form.dash_show_today_cash"
+                type="checkbox"
+                class="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span class="text-sm font-semibold text-slate-100">
+                {{ $t("dashboard_today_cash") }}
+              </span>
+            </label>
           </div>
 
           <button

@@ -44,6 +44,9 @@ class SystemConfig extends Model
         'wa_notify_payment',
         'default_receipts_vault_id',
         'default_purchases_vault_id',
+        'dash_show_clock',
+        'dash_show_exchange',
+        'dash_show_today_cash',
     ];
 
     /**
@@ -62,5 +65,8 @@ class SystemConfig extends Model
         'wa_notify_payment' => 'boolean',
         'default_receipts_vault_id' => 'integer',
         'default_purchases_vault_id' => 'integer',
+        'dash_show_clock' => 'boolean',
+        'dash_show_exchange' => 'boolean',
+        'dash_show_today_cash' => 'boolean',
     ];
 }

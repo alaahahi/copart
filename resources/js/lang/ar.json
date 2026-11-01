@@ -207,6 +207,8 @@
     "logoMain": "الشعار الرئيسي",
     "brandingTitle": "هوية المشروع",
     "brandingHint": "شعار وغلاف يظهران في تسجيل الدخول والواجهة الرئيسية.",
+    "dashboardWidgetsTitle": "بطاقات لوحة التحكم",
+    "dashboardWidgetsHint": "اختر إظهار أو إخفاء كل بطاقة على حدة في الصفحة الرئيسية.",
     "companyName": "اسم المشروع",
     "companyNameHint": "يظهر في الوصولات والتقارير بدل Laravel",
     "appLogo": "شعار المشروع",

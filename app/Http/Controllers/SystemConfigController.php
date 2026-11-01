@@ -39,6 +39,12 @@ class SystemConfigController extends Controller
         'wa_notify_payment',
     ];
 
+    protected array $dashboardWidgetFields = [
+        'dash_show_clock',
+        'dash_show_exchange',
+        'dash_show_today_cash',
+    ];
+
     public function __construct(
         protected SystemBrandingService $branding
     ) {
@@ -99,7 +105,7 @@ class SystemConfigController extends Controller
             'receipt_website',
             'first_title_ar',
             'second_title_ar',
-        ], $this->waFields));
+        ], $this->waFields, $this->dashboardWidgetFields));
 
         if (empty($validated['wa_base_host'])) {
             $validated['wa_base_host'] = 'https://wa.intellij-app.com';
