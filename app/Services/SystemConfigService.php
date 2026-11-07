@@ -73,6 +73,12 @@ class SystemConfigService
         ];
     }
 
+    /** Nejum/Kaml payments module — off by default until enabled in settings. */
+    public function nejumPaymentsEnabled(): bool
+    {
+        return $this->flag($this->current(), 'nejum_payments_enabled', false);
+    }
+
     protected function flag(SystemConfig $config, string $column, bool $default): bool
     {
         try {
@@ -122,6 +128,7 @@ class SystemConfigService
             'dash_show_clock' => true,
             'dash_show_exchange' => true,
             'dash_show_today_cash' => true,
+            'nejum_payments_enabled' => false,
         ]);
     }
 }

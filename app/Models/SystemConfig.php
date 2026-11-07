@@ -47,6 +47,7 @@ class SystemConfig extends Model
         'dash_show_clock',
         'dash_show_exchange',
         'dash_show_today_cash',
+        'nejum_payments_enabled',
     ];
 
     /**
@@ -68,5 +69,6 @@ class SystemConfig extends Model
         'dash_show_clock' => 'boolean',
         'dash_show_exchange' => 'boolean',
         'dash_show_today_cash' => 'boolean',
+        'nejum_payments_enabled' => 'boolean',
     ];
 }

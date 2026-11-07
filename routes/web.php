@@ -13,6 +13,7 @@ use App\Http\Controllers\CarConfigController;
 use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CompanyTreasuryController;
+use App\Http\Controllers\NejumPaymentController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
@@ -157,6 +158,9 @@ Route::group(['middleware' => ['auth','verified']], function () {
     Route::get('car_expenses',[CarExpensesController::class, 'index'])->name('car_expenses');
     Route::get('company_treasury',[CompanyTreasuryController::class, 'index'])->name('company_treasury');
     Route::get('company_treasury/print',[CompanyTreasuryController::class, 'printReport'])->name('company_treasury_print');
+    Route::middleware('nejum.payments')->group(function () {
+        Route::get('nejum-payments', [NejumPaymentController::class, 'index'])->name('nejum-payments');
+    });
     Route::get('ledger',[LedgerController::class, 'index'])->name('ledger');
     Route::get('analytics',[AnalyticsController::class, 'index'])->name('analytics');
     Route::get('settings',[SystemConfigController::class, 'index'])->name('settings');

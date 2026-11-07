@@ -19,6 +19,7 @@ use App\Http\Controllers\CarConfigController;
 use App\Http\Controllers\AnnualController;
 use App\Http\Controllers\CarExpensesController;
 use App\Http\Controllers\CompanyTreasuryController;
+use App\Http\Controllers\NejumPaymentController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SyncMonitorController;
@@ -225,6 +226,15 @@ Route::post('companyTreasuryDelete',[CompanyTreasuryController::class, 'destroy'
 Route::get('companyTreasuryTrash',[CompanyTreasuryController::class, 'getTrash'])->name('companyTreasuryTrash');
 Route::post('companyTreasuryRestore',[CompanyTreasuryController::class, 'restore'])->name('companyTreasuryRestore');
 Route::post('companyTreasuryToggleSettled',[CompanyTreasuryController::class, 'toggleSettled'])->name('companyTreasuryToggleSettled');
+
+Route::middleware('nejum.payments')->group(function () {
+    Route::get('nejumPayments', [NejumPaymentController::class, 'list'])->name('nejumPayments.list');
+    Route::get('nejumPaymentsSummary', [NejumPaymentController::class, 'summary'])->name('nejumPayments.summary');
+    Route::get('nejumPaymentsLookupCar', [NejumPaymentController::class, 'lookupCar'])->name('nejumPayments.lookupCar');
+    Route::post('nejumPayments', [NejumPaymentController::class, 'store'])->name('nejumPayments.store');
+    Route::post('nejumPayments/{line}', [NejumPaymentController::class, 'update'])->name('nejumPayments.update');
+    Route::post('nejumPayments/{line}/delete', [NejumPaymentController::class, 'destroy'])->name('nejumPayments.destroy');
+});
 
 Route::get('ledgerTrialBalance',[LedgerController::class, 'trialBalance'])->name('ledgerTrialBalance');
 Route::get('ledgerChartOfAccounts',[LedgerController::class, 'chartOfAccounts'])->name('ledgerChartOfAccounts');

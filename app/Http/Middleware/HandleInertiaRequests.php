@@ -53,6 +53,9 @@ class HandleInertiaRequests extends Middleware
                 'cover' => $branding['cover'],
             ],
             'dashboardWidgets' => $configService->dashboardWidgets(),
+            'features' => [
+                'nejumPayments' => $configService->nejumPaymentsEnabled(),
+            ],
             'auth' => [
                 'user' => $user,
                 // SPA uses the browser session cookie (Sanctum stateful) — no DB PAT.

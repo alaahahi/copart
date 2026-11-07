@@ -67,5 +67,6 @@ class Kernel extends HttpKernel
         'admin' => \App\Http\Middleware\EnsureAdmin::class,
         'qa.e2e' => \App\Http\Middleware\EnsureQaE2eEnabled::class,
         'vinstack.integration' => \App\Http\Middleware\VerifyVinstackIntegrationToken::class,
+        'nejum.payments' => \App\Http\Middleware\EnsureNejumPaymentsEnabled::class,
     ];
 }

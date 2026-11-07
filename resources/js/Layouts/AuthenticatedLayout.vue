@@ -84,8 +84,19 @@ const primaryItems = computed(() => [
   { key: "analytics", label: "Analytics", href: route("analytics"), active: route().current("analytics"), show: hasRole(1, 6) },
 ]);
 
+const nejumPaymentsEnabled = computed(
+  () => page.props.value.features?.nejumPayments === true
+);
+
 const moreItems = computed(() => [
   { key: "treasury", label: "CompanyTreasury", href: route("company_treasury"), active: route().current("company_treasury"), show: true },
+  {
+    key: "nejum-payments",
+    label: "nejumPaymentsTitle",
+    href: route("nejum-payments"),
+    active: route().current("nejum-payments"),
+    show: nejumPaymentsEnabled.value,
+  },
   { key: "ledger", label: "Ledger", href: route("ledger"), active: route().current("ledger"), show: hasRole(1, 6) },
   { key: "sync", label: "SyncMonitor", href: route("sync-monitor"), active: route().current("sync-monitor"), show: true },
   {

@@ -1,6 +1,6 @@
 export const CAR_FIELD_LABELS = {
   americaPrice: 'سعر السيارة أمريكا',
-  americaTransfer: 'توينج',
+  americaTransfer: 'نقل امريكا',
   recovery: 'شحن',
   repairExpenses: 'مصاريف تصليح',
   erbilTransfer: 'نقل أربيل',

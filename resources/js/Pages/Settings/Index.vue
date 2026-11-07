@@ -163,6 +163,7 @@ const form = ref({
   dash_show_clock: props.config?.dash_show_clock !== false,
   dash_show_exchange: props.config?.dash_show_exchange !== false,
   dash_show_today_cash: props.config?.dash_show_today_cash !== false,
+  nejum_payments_enabled: !!props.config?.nejum_payments_enabled,
 });
 
 const logoPaths = ref(
@@ -323,12 +324,17 @@ async function save() {
       form.value.dash_show_clock = data.config.dash_show_clock !== false;
       form.value.dash_show_exchange = data.config.dash_show_exchange !== false;
       form.value.dash_show_today_cash = data.config.dash_show_today_cash !== false;
+      form.value.nejum_payments_enabled = !!data.config.nejum_payments_enabled;
       if (!page.props.value.dashboardWidgets) {
         page.props.value.dashboardWidgets = {};
       }
       page.props.value.dashboardWidgets.clock = form.value.dash_show_clock;
       page.props.value.dashboardWidgets.exchange = form.value.dash_show_exchange;
       page.props.value.dashboardWidgets.today_cash = form.value.dash_show_today_cash;
+      if (!page.props.value.features) {
+        page.props.value.features = {};
+      }
+      page.props.value.features.nejumPayments = form.value.nejum_payments_enabled;
     }
 
     logoFiles.value = {};
@@ -780,6 +786,37 @@ onMounted(loadDbInsights);
             </label>
           </div>
 
+          <button
+            type="button"
+            class="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-60"
+            :disabled="saving"
+            @click="save"
+          >
+            {{ saving ? $t("saving") : $t("saveSettings") }}
+          </button>
+        </section>
+
+        <section
+          class="bg-slate-900 shadow rounded-xl p-6 border border-slate-700"
+        >
+          <h3 class="text-lg font-bold text-white mb-1">
+            {{ $t("nejumPaymentsSettingsTitle") }}
+          </h3>
+          <p class="text-sm text-slate-300 mb-5">
+            {{ $t("nejumPaymentsSettingsHint") }}
+          </p>
+          <label
+            class="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 cursor-pointer mb-5"
+          >
+            <input
+              v-model="form.nejum_payments_enabled"
+              type="checkbox"
+              class="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+            />
+            <span class="text-sm font-semibold text-slate-100">
+              {{ $t("nejumPaymentsEnable") }}
+            </span>
+          </label>
           <button
             type="button"
             class="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 disabled:opacity-60"
