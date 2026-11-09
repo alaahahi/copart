@@ -39,6 +39,7 @@ use App\Services\TransactionPaymentService;
 use App\Services\VaultService;
 use App\Models\Vault;
 use App\Models\LedgerAccount;
+use App\Models\CompanyTreasuryEntry;
 use Illuminate\Support\Facades\Schema;
 use App\Services\WhatsAppQueueService;
 use App\Http\Requests\RestoreTransactionRequest;
@@ -223,6 +224,41 @@ class AccountingController extends Controller
         return $transactions;
     }
 
+    /**
+     * Flag cash movements that already have an active (non-trashed) company-treasury copy.
+     */
+    private function attachTreasuryExportFlags($transactions, int $ownerId)
+    {
+        $ids = collect($transactions)->pluck('id')->filter()->unique()->values();
+        foreach ($transactions as $transaction) {
+            $transaction->setAttribute('exported_to_treasury', false);
+        }
+
+        if ($ids->isEmpty()
+            || ! Schema::hasTable('company_treasury_entries')
+            || ! Schema::hasColumn('company_treasury_entries', 'source_transaction_id')
+        ) {
+            return $transactions;
+        }
+
+        $exportedIds = CompanyTreasuryEntry::query()
+            ->where('owner_id', $ownerId)
+            ->whereIn('source_transaction_id', $ids)
+            ->pluck('source_transaction_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $exportedLookup = array_fill_keys($exportedIds, true);
+        foreach ($transactions as $transaction) {
+            $transaction->setAttribute(
+                'exported_to_treasury',
+                isset($exportedLookup[(int) $transaction->id])
+            );
+        }
+
+        return $transactions;
+    }
+
     public function getIndexAccounting(Request $request)
     {
      $owner_id=Auth::user()->owner_id;
@@ -306,6 +342,7 @@ class AccountingController extends Controller
      // التأكد من تحميل المرفقات (TransactionsImages) في كل الحالات بما فيها عند الفلترة بالتاريخ
      $allTransactions->getCollection()->load(['TransactionsImages', 'journalEntry.lines.account', 'parent.journalEntry.lines.account']);
      $this->attachMoneyAccounts($allTransactions->getCollection());
+     $this->attachTreasuryExportFlags($allTransactions->getCollection(), (int) $owner_id);
      $sumAllTransactions = $allTransactions->where('currency','$')->sum('amount');
      $sumDebitTransactions = $allTransactions->where('currency','$')->whereIn('type', ['debt','outUserBox'])->sum('amount');
      $sumInTransactions = $allTransactions->where('currency','$')->whereIn('type', ['in', 'inUserBox'])->sum('amount');

@@ -23,6 +23,7 @@ import imags from "@/Components/icon/imags.vue";
 import trash from "@/Components/icon/trash.vue";
 import edit from "@/Components/icon/edit.vue";
 import print from "@/Components/icon/print.vue";
+import wallet from "@/Components/icon/wallet.vue";
 
 import InfiniteLoading from "v3-infinite-loading";
 import "v3-infinite-loading/lib/style.css";
@@ -155,6 +156,26 @@ function openModalDel(tran){
 function openModalUploader(tran){
   tranId.value = tran
   showModalUploader.value = true;
+}
+
+const exportingTreasuryId = ref(null);
+
+async function exportToCompanyTreasury(tran) {
+  if (!tran?.id || tran.exported_to_treasury || exportingTreasuryId.value === tran.id) {
+    return;
+  }
+  exportingTreasuryId.value = tran.id;
+  try {
+    await axios.post('/api/companyTreasuryExportFromTransaction', {
+      transaction_id: tran.id,
+    });
+    tran.exported_to_treasury = true;
+  } catch (error) {
+    const msg = error?.response?.data?.message || 'تعذر تصدير الدفعة إلى قاصة الشركة';
+    window.alert(msg);
+  } finally {
+    exportingTreasuryId.value = null;
+  }
 }
 
 const props = defineProps({
@@ -949,6 +970,15 @@ async function saveDescription(tran) {
                         <button class="action-btn action-btn--upload" @click="openModalUploader(tran)" title="مرفقات الحركة">
                           <imags />
                         </button>
+                        <button
+                          v-if="!tran.exported_to_treasury"
+                          class="action-btn action-btn--treasury"
+                          title="تصدير الدفعة إلى قاصة الشركة (نسخ مرة واحدة)"
+                          :disabled="exportingTreasuryId === tran.id"
+                          @click="exportToCompanyTreasury(tran)"
+                        >
+                          <wallet class="w-4 h-4" />
+                        </button>
                         <a
                           v-if="tran.type === 'out' || tran.type === 'outUser' || tran.type === 'debt'"
                           :href="`/api/getIndexAccountsSelas?user_id=${boxes[0].id}&print=2&transactions_id=${tran.id}`"
@@ -1097,6 +1127,10 @@ async function saveDescription(tran) {
 
 .action-btn--print {
   background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.action-btn--treasury {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
 }
 
 .account-link {

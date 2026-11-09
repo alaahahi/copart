@@ -81,7 +81,7 @@
     };
 
     $push('Purchase Amount (USA)', (float) ($car->shipping_dolar_s ?? 0));
-    $push('Towing', (float) ($car->dinar_s ?? 0));
+    $push('Towing and shipping', (float) ($car->dinar_s ?? 0));
     $push('Shipping', (float) ($car->coc_dolar_s ?? 0));
     $push('Repair Expenses', (float) ($car->checkout_s ?? 0));
     $push('Erbil Transfer', $erbilSub);

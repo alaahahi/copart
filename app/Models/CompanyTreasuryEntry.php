@@ -22,6 +22,7 @@ class CompanyTreasuryEntry extends Model
         'balance',
         'is_settled',
         'journal_entry_id',
+        'source_transaction_id',
     ];
 
     protected $casts = [
@@ -35,5 +36,10 @@ class CompanyTreasuryEntry extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function sourceTransaction()
+    {
+        return $this->belongsTo(Transactions::class, 'source_transaction_id');
     }
 }

@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyTreasuryEntry;
 use App\Models\SystemConfig;
+use App\Models\Transactions;
+use App\Models\User;
 use App\Services\LedgerService;
+use App\Services\VaultService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -175,6 +178,135 @@ class CompanyTreasuryController extends Controller
         $entry->refresh();
 
         return Response::json($this->formatEntryForApi($entry), 201);
+    }
+
+    /**
+     * One-time convenience copy of a cash-box movement into company treasury.
+     * Does NOT post ledger journals — soft-delete restores the export button.
+     */
+    public function exportFromTransaction(Request $request)
+    {
+        $this->authorizeTreasury();
+
+        if (! $this->treasuryReady()) {
+            return Response::json(['message' => 'جدول القاصة غير موجود — شغّل php artisan migrate'], 503);
+        }
+
+        if (! Schema::hasColumn('company_treasury_entries', 'source_transaction_id')) {
+            return Response::json(['message' => 'عمود الربط غير موجود — شغّل php artisan migrate'], 503);
+        }
+
+        $validated = $request->validate([
+            'transaction_id' => 'required|integer',
+        ]);
+
+        $ownerId = (int) Auth::user()->owner_id;
+        $transactionId = (int) $validated['transaction_id'];
+
+        $transaction = $this->findOwnerCashBoxTransaction($ownerId, $transactionId);
+        if (! $transaction) {
+            return Response::json(['message' => 'الحركة غير موجودة أو غير تابعة لصناديق هذا الحساب'], 404);
+        }
+
+        $existing = CompanyTreasuryEntry::query()
+            ->where('owner_id', $ownerId)
+            ->where('source_transaction_id', $transactionId)
+            ->first();
+        if ($existing) {
+            return Response::json([
+                'message' => 'تم تصدير هذه الدفعة مسبقاً إلى قاصة الشركة',
+                'entry' => $this->formatEntryForApi($existing),
+            ], 409);
+        }
+
+        $amount = abs((float) $transaction->amount);
+        if ($amount < 0.01) {
+            return Response::json(['message' => 'مبلغ الحركة غير صالح للتصدير'], 422);
+        }
+
+        $currency = in_array($transaction->currency, ['$', 'IQD'], true)
+            ? $transaction->currency
+            : '$';
+
+        $depositTypes = ['in', 'inUser', 'inUserBox', 'inUserAmanah', 'transfer_in'];
+        $withdrawTypes = ['out', 'outUser', 'outUserBox', 'outUserAmanah', 'debt', 'transfer_out'];
+        $isDeposit = in_array($transaction->type, $depositTypes, true);
+        $isWithdraw = in_array($transaction->type, $withdrawTypes, true);
+        if (! $isDeposit && ! $isWithdraw) {
+            return Response::json(['message' => 'نوع الحركة غير مدعوم للتصدير'], 422);
+        }
+
+        $entryDate = $this->normalizeEntryDate(
+            $transaction->created
+                ? (string) $transaction->created
+                : now()->toDateString()
+        );
+
+        $description = trim((string) ($transaction->description ?? ''));
+        if ($description === '') {
+            $description = $isDeposit ? 'إيداع' : 'سحب';
+        }
+        $description = mb_substr('نسخ حركة #'.$transactionId.' — '.$description, 0, 500);
+
+        $entry = CompanyTreasuryEntry::create([
+            'owner_id' => $ownerId,
+            'user_id' => Auth::id(),
+            'entry_date' => $entryDate,
+            'description' => $description,
+            'tag' => $transaction->tag ?: null,
+            'currency' => $currency,
+            'debit' => $isDeposit ? $amount : 0,
+            'credit' => $isDeposit ? 0 : $amount,
+            'balance' => 0,
+            'journal_entry_id' => null,
+            'source_transaction_id' => $transactionId,
+        ]);
+
+        $this->recalculateBalancesFrom(
+            $ownerId,
+            $currency,
+            $entryDate,
+            (int) $entry->id
+        );
+
+        if ($this->getLastBalance($ownerId, $currency) < 0) {
+            $entryId = (int) $entry->id;
+            $entry->forceDelete();
+            $this->recalculateAfterDelete($ownerId, $currency, $entryDate, $entryId);
+
+            return Response::json(['message' => 'الرصيد غير كافٍ لإتمام السحب في قاصة الشركة'], 422);
+        }
+
+        $entry->refresh();
+
+        return Response::json($this->formatEntryForApi($entry), 201);
+    }
+
+    /**
+     * Resolve a cash-box transaction that belongs to the authenticated owner.
+     */
+    protected function findOwnerCashBoxTransaction(int $ownerId, int $transactionId): ?Transactions
+    {
+        $vaults = app(VaultService::class);
+        $rows = $vaults->listForOwner($ownerId, true);
+        $vaultIds = $rows->pluck('id')->filter()->unique()->values();
+        $legacyIds = $rows->pluck('legacy_user_id')->filter()->unique()->values();
+
+        return Transactions::query()
+            ->where('id', $transactionId)
+            ->whereIn('type', VaultService::CASH_BOX_MOVEMENT_TYPES)
+            ->where(function ($q) use ($vaultIds, $legacyIds) {
+                if ($vaultIds->isNotEmpty()) {
+                    $q->orWhereIn('vault_id', $vaultIds);
+                }
+                if ($legacyIds->isNotEmpty()) {
+                    $q->orWhere(function ($inner) use ($legacyIds) {
+                        $inner->whereIn('morphed_type', [User::class, 'App\\Models\\User', 'App\Models\User'])
+                            ->whereIn('morphed_id', $legacyIds);
+                    });
+                }
+            })
+            ->first();
     }
 
     public function destroy(Request $request)
