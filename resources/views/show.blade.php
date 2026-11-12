@@ -2,6 +2,31 @@
 <html lang="ar" dir="rtl">
 <head>
 @include('Components.reportHead', ['pageTitle' => 'كشف حساب'])
+<style>
+    /* Statement numbers: center + larger + heavier (beats cached Bootstrap) */
+    .erp-report-summary__value,
+    .erp-report-summary__value.num,
+    table.erp-report-table td.num,
+    table.erp-report-table.erp-report-table--dense td.num {
+        text-align: center !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.03em;
+    }
+    .erp-report-summary__value,
+    .erp-report-summary__value.num {
+        font-size: 20px !important;
+    }
+    table.erp-report-table td.num,
+    table.erp-report-table.erp-report-table--dense td.num {
+        font-size: 12px !important;
+    }
+    table.erp-report-table td.cell-vin {
+        text-align: center !important;
+        white-space: nowrap !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+    }
+</style>
 </head>
 <body class="erp-report">
 @include('Components.reportToolbar')
@@ -102,9 +127,9 @@
             <tbody>
                 @foreach ($rows as $key => $row)
                 <tr>
-                    <td>{{ $key + 1 }}</td>
+                    <td class="num">{{ $key + 1 }}</td>
                     <td class="text-start-rtl">{{ $row->car_type }}</td>
-                    <td>{{ $row->date }}</td>
+                    <td class="num">{{ $row->date }}</td>
                     <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
                     <td class="num">{{ $row->car_number }}</td>
                     <td>{{ $row->car_color }}</td>

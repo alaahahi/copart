@@ -332,14 +332,14 @@ table.erp-report-table tfoot th {
 
 table.erp-report-table .num,
 table.erp-report-table td.num {
-    text-align: center;
+    text-align: center !important;
     font-variant-numeric: tabular-nums;
-    font-weight: 800;
-    font-size: 13px;
+    font-weight: 800 !important;
+    font-size: 13px !important;
     white-space: nowrap;
     direction: ltr;
-    unicode-bidi: embed;
-    letter-spacing: 0.02em;
+    unicode-bidi: isolate;
+    letter-spacing: 0.03em;
 }
 
 table.erp-report-table .text-start-rtl {
@@ -388,13 +388,13 @@ table.erp-report-table.erp-report-table--dense tbody th {
 
 table.erp-report-table.erp-report-table--dense .num,
 table.erp-report-table.erp-report-table--dense td.num {
-    white-space: nowrap;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 800;
+    white-space: nowrap !important;
+    text-align: center !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
     padding-left: 2px;
     padding-right: 2px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
 }
 
 table.erp-report-table.erp-report-table--dense .text-start-rtl {
@@ -408,9 +408,11 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
     white-space: nowrap !important;
     overflow-wrap: normal !important;
     word-break: keep-all !important;
+    text-align: center !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 7.5px;
-    letter-spacing: -0.02em;
+    font-size: 10px !important;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     direction: ltr;
     unicode-bidi: isolate;
 }
@@ -511,7 +513,9 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
         white-space: nowrap !important;
         overflow-wrap: normal !important;
         word-break: keep-all !important;
-        font-size: 7px !important;
+        text-align: center !important;
+        font-size: 9.5px !important;
+        font-weight: 700 !important;
     }
 
     .erp-report-header {
