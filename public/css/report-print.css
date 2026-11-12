@@ -389,6 +389,19 @@ table.erp-report-table.erp-report-table--dense .text-start-rtl {
     word-break: break-word;
 }
 
+/* Chassis / VIN must stay on one line even in dense A4 layout */
+table.erp-report-table.erp-report-table--dense .cell-vin,
+table.erp-report-table.erp-report-table--dense td.cell-vin {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 7.5px;
+    letter-spacing: -0.02em;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
 /* Footer */
 .erp-report-footer {
     margin-top: 18px;
@@ -469,6 +482,14 @@ table.erp-report-table.erp-report-table--dense .text-start-rtl {
     table.erp-report-table.erp-report-table--dense td.num {
         font-size: 7.5px !important;
         white-space: nowrap;
+    }
+
+    table.erp-report-table.erp-report-table--dense .cell-vin,
+    table.erp-report-table.erp-report-table--dense td.cell-vin {
+        white-space: nowrap !important;
+        overflow-wrap: normal !important;
+        word-break: keep-all !important;
+        font-size: 7px !important;
     }
 
     .erp-report-header {

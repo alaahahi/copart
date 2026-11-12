@@ -46,6 +46,34 @@
         </div>
     </div>
 
+    @php
+        $rows = collect($clientData['data'] ?? []);
+        $hasNum = static function (string $field) use ($rows): bool {
+            return $rows->contains(static function ($row) use ($field) {
+                return abs((float) ($row->{$field} ?? 0)) >= 0.01;
+            });
+        };
+        $hasText = static function (string $field) use ($rows): bool {
+            return $rows->contains(static function ($row) use ($field) {
+                return trim((string) ($row->{$field} ?? '')) !== '';
+            });
+        };
+        $hasErbilTransfer = $rows->contains(static function ($row) {
+            return abs((float) \App\Models\Car::erbilTransferSubtotal($row->getAttributes(), true)) >= 0.01;
+        });
+
+        $showUsaPrice = $hasNum('shipping_dolar_s');
+        $showTowingUsa = $hasNum('dinar_s');
+        $showShipping = $hasNum('coc_dolar_s');
+        $showRepair = $hasNum('checkout_s');
+        $showErbilTransfer = $hasErbilTransfer;
+        $showErbilExpenses = $hasNum('commission_s');
+        $showPaid = $hasNum('paid');
+        $showDiscount = $hasNum('discount');
+        $showDamage = $hasNum('damage_compensation');
+        $showNote = $hasText('note');
+    @endphp
+
     <div class="erp-report-table-wrap erp-report-table-wrap--fit">
         <table class="erp-report-table erp-report-table--dense">
             <thead>
@@ -57,42 +85,42 @@
                     <th scope="col">رقم كوبارت</th>
                     <th scope="col">اللون</th>
                     <th scope="col">الموديل</th>
-                    <th scope="col">سعر أمريكا</th>
-                    <th scope="col">نقل امريكا</th>
-                    <th scope="col">شحن</th>
-                    <th scope="col">مصاريف تصليح</th>
-                    <th scope="col">نقل أربيل</th>
-                    <th scope="col">مصاريف أربيل</th>
+                    @if ($showUsaPrice)<th scope="col">سعر أمريكا</th>@endif
+                    @if ($showTowingUsa)<th scope="col">نقل امريكا</th>@endif
+                    @if ($showShipping)<th scope="col">شحن</th>@endif
+                    @if ($showRepair)<th scope="col">مصاريف تصليح</th>@endif
+                    @if ($showErbilTransfer)<th scope="col">نقل أربيل</th>@endif
+                    @if ($showErbilExpenses)<th scope="col">مصاريف أربيل</th>@endif
                     <th scope="col">المجموع</th>
-                    <th scope="col">مدفوع</th>
-                    <th scope="col">خصم</th>
-                    <th scope="col">تعويض ضرر</th>
+                    @if ($showPaid)<th scope="col">مدفوع</th>@endif
+                    @if ($showDiscount)<th scope="col">خصم</th>@endif
+                    @if ($showDamage)<th scope="col">تعويض ضرر</th>@endif
                     <th scope="col">متبقي</th>
-                    <th scope="col">ملاحظة</th>
+                    @if ($showNote)<th scope="col">ملاحظة</th>@endif
                 </tr>
             </thead>
             <tbody>
-                @foreach ($clientData['data'] as $key => $row)
+                @foreach ($rows as $key => $row)
                 <tr>
                     <td>{{ $key + 1 }}</td>
                     <td class="text-start-rtl">{{ $row->car_type }}</td>
                     <td>{{ $row->date }}</td>
-                    <td>{{ $row->vin }}</td>
+                    <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
                     <td>{{ $row->car_number }}</td>
                     <td>{{ $row->car_color }}</td>
                     <td>{{ $row->year }}</td>
-                    <td class="num">{{ $row->shipping_dolar_s }}</td>
-                    <td class="num">{{ $row->dinar_s }}</td>
-                    <td class="num">{{ $row->coc_dolar_s }}</td>
-                    <td class="num">{{ $row->checkout_s }}</td>
-                    <td class="num">{{ \App\Models\Car::erbilTransferSubtotal($row->getAttributes(), true) }}</td>
-                    <td class="num">{{ $row->commission_s ?? 0 }}</td>
+                    @if ($showUsaPrice)<td class="num">{{ $row->shipping_dolar_s }}</td>@endif
+                    @if ($showTowingUsa)<td class="num">{{ $row->dinar_s }}</td>@endif
+                    @if ($showShipping)<td class="num">{{ $row->coc_dolar_s }}</td>@endif
+                    @if ($showRepair)<td class="num">{{ $row->checkout_s }}</td>@endif
+                    @if ($showErbilTransfer)<td class="num">{{ \App\Models\Car::erbilTransferSubtotal($row->getAttributes(), true) }}</td>@endif
+                    @if ($showErbilExpenses)<td class="num">{{ $row->commission_s ?? 0 }}</td>@endif
                     <td class="num">{{ $row->total_s }}</td>
-                    <td class="num">{{ $row->paid }}</td>
-                    <td class="num">{{ $row->discount ?? 0 }}</td>
-                    <td class="num">{{ $row->damage_compensation ?? 0 }}</td>
+                    @if ($showPaid)<td class="num">{{ $row->paid }}</td>@endif
+                    @if ($showDiscount)<td class="num">{{ $row->discount ?? 0 }}</td>@endif
+                    @if ($showDamage)<td class="num">{{ $row->damage_compensation ?? 0 }}</td>@endif
                     <td class="num">{{ ($row->total_s) - ($row->paid) - ($row->discount ?? 0) - ($row->damage_compensation ?? 0) }}</td>
-                    <td class="text-start-rtl">{{ $row->note }}</td>
+                    @if ($showNote)<td class="text-start-rtl">{{ $row->note }}</td>@endif
                 </tr>
                 @endforeach
             </tbody>
