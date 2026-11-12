@@ -20,11 +20,33 @@
     table.erp-report-table.erp-report-table--dense td.num {
         font-size: 12px !important;
     }
-    table.erp-report-table td.cell-vin {
+    /* Prevent cells from bleeding into neighbors */
+    table.erp-report-table.erp-report-table--dense th,
+    table.erp-report-table.erp-report-table--dense td {
+        overflow: hidden !important;
+        vertical-align: middle !important;
+    }
+    table.erp-report-table td.cell-date,
+    table.erp-report-table.erp-report-table--dense td.cell-date,
+    table.erp-report-table.erp-report-table--dense th.cell-date {
         text-align: center !important;
         white-space: nowrap !important;
-        font-size: 10px !important;
+        font-size: 8px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0 !important;
+        padding-left: 1px !important;
+        padding-right: 1px !important;
+        max-width: 4.5rem;
+    }
+    table.erp-report-table td.cell-vin,
+    table.erp-report-table.erp-report-table--dense td.cell-vin {
+        text-align: center !important;
+        white-space: nowrap !important;
+        font-size: 9px !important;
         font-weight: 700 !important;
+        letter-spacing: 0 !important;
+        overflow: hidden !important;
+        text-overflow: clip;
     }
 </style>
 </head>
@@ -99,13 +121,47 @@
         $showNote = $hasText('note');
     @endphp
 
+    @php
+        $dateLabel = static function ($value): string {
+            if ($value === null || $value === '') {
+                return '';
+            }
+            try {
+                return \Carbon\Carbon::parse($value)->format('y-m-d');
+            } catch (\Throwable $e) {
+                return (string) $value;
+            }
+        };
+    @endphp
+
     <div class="erp-report-table-wrap erp-report-table-wrap--fit">
         <table class="erp-report-table erp-report-table--dense">
+            <colgroup>
+                <col style="width:3%">
+                <col style="width:14%">
+                <col style="width:7%">
+                <col style="width:15%">
+                <col style="width:8%">
+                <col style="width:6%">
+                <col style="width:5%">
+                @if ($showUsaPrice)<col style="width:7%">@endif
+                @if ($showTowingUsa)<col style="width:6%">@endif
+                @if ($showShipping)<col style="width:5%">@endif
+                @if ($showRepair)<col style="width:6%">@endif
+                @if ($showErbilTransfer)<col style="width:6%">@endif
+                @if ($showErbilExpenses)<col style="width:6%">@endif
+                <col style="width:7%">
+                @if ($showPaid)<col style="width:6%">@endif
+                @if ($showDiscount)<col style="width:5%">@endif
+                @if ($showDamage)<col style="width:6%">@endif
+                <col style="width:7%">
+                @if ($showNote)<col style="width:8%">@endif
+            </colgroup>
             <thead>
                 <tr>
                     <th scope="col">#</th>
                     <th scope="col">السيارة</th>
-                    <th scope="col">التاريخ</th>
+                    <th scope="col" class="cell-date">التاريخ</th>
                     <th scope="col">رقم الشاصي</th>
                     <th scope="col">رقم كوبارت</th>
                     <th scope="col">اللون</th>
@@ -129,7 +185,7 @@
                 <tr>
                     <td class="num">{{ $key + 1 }}</td>
                     <td class="text-start-rtl">{{ $row->car_type }}</td>
-                    <td class="num">{{ $row->date }}</td>
+                    <td class="cell-date">{{ $dateLabel($row->date) }}</td>
                     <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
                     <td class="num">{{ $row->car_number }}</td>
                     <td>{{ $row->car_color }}</td>

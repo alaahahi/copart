@@ -382,8 +382,22 @@ table.erp-report-table.erp-report-table--dense tbody td,
 table.erp-report-table.erp-report-table--dense tbody th {
     padding: 3px 2px;
     line-height: 1.25;
+    overflow: hidden;
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+table.erp-report-table.erp-report-table--dense .cell-date,
+table.erp-report-table.erp-report-table--dense td.cell-date,
+table.erp-report-table.erp-report-table--dense th.cell-date {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-align: center !important;
+    font-size: 7.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    padding-left: 1px !important;
+    padding-right: 1px !important;
 }
 
 table.erp-report-table.erp-report-table--dense .num,
@@ -508,13 +522,23 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
         text-align: center !important;
     }
 
+    table.erp-report-table.erp-report-table--dense .cell-date,
+    table.erp-report-table.erp-report-table--dense td.cell-date,
+    table.erp-report-table.erp-report-table--dense th.cell-date {
+        font-size: 7px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-align: center !important;
+    }
+
     table.erp-report-table.erp-report-table--dense .cell-vin,
     table.erp-report-table.erp-report-table--dense td.cell-vin {
         white-space: nowrap !important;
+        overflow: hidden !important;
         overflow-wrap: normal !important;
         word-break: keep-all !important;
         text-align: center !important;
-        font-size: 9.5px !important;
+        font-size: 9px !important;
         font-weight: 700 !important;
     }
 
