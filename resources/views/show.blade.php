@@ -18,13 +18,21 @@
     }
     table.erp-report-table td.num,
     table.erp-report-table.erp-report-table--dense td.num {
-        font-size: 12px !important;
+        font-size: 10px !important;
+        font-weight: 800 !important;
     }
     /* Prevent cells from bleeding into neighbors */
     table.erp-report-table.erp-report-table--dense th,
     table.erp-report-table.erp-report-table--dense td {
         overflow: hidden !important;
         vertical-align: middle !important;
+    }
+    table.erp-report-table td.cell-car,
+    table.erp-report-table.erp-report-table--dense td.cell-car {
+        text-align: center !important;
+        font-weight: 700 !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
     table.erp-report-table td.cell-date,
     table.erp-report-table.erp-report-table--dense td.cell-date,
@@ -184,7 +192,7 @@
                 @foreach ($rows as $key => $row)
                 <tr>
                     <td class="num">{{ $key + 1 }}</td>
-                    <td class="text-start-rtl">{{ $row->car_type }}</td>
+                    <td class="cell-car">{{ $row->car_type }}</td>
                     <td class="cell-date">{{ $dateLabel($row->date) }}</td>
                     <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
                     <td class="num">{{ $row->car_number }}</td>

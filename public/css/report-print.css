@@ -335,11 +335,11 @@ table.erp-report-table td.num {
     text-align: center !important;
     font-variant-numeric: tabular-nums;
     font-weight: 800 !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     white-space: nowrap;
     direction: ltr;
     unicode-bidi: isolate;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
 }
 
 table.erp-report-table .text-start-rtl {
@@ -404,14 +404,22 @@ table.erp-report-table.erp-report-table--dense .num,
 table.erp-report-table.erp-report-table--dense td.num {
     white-space: nowrap !important;
     text-align: center !important;
-    font-size: 12px !important;
+    font-size: 10px !important;
     font-weight: 800 !important;
     padding-left: 2px;
     padding-right: 2px;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
 }
 
 table.erp-report-table.erp-report-table--dense .text-start-rtl {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+table.erp-report-table.erp-report-table--dense .cell-car,
+table.erp-report-table.erp-report-table--dense td.cell-car {
+    text-align: center !important;
+    font-weight: 700;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
@@ -509,7 +517,7 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
 
     table.erp-report-table.erp-report-table--dense .num,
     table.erp-report-table.erp-report-table--dense td.num {
-        font-size: 10.5px !important;
+        font-size: 9.5px !important;
         font-weight: 800 !important;
         text-align: center !important;
         white-space: nowrap;
@@ -520,6 +528,12 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
         font-size: 18px !important;
         font-weight: 800 !important;
         text-align: center !important;
+    }
+
+    table.erp-report-table.erp-report-table--dense .cell-car,
+    table.erp-report-table.erp-report-table--dense td.cell-car {
+        text-align: center !important;
+        font-weight: 700 !important;
     }
 
     table.erp-report-table.erp-report-table--dense .cell-date,
