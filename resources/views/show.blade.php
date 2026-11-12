@@ -42,7 +42,7 @@
         </div>
         <div class="erp-report-summary__card">
             <span class="erp-report-summary__label">عدد السيارات</span>
-            <span class="erp-report-summary__value">{{ $clientData['car_total'] }}</span>
+            <span class="erp-report-summary__value num">{{ $clientData['car_total'] }}</span>
         </div>
     </div>
 
@@ -106,9 +106,9 @@
                     <td class="text-start-rtl">{{ $row->car_type }}</td>
                     <td>{{ $row->date }}</td>
                     <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
-                    <td>{{ $row->car_number }}</td>
+                    <td class="num">{{ $row->car_number }}</td>
                     <td>{{ $row->car_color }}</td>
-                    <td>{{ $row->year }}</td>
+                    <td class="num">{{ $row->year }}</td>
                     @if ($showUsaPrice)<td class="num">{{ $row->shipping_dolar_s }}</td>@endif
                     @if ($showTowingUsa)<td class="num">{{ $row->dinar_s }}</td>@endif
                     @if ($showShipping)<td class="num">{{ $row->coc_dolar_s }}</td>@endif

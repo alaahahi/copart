@@ -493,8 +493,17 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
 
     table.erp-report-table.erp-report-table--dense .num,
     table.erp-report-table.erp-report-table--dense td.num {
-        font-size: 7.5px !important;
+        font-size: 10.5px !important;
+        font-weight: 800 !important;
+        text-align: center !important;
         white-space: nowrap;
+    }
+
+    .erp-report-summary__value,
+    .erp-report-summary__value.num {
+        font-size: 18px !important;
+        font-weight: 800 !important;
+        text-align: center !important;
     }
 
     table.erp-report-table.erp-report-table--dense .cell-vin,
