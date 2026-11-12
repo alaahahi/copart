@@ -33,6 +33,9 @@
         white-space: nowrap !important;
         letter-spacing: 0 !important;
         text-overflow: clip;
+        font-family: Tahoma, Arial, sans-serif !important;
+        font-weight: 800 !important;
+        -webkit-text-stroke: 0.25px currentColor;
     }
     table.erp-report-table.erp-report-table--dense td.cell-car {
         overflow-wrap: anywhere;
@@ -182,7 +185,7 @@
                     <td class="num">{{ $key + 1 }}</td>
                     <td class="cell-car">{{ $row->car_type }}</td>
                     <td class="cell-date">{{ $dateLabel($row->date) }}</td>
-                    <td class="cell-vin" dir="ltr">{{ $row->vin }}</td>
+                    <td class="cell-vin" dir="ltr"><strong>{{ $row->vin }}</strong></td>
                     <td class="num">{{ $row->car_number }}</td>
                     <td>{{ $row->car_color }}</td>
                     <td class="num">{{ $row->year }}</td>

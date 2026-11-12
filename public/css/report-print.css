@@ -440,12 +440,14 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
     overflow-wrap: normal !important;
     word-break: keep-all !important;
     text-align: center !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    /* Sans-serif so bold weight actually renders (monospace often has no bold face) */
+    font-family: Tahoma, Arial, sans-serif !important;
     font-size: 10px !important;
     font-weight: 800 !important;
     letter-spacing: 0;
     direction: ltr;
     unicode-bidi: isolate;
+    -webkit-text-stroke: 0.25px currentColor;
 }
 
 /* Footer */
@@ -566,6 +568,9 @@ table.erp-report-table.erp-report-table--dense td.cell-vin {
         overflow: hidden !important;
         overflow-wrap: normal !important;
         word-break: keep-all !important;
+        font-family: Tahoma, Arial, sans-serif !important;
+        font-weight: 800 !important;
+        -webkit-text-stroke: 0.25px currentColor;
     }
 
     .erp-report-header {
