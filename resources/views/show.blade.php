@@ -3,58 +3,46 @@
 <head>
 @include('Components.reportHead', ['pageTitle' => 'كشف حساب'])
 <style>
-    /* Statement numbers: center + larger + heavier (beats cached Bootstrap) */
-    .erp-report-summary__value,
-    .erp-report-summary__value.num,
-    table.erp-report-table td.num,
-    table.erp-report-table.erp-report-table--dense td.num {
-        text-align: center !important;
-        font-weight: 800 !important;
-        letter-spacing: 0.03em;
-    }
+    /* Summary cards stay larger */
     .erp-report-summary__value,
     .erp-report-summary__value.num {
+        text-align: center !important;
         font-size: 20px !important;
-    }
-    table.erp-report-table td.num,
-    table.erp-report-table.erp-report-table--dense td.num {
-        font-size: 10px !important;
         font-weight: 800 !important;
     }
-    /* Prevent cells from bleeding into neighbors */
-    table.erp-report-table.erp-report-table--dense th,
-    table.erp-report-table.erp-report-table--dense td {
-        overflow: hidden !important;
-        vertical-align: middle !important;
-    }
-    table.erp-report-table td.cell-car,
-    table.erp-report-table.erp-report-table--dense td.cell-car {
+
+    /* Statement list: one size + bold for every cell */
+    table.erp-report-table.erp-report-table--dense thead th,
+    table.erp-report-table.erp-report-table--dense tbody td,
+    table.erp-report-table.erp-report-table--dense tbody th {
+        font-size: 10px !important;
+        font-weight: 800 !important;
         text-align: center !important;
-        font-weight: 700 !important;
-        overflow-wrap: anywhere;
-        word-break: break-word;
+        vertical-align: middle !important;
+        overflow: hidden !important;
+        letter-spacing: 0.01em;
     }
-    table.erp-report-table td.cell-date,
     table.erp-report-table.erp-report-table--dense td.cell-date,
     table.erp-report-table.erp-report-table--dense th.cell-date {
-        text-align: center !important;
         white-space: nowrap !important;
-        font-size: 8px !important;
-        font-weight: 600 !important;
-        letter-spacing: 0 !important;
         padding-left: 1px !important;
         padding-right: 1px !important;
         max-width: 4.5rem;
     }
-    table.erp-report-table td.cell-vin,
     table.erp-report-table.erp-report-table--dense td.cell-vin {
-        text-align: center !important;
         white-space: nowrap !important;
-        font-size: 9px !important;
-        font-weight: 700 !important;
         letter-spacing: 0 !important;
-        overflow: hidden !important;
         text-overflow: clip;
+    }
+    table.erp-report-table.erp-report-table--dense td.cell-car {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    table.erp-report-table.erp-report-table--dense td.num {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap !important;
+        direction: ltr;
+        unicode-bidi: isolate;
     }
 </style>
 </head>
