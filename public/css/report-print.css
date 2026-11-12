@@ -263,10 +263,18 @@ body.erp-report {
 
 .erp-report-summary__value {
     display: block;
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 800;
     color: #0f172a;
     font-variant-numeric: tabular-nums;
+    text-align: center;
+    letter-spacing: 0.02em;
+}
+
+.erp-report-summary__value.num {
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
 }
 
 /* Tables */
@@ -324,12 +332,14 @@ table.erp-report-table tfoot th {
 
 table.erp-report-table .num,
 table.erp-report-table td.num {
-    text-align: left;
+    text-align: center;
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    font-weight: 800;
+    font-size: 13px;
     white-space: nowrap;
     direction: ltr;
     unicode-bidi: embed;
+    letter-spacing: 0.02em;
 }
 
 table.erp-report-table .text-start-rtl {
@@ -379,9 +389,12 @@ table.erp-report-table.erp-report-table--dense tbody th {
 table.erp-report-table.erp-report-table--dense .num,
 table.erp-report-table.erp-report-table--dense td.num {
     white-space: nowrap;
-    font-size: 8px;
-    padding-left: 1px;
-    padding-right: 1px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    padding-left: 2px;
+    padding-right: 2px;
+    letter-spacing: 0.02em;
 }
 
 table.erp-report-table.erp-report-table--dense .text-start-rtl {
