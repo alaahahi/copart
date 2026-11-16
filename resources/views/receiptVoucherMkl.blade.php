@@ -48,13 +48,13 @@
             direction: rtl;
         }
         .mkl-header {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            /* Equal side columns pin HAULF in the horizontal center;
+               partners stay start-aligned in the left column (LTR). */
+            grid-template-columns: 1fr auto 1fr;
             align-items: center;
             gap: 10px;
             margin-bottom: 6px;
-            /* Keep partner logos on visual left and HAULF/MKL on visual right
-               even though the voucher sheet is RTL. */
             direction: ltr;
         }
         .mkl-logos-left {
@@ -62,14 +62,16 @@
             align-items: center;
             gap: 8px;
             min-height: 44px;
-            flex: 1;
+            justify-self: start;
+            grid-column: 1;
         }
         .mkl-logos-right {
             display: flex;
             align-items: center;
             gap: 10px;
             text-align: center;
-            flex-shrink: 0;
+            justify-self: center;
+            grid-column: 2;
         }
         .mkl-partner-logo {
             height: 40px;
