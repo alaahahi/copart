@@ -60,7 +60,7 @@
             direction: ltr;
             unicode-bidi: isolate;
             /* Reserve space so partner logos never sit under absolute HAULF. */
-            padding-right: 290px;
+            padding-right: 90px;
             box-sizing: border-box;
         }
         .mkl-logos-left {
