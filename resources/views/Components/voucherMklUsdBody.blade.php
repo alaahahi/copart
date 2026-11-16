@@ -20,9 +20,10 @@
     } elseif (is_array($config ?? null)) {
         $cfg = $config;
     }
-    $phone = $cfg['receipt_phone'] ?? '+964 750 468 0510 / 750 705 3555 / 750 438 0888';
-    $address = $cfg['receipt_address'] ?? '100 M road near Hanouf motel';
-    $website = $cfg['receipt_website'] ?? 'Mklmersin.com';
+    $footer = \App\Support\VoucherPrint::footerContact($cfg);
+    $phone = $footer['phone'];
+    $address = $footer['address'];
+    $website = $footer['website'];
     $logoLeft1 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_1'] ?? null);
     $logoLeft2 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_2'] ?? null);
     $logoLeft3 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_3'] ?? null);

@@ -147,9 +147,12 @@ const coverInput = ref(null);
 
 const form = ref({
   receipt_template: props.config?.receipt_template || "default",
-  receipt_phone: props.config?.receipt_phone || "",
-  receipt_address: props.config?.receipt_address || "",
-  receipt_website: props.config?.receipt_website || "",
+  // Seed from Settings defaults (same as VoucherPrint) so Save persists footer contact.
+  receipt_phone:
+    props.config?.receipt_phone || "+964 750 468 0510 / 750 705 3555",
+  receipt_address:
+    props.config?.receipt_address || "100 M road near Hanouf motel",
+  receipt_website: props.config?.receipt_website || "Mklmersin.com",
   first_title_ar: props.config?.first_title_ar || "",
   second_title_ar: props.config?.second_title_ar || "",
   wa_enabled: !!props.config?.wa_enabled,

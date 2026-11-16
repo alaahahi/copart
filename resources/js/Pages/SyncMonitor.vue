@@ -76,9 +76,9 @@ function forceRunMigration(name) {
 // ===== Logs =====
 const logEntries = ref([]);
 const loadingLogs = ref(false);
-const logInfo = ref({ size: 0, modified: null });
+const logInfo = ref({ size: 0, modified: null, file: null, total: 0 });
 const logLevelFilter = ref("all");
-const logLines = ref(300);
+const logLines = ref(200);
 const logMsg = ref("");
 
 async function loadLogs() {
@@ -86,12 +86,21 @@ async function loadLogs() {
   logMsg.value = "";
   try {
     const res = await axios.get("/api/sync-monitor/logs", {
-      params: { lines: logLines.value },
+      params: {
+        lines: logLines.value,
+        level: logLevelFilter.value,
+      },
     });
     logEntries.value = res.data.entries || [];
-    logInfo.value = { size: res.data.size || 0, modified: res.data.modified || null };
+    logInfo.value = {
+      size: res.data.size || 0,
+      modified: res.data.modified || null,
+      file: res.data.file || "laravel.log",
+      total: res.data.total ?? (res.data.entries || []).length,
+    };
     if (res.data.message) logMsg.value = res.data.message;
   } catch (e) {
+    logEntries.value = [];
     logMsg.value = e.response?.data?.error || "تعذر تحميل اللوغ";
   } finally {
     loadingLogs.value = false;
@@ -103,16 +112,14 @@ async function clearLogs() {
   try {
     await axios.post("/api/sync-monitor/clear-logs");
     logEntries.value = [];
+    logInfo.value = { size: 0, modified: null, file: logInfo.value.file, total: 0 };
     logMsg.value = "تم تفريغ اللوغ";
   } catch (e) {
     logMsg.value = e.response?.data?.error || "تعذر التفريغ";
   }
 }
 
-const filteredLogs = computed(() => {
-  if (logLevelFilter.value === "all") return logEntries.value;
-  return logEntries.value.filter((l) => l.level === logLevelFilter.value);
-});
+const filteredLogs = computed(() => logEntries.value);
 
 function levelClass(level) {
   switch (level) {
@@ -146,7 +153,7 @@ function formatSize(bytes) {
 
 function switchTab(tab) {
   activeTab.value = tab;
-  if (tab === "logs" && !logEntries.value.length) loadLogs();
+  if (tab === "logs") loadLogs();
 }
 
 onMounted(loadMigrations);
@@ -308,19 +315,21 @@ onMounted(loadMigrations);
       </div>
 
       <!-- ===== Logs Tab ===== -->
-      <div v-if="activeTab === 'logs'" class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+      <div v-if="activeTab === 'logs'" class="bg-slate-900 border border-slate-700 shadow-sm rounded-lg p-6">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-3">
           <div>
-            <h3 class="text-xl font-semibold dark:text-gray-200 mb-1">📋 سجل الأخطاء (laravel.log)</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">
+            <h3 class="text-xl font-semibold text-white mb-1">📋 سجل الأخطاء ({{ logInfo.file || "laravel.log" }})</h3>
+            <p class="text-sm text-slate-300">
               <span v-if="logInfo.modified">آخر تعديل: {{ logInfo.modified }} · </span>
               الحجم: {{ formatSize(logInfo.size) }}
+              <span v-if="logInfo.total"> · {{ filteredLogs.length }}/{{ logInfo.total }} سجل</span>
             </p>
           </div>
           <div class="flex gap-2 items-center flex-wrap">
             <select
               v-model="logLevelFilter"
-              class="text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded"
+              @change="loadLogs"
+              class="text-sm bg-slate-950 border border-slate-600 text-white rounded"
             >
               <option value="all">كل المستويات</option>
               <option value="error">أخطاء</option>
@@ -330,54 +339,56 @@ onMounted(loadMigrations);
             <select
               v-model.number="logLines"
               @change="loadLogs"
-              class="text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded"
+              class="text-sm bg-slate-950 border border-slate-600 text-white rounded"
             >
-              <option :value="100">100 سطر</option>
-              <option :value="300">300 سطر</option>
-              <option :value="1000">1000 سطر</option>
+              <option :value="50">50 سجل</option>
+              <option :value="200">200 سجل</option>
+              <option :value="500">500 سجل</option>
             </select>
             <button
               @click="loadLogs"
               :disabled="loadingLogs"
-              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              class="px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-500 disabled:opacity-50"
             >
               {{ loadingLogs ? "⏳" : "🔄 تحديث" }}
             </button>
-            <button @click="clearLogs" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            <button @click="clearLogs" class="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-500">
               🗑️ تفريغ
             </button>
           </div>
         </div>
 
-        <div v-if="logMsg" class="mb-4 p-3 rounded bg-gray-100 dark:bg-gray-700 text-sm dark:text-gray-200">
+        <div v-if="logMsg" class="mb-4 p-3 rounded bg-slate-800 border border-slate-600 text-sm text-slate-100">
           {{ logMsg }}
         </div>
 
-        <div v-if="loadingLogs" class="text-center py-12 text-gray-500">⏳ جاري التحميل...</div>
+        <div v-if="loadingLogs" class="text-center py-12 text-slate-400">⏳ جاري التحميل...</div>
 
         <div v-else class="space-y-2">
           <div
             v-for="(log, idx) in filteredLogs"
             :key="idx"
-            class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+            class="border border-slate-700 rounded-lg overflow-hidden bg-slate-950/60"
           >
             <div
-              class="flex items-start gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+              class="flex items-start gap-3 p-3 cursor-pointer hover:bg-slate-800/80"
               @click="log.stack && toggleStack(idx)"
             >
               <span :class="['px-2 py-0.5 rounded text-xs font-bold uppercase shrink-0', levelClass(log.level)]">
                 {{ log.level }}
               </span>
-              <span class="text-xs text-gray-400 shrink-0 font-mono">{{ log.time }}</span>
-              <span class="text-sm dark:text-gray-200 break-all flex-1">{{ log.message }}</span>
-              <span v-if="log.stack" class="text-gray-400 text-xs shrink-0">{{ expanded[idx] ? "▲" : "▼" }}</span>
+              <span class="text-xs text-slate-400 shrink-0 font-mono">{{ log.time }}</span>
+              <span class="text-sm text-slate-100 break-all flex-1">{{ log.message }}</span>
+              <span v-if="log.stack" class="text-slate-400 text-xs shrink-0">{{ expanded[idx] ? "▲" : "▼" }}</span>
             </div>
             <pre
               v-if="log.stack && expanded[idx]"
-              class="text-xs font-mono bg-gray-900 text-gray-300 p-3 overflow-x-auto max-h-80 overflow-y-auto whitespace-pre-wrap"
+              class="text-xs font-mono bg-slate-950 text-slate-300 p-3 overflow-x-auto max-h-80 overflow-y-auto whitespace-pre-wrap border-t border-slate-700"
             >{{ log.stack }}</pre>
           </div>
-          <div v-if="filteredLogs.length === 0" class="text-center py-12 text-gray-500">لا توجد سجلات</div>
+          <div v-if="filteredLogs.length === 0" class="text-center py-12 text-slate-400">
+            {{ logInfo.size > 0 ? "لا توجد سجلات مطابقة للفلتر" : "لا توجد سجلات" }}
+          </div>
         </div>
       </div>
     </div>

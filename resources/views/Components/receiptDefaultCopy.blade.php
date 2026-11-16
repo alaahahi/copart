@@ -7,14 +7,10 @@
         $subtitle = '';
     }
 
-    $phone = trim((string) ($cfg['receipt_phone'] ?? ''));
-    $address = trim((string) ($cfg['receipt_address'] ?? ''));
-    if ($phone === '' && ! empty($owner_id)) {
-        $phone = trim((string) (((int) $owner_id === 2) ? ($cfg['mobile_kik'] ?? '') : ($cfg['mobile_erb'] ?? '')));
-    }
-    if ($address === '' && ! empty($owner_id)) {
-        $address = trim((string) (((int) $owner_id === 2) ? ($cfg['address_kik'] ?? '') : ($cfg['address_erb'] ?? '')));
-    }
+    $footer = \App\Support\VoucherPrint::footerContact($cfg);
+    $phone = $footer['phone'];
+    $address = $footer['address'];
+    $website = $footer['website'];
 
     $clientName = $clientData['client']->name ?? '—';
     $currency = $currency ?? '$';
@@ -110,13 +106,16 @@
         </div>
     </div>
 
-    @if($address !== '' || $phone !== '')
+    @if($address !== '' || $phone !== '' || $website !== '')
         <footer class="rv-foot">
+            @if($website !== '')
+                <span dir="ltr">🌐 {{ $website }}</span>
+            @endif
             @if($address !== '')
-                <span>العنوان: {{ $address }}</span>
+                <span>📍 العنوان: {{ $address }}</span>
             @endif
             @if($phone !== '')
-                <span dir="ltr">Mobile: {{ $phone }}</span>
+                <span dir="ltr">📞 {{ $phone }}</span>
             @endif
         </footer>
     @endif

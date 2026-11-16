@@ -178,30 +178,70 @@ class SyncMonitorController extends Controller
     }
 
     /**
-     * قراءة آخر أسطر من ملف اللوغ (storage/logs/laravel.log).
+     * قراءة آخر سجلات من laravel.log (حسب عدد السجلات وليس الأسطر —
+     * حتى لا يختفي اللوغ داخل stack trace طويل).
      */
     public function getLogs(Request $request): JsonResponse
     {
         try {
-            $lines = (int) $request->get('lines', 300);
-            $lines = max(50, min($lines, 2000));
+            // "lines" kept for UI compat; treated as max entries.
+            $limit = (int) $request->get('lines', $request->get('limit', 200));
+            $limit = max(20, min($limit, 500));
+            $level = strtolower(trim((string) $request->get('level', 'all')));
 
-            $logFile = storage_path('logs/laravel.log');
-            if (!File::exists($logFile)) {
+            $logFile = $this->resolveLaravelLogFile();
+            if (!$logFile) {
                 return response()->json([
                     'entries' => [],
                     'size' => 0,
+                    'file' => null,
                     'message' => 'لا يوجد ملف لوغ بعد',
                 ]);
             }
 
-            $content = $this->tailFile($logFile, $lines);
+            $size = File::size($logFile);
+            // Read enough bytes so huge exception stacks don't wipe out headers.
+            $content = $this->readTailBytes($logFile, 2 * 1024 * 1024);
             $entries = $this->parseLogEntries($content);
+
+            // If the byte window started mid-stack, expand to the whole file (small) or more bytes.
+            if ($entries === [] && $size > 0) {
+                if ($size <= 5 * 1024 * 1024) {
+                    $entries = $this->parseLogEntries((string) File::get($logFile));
+                } else {
+                    $entries = $this->parseLogEntries($this->readTailBytes($logFile, 5 * 1024 * 1024));
+                }
+            }
+
+            if ($level !== '' && $level !== 'all') {
+                $errorLike = ['error', 'critical', 'alert', 'emergency'];
+                $entries = array_values(array_filter($entries, function (array $entry) use ($level, $errorLike) {
+                    $lv = strtolower((string) ($entry['level'] ?? ''));
+                    if ($level === 'error') {
+                        return in_array($lv, $errorLike, true);
+                    }
+                    return $lv === $level;
+                }));
+            }
+
+            $totalMatched = count($entries);
+            $entries = array_slice($entries, 0, $limit);
+            $entries = array_map([$this, 'truncateLogEntry'], $entries);
+
+            $message = null;
+            if ($entries === [] && $size > 0) {
+                $message = $level !== 'all'
+                    ? 'لا توجد سجلات بهذا المستوى في آخر اللوغ'
+                    : 'تعذر تحليل اللوغ — الملف موجود لكن بدون ترويسات Laravel معروفة';
+            }
 
             return response()->json([
                 'entries' => $entries,
-                'size' => File::size($logFile),
+                'total' => $totalMatched,
+                'size' => $size,
+                'file' => basename($logFile),
                 'modified' => date('Y-m-d H:i:s', File::lastModified($logFile)),
+                'message' => $message,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to read logs', ['error' => $e->getMessage()]);
@@ -215,7 +255,7 @@ class SyncMonitorController extends Controller
     public function clearLogs(): JsonResponse
     {
         try {
-            $logFile = storage_path('logs/laravel.log');
+            $logFile = $this->resolveLaravelLogFile() ?: storage_path('logs/laravel.log');
             if (File::exists($logFile)) {
                 File::put($logFile, '');
             }
@@ -262,45 +302,72 @@ class SyncMonitorController extends Controller
     }
 
     /**
-     * قراءة آخر N سطر من ملف نصي بكفاءة.
+     * Prefer laravel.log; fall back to newest laravel-YYYY-MM-DD.log (daily channel).
      */
-    protected function tailFile(string $filepath, int $lines): string
+    protected function resolveLaravelLogFile(): ?string
     {
-        $f = fopen($filepath, 'rb');
-        if (!$f) {
-            return '';
+        $dir = storage_path('logs');
+        $single = $dir . DIRECTORY_SEPARATOR . 'laravel.log';
+        if (File::exists($single) && File::size($single) > 0) {
+            return $single;
         }
 
-        $buffer = 4096;
-        fseek($f, 0, SEEK_END);
-        $filesize = ftell($f);
-        $pos = $filesize;
-        $lineCount = 0;
-        $chunks = '';
-
-        while ($pos > 0 && $lineCount <= $lines) {
-            $readSize = ($pos - $buffer) > 0 ? $buffer : $pos;
-            $pos -= $readSize;
-            fseek($f, $pos);
-            $chunk = fread($f, $readSize);
-            $chunks = $chunk . $chunks;
-            $lineCount = substr_count($chunks, "\n");
+        $dated = glob($dir . DIRECTORY_SEPARATOR . 'laravel-*.log') ?: [];
+        $dated = array_values(array_filter($dated, 'is_file'));
+        if ($dated === []) {
+            return File::exists($single) ? $single : null;
         }
-        fclose($f);
 
-        $allLines = explode("\n", $chunks);
-        $allLines = array_slice($allLines, -$lines);
-        return implode("\n", $allLines);
+        usort($dated, fn ($a, $b) => filemtime($b) <=> filemtime($a));
+
+        return $dated[0];
     }
 
     /**
-     * تحويل نص اللوغ إلى سجلات منظمة.
+     * Read the last N bytes of a log file (handles large stack traces).
+     */
+    protected function readTailBytes(string $filepath, int $maxBytes): string
+    {
+        $size = filesize($filepath);
+        if ($size === false || $size <= 0) {
+            return '';
+        }
+
+        if ($size <= $maxBytes) {
+            return (string) file_get_contents($filepath);
+        }
+
+        $handle = fopen($filepath, 'rb');
+        if (!$handle) {
+            return '';
+        }
+
+        fseek($handle, -$maxBytes, SEEK_END);
+        $content = (string) fread($handle, $maxBytes);
+        fclose($handle);
+
+        // Drop partial first line so parsing starts on a real boundary.
+        $nl = strpos($content, "\n");
+        if ($nl !== false) {
+            $content = substr($content, $nl + 1);
+        }
+
+        return $content;
+    }
+
+    /**
+     * تحويل نص اللوغ إلى سجلات منظمة (أحدث أولاً).
      */
     protected function parseLogEntries(string $content): array
     {
+        if ($content === '') {
+            return [];
+        }
+
         $entries = [];
-        $pattern = '/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\][^:]*\.(\w+):(.*)$/';
-        $lines = explode("\n", $content);
+        // Match standard Monolog: [2026-11-02 01:40:00] local.WARNING: message
+        $pattern = '/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s*([^.]+)\.(\w+):\s*(.*)$/';
+        $lines = preg_split("/\r\n|\n|\r/", $content) ?: [];
         $current = null;
 
         foreach ($lines as $line) {
@@ -310,8 +377,8 @@ class SyncMonitorController extends Controller
                 }
                 $current = [
                     'time' => $m[1],
-                    'level' => strtolower($m[2]),
-                    'message' => trim($m[3]),
+                    'level' => strtolower($m[3]),
+                    'message' => trim($m[4]),
                     'stack' => '',
                 ];
             } elseif ($current !== null) {
@@ -323,6 +390,21 @@ class SyncMonitorController extends Controller
         }
 
         return array_reverse($entries);
+    }
+
+    protected function truncateLogEntry(array $entry): array
+    {
+        $message = (string) ($entry['message'] ?? '');
+        $stack = (string) ($entry['stack'] ?? '');
+
+        if (mb_strlen($message) > 2000) {
+            $entry['message'] = mb_substr($message, 0, 2000) . '…';
+        }
+        if (mb_strlen($stack) > 8000) {
+            $entry['stack'] = mb_substr($stack, 0, 8000) . "\n…";
+        }
+
+        return $entry;
     }
 
     /**

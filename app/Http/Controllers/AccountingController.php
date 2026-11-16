@@ -2647,12 +2647,18 @@ class AccountingController extends Controller
         $client = $vars['clientData']['client']
             ?? ($vars['user'] ?? ($vars['data']['user'] ?? null));
 
-        if (VoucherPrint::usesMklTemplate($config)) {
+        // Always re-read singleton so footer contact (phone/address/website) is never stale.
+        $liveConfig = SystemConfig::resolved();
+        $configPayload = $liveConfig->toArray();
+
+        if (VoucherPrint::usesMklTemplate($liveConfig)) {
             return view('receiptVoucherMkl', array_merge(
                 VoucherPrint::dataFromTransaction($transaction, $client, $voucherType),
-                ['config' => $config ? $config->toArray() : []]
+                ['config' => $configPayload]
             ));
         }
+
+        $vars['config'] = $liveConfig;
 
         return view($defaultView, $vars);
     }

@@ -5,9 +5,17 @@ namespace App\Support;
 use App\Models\SystemConfig;
 use App\Models\Transactions;
 use App\Models\User;
+use App\Services\SystemConfigService;
 
 class VoucherPrint
 {
+    /** Defaults aligned with Settings «بيانات التذليل (قالب MKL)» placeholders. */
+    public const DEFAULT_PHONE = '+964 750 468 0510 / 750 705 3555';
+
+    public const DEFAULT_ADDRESS = '100 M road near Hanouf motel';
+
+    public const DEFAULT_WEBSITE = 'Mklmersin.com';
+
     public static function usesMklTemplate(?SystemConfig $config): bool
     {
         return ($config->receipt_template ?? 'default') === 'mkl_usd';
@@ -16,6 +24,67 @@ class VoucherPrint
     public static function viewFor(?SystemConfig $config, string $defaultView): string
     {
         return self::usesMklTemplate($config) ? 'receiptVoucherMkl' : $defaultView;
+    }
+
+    /**
+     * Resolve voucher footer contact from live system_config (prefer saved Settings values).
+     *
+     * @param  SystemConfig|array<string, mixed>|null  $config
+     * @return array{phone: string, address: string, website: string}
+     */
+    public static function footerContact(SystemConfig|array|null $config = null): array
+    {
+        $fresh = [];
+        try {
+            $fresh = app(SystemConfigService::class)->current()->toArray();
+        } catch (\Throwable) {
+            $fresh = [];
+        }
+
+        $passed = [];
+        if ($config instanceof SystemConfig) {
+            $passed = $config->toArray();
+        } elseif (is_array($config)) {
+            $passed = $config;
+        }
+
+        // Prefer the live system_config row; passed print payload is only a fallback.
+        $cfg = array_merge($passed, $fresh);
+
+        $phone = self::nonEmpty(
+            $cfg['receipt_phone'] ?? null,
+            $cfg['mobile_erb'] ?? null,
+            $cfg['mobile_kik'] ?? null,
+            self::DEFAULT_PHONE
+        );
+        $address = self::nonEmpty(
+            $cfg['receipt_address'] ?? null,
+            $cfg['address_erb'] ?? null,
+            $cfg['address_kik'] ?? null,
+            self::DEFAULT_ADDRESS
+        );
+        $website = self::nonEmpty(
+            $cfg['receipt_website'] ?? null,
+            self::DEFAULT_WEBSITE
+        );
+
+        return [
+            'phone' => $phone,
+            'address' => $address,
+            'website' => $website,
+        ];
+    }
+
+    private static function nonEmpty(mixed ...$candidates): string
+    {
+        foreach ($candidates as $value) {
+            $trimmed = trim((string) ($value ?? ''));
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        }
+
+        return '';
     }
 
     /**

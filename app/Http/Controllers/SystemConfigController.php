@@ -254,6 +254,18 @@ class SystemConfigController extends Controller
             $data[$field] = $this->branding->resolve($data[$field] ?? null);
         }
 
+        // Seed empty MKL footer fields so Settings + prints share the same contact defaults.
+        $footerDefaults = [
+            'receipt_phone' => \App\Support\VoucherPrint::DEFAULT_PHONE,
+            'receipt_address' => \App\Support\VoucherPrint::DEFAULT_ADDRESS,
+            'receipt_website' => \App\Support\VoucherPrint::DEFAULT_WEBSITE,
+        ];
+        foreach ($footerDefaults as $key => $default) {
+            if (trim((string) ($data[$key] ?? '')) === '') {
+                $data[$key] = $default;
+            }
+        }
+
         return $data;
     }
 
