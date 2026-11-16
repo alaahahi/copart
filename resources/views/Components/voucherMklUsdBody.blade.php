@@ -49,17 +49,6 @@
 @endphp
 <div class="mkl-voucher-sheet">
     <div class="mkl-header">
-        <div class="mkl-logos-left">
-            @if($logoLeft1)
-                <img src="{{ $logoLeft1 }}" alt="" class="mkl-partner-logo">
-            @endif
-            @if($logoLeft2)
-                <img src="{{ $logoLeft2 }}" alt="" class="mkl-partner-logo mkl-logo-m">
-            @endif
-            @if($logoLeft3)
-                <img src="{{ $logoLeft3 }}" alt="" class="mkl-partner-logo">
-            @endif
-        </div>
         <div class="mkl-logos-right">
             @if($logoHaulf)
                 <img src="{{ $logoHaulf }}" alt="{{ $productName }}" class="mkl-haulf-img">
@@ -71,6 +60,17 @@
                     <img src="{{ $logoMain }}" alt="Logo" class="mkl-main-logo">
                 @endif
             </div>
+        </div>
+        <div class="mkl-logos-left">
+            @if($logoLeft1)
+                <img src="{{ $logoLeft1 }}" alt="" class="mkl-partner-logo">
+            @endif
+            @if($logoLeft2)
+                <img src="{{ $logoLeft2 }}" alt="" class="mkl-partner-logo mkl-logo-m">
+            @endif
+            @if($logoLeft3)
+                <img src="{{ $logoLeft3 }}" alt="" class="mkl-partner-logo">
+            @endif
         </div>
     </div>
 
