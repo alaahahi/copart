@@ -51,20 +51,24 @@ class VoucherPrint
         // Prefer the live system_config row; passed print payload is only a fallback.
         $cfg = array_merge($passed, $fresh);
 
-        $phone = self::nonEmpty(
-            $cfg['receipt_phone'] ?? null,
+        // Empty string = intentionally cleared in Settings; null/missing = never set → defaults.
+        $phone = self::resolveFooterField(
+            $cfg,
+            'receipt_phone',
             $cfg['mobile_erb'] ?? null,
             $cfg['mobile_kik'] ?? null,
             self::DEFAULT_PHONE
         );
-        $address = self::nonEmpty(
-            $cfg['receipt_address'] ?? null,
+        $address = self::resolveFooterField(
+            $cfg,
+            'receipt_address',
             $cfg['address_erb'] ?? null,
             $cfg['address_kik'] ?? null,
             self::DEFAULT_ADDRESS
         );
-        $website = self::nonEmpty(
-            $cfg['receipt_website'] ?? null,
+        $website = self::resolveFooterField(
+            $cfg,
+            'receipt_website',
             self::DEFAULT_WEBSITE
         );
 
@@ -73,6 +77,19 @@ class VoucherPrint
             'address' => $address,
             'website' => $website,
         ];
+    }
+
+    /**
+     * Use the configured value when the column was set (including intentional "").
+     * Fall back only when the primary key is null/missing.
+     */
+    private static function resolveFooterField(array $cfg, string $key, mixed ...$fallbacks): string
+    {
+        if (array_key_exists($key, $cfg) && $cfg[$key] !== null) {
+            return trim((string) $cfg[$key]);
+        }
+
+        return self::nonEmpty(...$fallbacks);
     }
 
     private static function nonEmpty(mixed ...$candidates): string

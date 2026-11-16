@@ -125,6 +125,14 @@ class SystemConfigController extends Controller
             $validated['first_title_ar'] = \App\Support\Branding::resolveName((string) $validated['first_title_ar']);
         }
 
+        // ConvertEmptyStringsToNull turns cleared footer fields into null; persist "" so
+        // prints/Settings treat an intentional clear differently from "never set".
+        foreach (['receipt_phone', 'receipt_address', 'receipt_website'] as $footerField) {
+            if (array_key_exists($footerField, $validated)) {
+                $validated[$footerField] = trim((string) ($validated[$footerField] ?? ''));
+            }
+        }
+
         $config->fill($validated);
 
         $this->applyBrandingUploads($request, $config);
@@ -262,14 +270,14 @@ class SystemConfigController extends Controller
             $data[$field] = $this->branding->resolve($data[$field] ?? null);
         }
 
-        // Seed empty MKL footer fields so Settings + prints share the same contact defaults.
+        // Seed only never-set (null/missing) footer fields — not intentional empty strings.
         $footerDefaults = [
             'receipt_phone' => \App\Support\VoucherPrint::DEFAULT_PHONE,
             'receipt_address' => \App\Support\VoucherPrint::DEFAULT_ADDRESS,
             'receipt_website' => \App\Support\VoucherPrint::DEFAULT_WEBSITE,
         ];
         foreach ($footerDefaults as $key => $default) {
-            if (trim((string) ($data[$key] ?? '')) === '') {
+            if (! array_key_exists($key, $data) || $data[$key] === null) {
                 $data[$key] = $default;
             }
         }

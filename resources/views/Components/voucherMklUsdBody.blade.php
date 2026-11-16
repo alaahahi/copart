@@ -181,9 +181,17 @@
         </div>
     </div>
 
+    @if($address !== '' || $phone !== '' || $website !== '')
     <div class="mkl-footer">
-        <span>🌐 <bdi>{{ $website }}</bdi></span>
-        <span>📍 <bdi>{{ $address }}</bdi></span>
-        <span>📞 <bdi dir="ltr">{{ $phone }}</bdi></span>
+        @if($website !== '')
+            <span>🌐 <bdi>{{ $website }}</bdi></span>
+        @endif
+        @if($address !== '')
+            <span>📍 <bdi>{{ $address }}</bdi></span>
+        @endif
+        @if($phone !== '')
+            <span>📞 <bdi dir="ltr">{{ $phone }}</bdi></span>
+        @endif
     </div>
+    @endif
 </div>
