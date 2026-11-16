@@ -177,6 +177,9 @@ const logoPaths = ref(
 
 const logoFiles = ref({});
 const logoPreviews = ref({});
+const removeLogos = ref(
+  Object.fromEntries(logoFields.map(({ key }) => [key, false]))
+);
 
 const saving = ref(false);
 const successMsg = ref("");
@@ -225,11 +228,24 @@ function onLogoChange(field, event) {
   if (!file) return;
   logoFiles.value[field] = file;
   logoPreviews.value[field] = URL.createObjectURL(file);
+  removeLogos.value[field] = false;
 }
 
 /** Match ERP static paths under /public (legacy /img/... and /storage/... still work). */
 function logoSrc(field) {
+  if (removeLogos.value[field] && !logoPreviews.value[field]) {
+    return "";
+  }
   return logoPreviews.value[field] || resolvePublicAsset(logoPaths.value[field]) || "";
+}
+
+function clearLogo(field) {
+  logoFiles.value[field] = null;
+  if (logoPreviews.value[field]) {
+    URL.revokeObjectURL(logoPreviews.value[field]);
+  }
+  logoPreviews.value[field] = "";
+  removeLogos.value[field] = true;
 }
 
 function onBrandingChange(field, event) {
@@ -284,6 +300,9 @@ async function save() {
       if (logoFiles.value[key]) {
         formData.append(key, logoFiles.value[key]);
       }
+      if (removeLogos.value[key]) {
+        formData.append(`remove_${key}`, "1");
+      }
     });
     ["app_logo", "app_cover"].forEach((key) => {
       if (brandingFiles.value[key]) {
@@ -298,9 +317,7 @@ async function save() {
 
     if (data.config) {
       logoFields.forEach(({ key }) => {
-        if (data.config[key]) {
-          logoPaths.value[key] = data.config[key];
-        }
+        logoPaths.value[key] = data.config[key] || "";
       });
       brandingPaths.value.app_logo = data.config.app_logo || "";
       brandingPaths.value.app_cover = data.config.app_cover || "";
@@ -341,7 +358,13 @@ async function save() {
     }
 
     logoFiles.value = {};
+    Object.values(logoPreviews.value).forEach((url) => {
+      if (url) URL.revokeObjectURL(url);
+    });
     logoPreviews.value = {};
+    removeLogos.value = Object.fromEntries(
+      logoFields.map(({ key }) => [key, false])
+    );
     brandingFiles.value = {};
     Object.values(brandingPreviews.value).forEach((url) => {
       if (url) URL.revokeObjectURL(url);
@@ -891,27 +914,40 @@ onMounted(loadDbInsights);
             <div
               v-for="logo in logoFields"
               :key="logo.key"
-              class="border border-gray-200 dark:border-gray-700 rounded-lg p-3"
+              class="rounded-lg border border-slate-700 bg-slate-950/60 p-3"
             >
-              <label class="block text-sm font-semibold mb-2 dark:text-gray-300">
+              <label class="block text-sm font-semibold text-slate-200 mb-2">
                 {{ $t(logo.labelKey) }}
               </label>
               <div
-                v-if="logoSrc(logo.key)"
-                class="mb-2 flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded p-2 min-h-[60px]"
+                class="mb-2 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700 min-h-[60px] p-2"
               >
                 <img
+                  v-if="logoSrc(logo.key)"
                   :src="logoSrc(logo.key)"
                   alt=""
                   class="max-h-14 max-w-full object-contain"
                 />
+                <span v-else class="text-sm text-slate-400">{{
+                  $t("noImage")
+                }}</span>
               </div>
               <input
                 type="file"
                 accept="image/*"
-                class="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/40 dark:file:text-blue-200"
+                class="block w-full text-sm text-slate-300 file:me-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-900/50 file:text-emerald-200"
                 @change="onLogoChange(logo.key, $event)"
               />
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button
+                  v-if="logoSrc(logo.key) || logoPaths[logo.key]"
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg bg-rose-700 text-rose-100 text-xs font-semibold hover:bg-rose-600"
+                  @click="clearLogo(logo.key)"
+                >
+                  {{ $t("removeImage") }}
+                </button>
+              </div>
             </div>
           </div>
 

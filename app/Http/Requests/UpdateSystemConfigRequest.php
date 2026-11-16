@@ -39,6 +39,11 @@ class UpdateSystemConfigRequest extends FormRequest
             'receipt_logo_left_3' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif,svg|max:4096',
             'receipt_logo_haulf' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif,svg|max:4096',
             'receipt_logo_main' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif,svg|max:4096',
+            'remove_receipt_logo_left_1' => 'sometimes|boolean',
+            'remove_receipt_logo_left_2' => 'sometimes|boolean',
+            'remove_receipt_logo_left_3' => 'sometimes|boolean',
+            'remove_receipt_logo_haulf' => 'sometimes|boolean',
+            'remove_receipt_logo_main' => 'sometimes|boolean',
 
             'wa_enabled' => 'sometimes|boolean',
             'wa_base_host' => 'nullable|string|max:255|url',
@@ -69,6 +74,11 @@ class UpdateSystemConfigRequest extends FormRequest
             'nejum_payments_enabled',
             'remove_app_logo',
             'remove_app_cover',
+            'remove_receipt_logo_left_1',
+            'remove_receipt_logo_left_2',
+            'remove_receipt_logo_left_3',
+            'remove_receipt_logo_haulf',
+            'remove_receipt_logo_main',
         ];
 
         $merged = [];

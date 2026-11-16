@@ -130,6 +130,14 @@ class SystemConfigController extends Controller
         $this->applyBrandingUploads($request, $config);
 
         foreach ($this->logoFields as $field) {
+            $removeKey = 'remove_'.$field;
+
+            if ($request->boolean($removeKey) && ! $request->hasFile($field)) {
+                $this->deleteStoredLogo($config->{$field});
+                $config->{$field} = null;
+                continue;
+            }
+
             if ($request->hasFile($field)) {
                 $this->deleteStoredLogo($config->{$field});
                 $config->{$field} = $this->storeReceiptLogo($request->file($field), $field);
