@@ -50,7 +50,7 @@
         .mkl-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             gap: 10px;
             margin-bottom: 6px;
             /* Keep partner logos on visual left and HAULF/MKL on visual right
@@ -60,7 +60,6 @@
         .mkl-logos-left {
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
             min-height: 44px;
             flex: 1;
