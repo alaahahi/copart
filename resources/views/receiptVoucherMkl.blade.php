@@ -49,26 +49,36 @@
         }
         .mkl-header {
             display: flex;
-            justify-content: space-between;
+            flex-direction: row;
             align-items: center;
             gap: 10px;
             margin-bottom: 6px;
-            /* LTR: partners visual left, HAULF visual right (sheet is RTL). */
+            width: 100%;
+            position: relative;
+            min-height: 92px;
+            /* Isolate from html/sheet RTL so flex order is not mirrored. */
             direction: ltr;
+            unicode-bidi: isolate;
+            /* Reserve space so partner logos never sit under absolute HAULF. */
+            padding-right: 290px;
+            box-sizing: border-box;
         }
         .mkl-logos-left {
             display: flex;
             align-items: center;
             gap: 8px;
             min-height: 44px;
-            flex: 1;
         }
         .mkl-logos-right {
             display: flex;
             align-items: center;
             gap: 10px;
             text-align: center;
-            flex-shrink: 0;
+            /* Physical right — immune to RTL flex mirroring. */
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
         }
         .mkl-partner-logo {
             height: 40px;
