@@ -28,7 +28,7 @@
     $logoLeft2 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_2'] ?? null);
     $logoLeft3 = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_left_3'] ?? null);
     $logoHaulf = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_haulf'] ?? null);
-    $logoMain = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_main'] ?? '/img/logo.jpg');
+    $logoMain = \App\Helpers\Help::publicAssetUrl($cfg['receipt_logo_main'] ?? null);
     $productName = \App\Support\Branding::name();
 
     if ($isReceipt) {

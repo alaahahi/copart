@@ -78,8 +78,11 @@
         }
         .mkl-logo-m { height: 42px; }
         .mkl-haulf-img {
-            height: 42px;
-            max-width: 110px;
+            min-width: 250px;
+            max-width: 280px;
+            max-height: 90px;
+            height: auto;
+            width: auto;
             object-fit: contain;
         }
         .mkl-haulf {
