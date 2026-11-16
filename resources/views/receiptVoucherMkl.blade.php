@@ -60,6 +60,7 @@
         .mkl-logos-left {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             min-height: 44px;
             flex: 1;

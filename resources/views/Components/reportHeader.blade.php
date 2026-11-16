@@ -34,13 +34,14 @@
         <div class="erp-report-header__brand">
             @if($logoUrl)
                 <img src="{{ $logoUrl }}" alt="{{ $appName }}" class="erp-report-header__logo">
+            @else
+                <div class="erp-report-header__names">
+                    <p class="erp-report-header__app-name">{{ $appName }}</p>
+                    @if($appSub)
+                        <p class="erp-report-header__app-sub">{{ $appSub }}</p>
+                    @endif
+                </div>
             @endif
-            <div class="erp-report-header__names">
-                <p class="erp-report-header__app-name">{{ $appName }}</p>
-                @if($appSub)
-                    <p class="erp-report-header__app-sub">{{ $appSub }}</p>
-                @endif
-            </div>
         </div>
         <div class="erp-report-header__title-block">
             <h1 class="erp-report-header__title">{{ $reportTitle }}</h1>
