@@ -49,11 +49,11 @@
         }
         .mkl-header {
             display: flex;
-            justify-content: flex-start;
+            justify-content: space-between;
             align-items: center;
             gap: 10px;
             margin-bottom: 6px;
-            /* LTR so HAULF (first in DOM) sits on the visual left. */
+            /* LTR: partners visual left, HAULF visual right (sheet is RTL). */
             direction: ltr;
         }
         .mkl-logos-left {
@@ -61,6 +61,7 @@
             align-items: center;
             gap: 8px;
             min-height: 44px;
+            flex: 1;
         }
         .mkl-logos-right {
             display: flex;
